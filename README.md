@@ -16,19 +16,23 @@ Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solution
 - Which weak topics offer the highest expected improvement per hour?
 - What should I deprioritize when time is running out?
 
-## Current milestone — courses and source material
+## Current milestone — document intelligence foundation
 
 The backend can now:
 
 - create courses with exam dates and target grades
 - persist course data in SQLite
 - upload `.pdf`, `.docx`, `.pptx`, `.txt`, and `.md` study material
-- stream uploads to disk instead of loading entire files into memory
-- enforce configurable upload-size limits
-- calculate SHA-256 hashes for source integrity and deduplication
-- reject duplicate documents within a course
-- expose document metadata without leaking internal storage paths
-- run the API against isolated settings/databases for reliable tests
+- stream uploads to disk and deduplicate them with SHA-256
+- extract text from all supported document formats
+- preserve PDF page and PowerPoint slide references
+- store normalized source units and retrieval-ready text chunks
+- deterministically classify common study-material types
+- detect PDFs with too little extractable text and flag them for future OCR
+- safely reprocess documents without duplicating extracted content
+- expose extracted content without leaking internal storage paths
+
+The extraction pipeline is deliberately deterministic and local-first. LLM-based concept extraction will be layered on top of source-grounded text instead of replacing the parsing layer.
 
 ### API
 
@@ -40,19 +44,38 @@ The backend can now:
 | `GET` | `/api/v1/courses/{course_id}` | Get one course |
 | `POST` | `/api/v1/courses/{course_id}/documents` | Upload course material |
 | `GET` | `/api/v1/courses/{course_id}/documents` | List uploaded material |
+| `GET` | `/api/v1/courses/{course_id}/documents/{document_id}` | Get document metadata |
+| `POST` | `/api/v1/courses/{course_id}/documents/{document_id}/process` | Extract and classify a document |
+| `GET` | `/api/v1/courses/{course_id}/documents/{document_id}/content` | Read source units and chunks |
 
 FastAPI also exposes interactive API documentation at `/docs` while the server is running.
+
+## Source references
+
+StudyOS keeps extracted content tied to its origin:
+
+```text
+PDF      -> page 1, page 2, ...
+PPTX     -> slide 1, slide 2, ...
+DOCX     -> document
+TXT / MD -> document
+```
+
+Chunks inherit their source unit so later search, tutoring, topic extraction, and generated answers can cite the original material.
+
+Scanned/image-only PDFs are currently flagged with `needs_ocr: true`; OCR itself is intentionally deferred to a later milestone.
 
 ## Roadmap
 
 ### Phase 1 — Course intelligence and planning
 - [x] course model and persistence
 - [x] document upload and metadata
-- [ ] PDF/DOCX/PPTX text extraction
-- [ ] document chunking and source references
+- [x] PDF/DOCX/PPTX/TXT/MD text extraction
+- [x] document chunking and source references
+- [x] baseline document classification
 - [ ] concept and topic extraction
-- [ ] past-paper classification
-- [ ] topic weighting
+- [ ] past-paper question structure extraction
+- [ ] topic weighting and exam-frequency analysis
 - [ ] first study-plan engine
 
 ### Phase 2 — Diagnostics and mastery
@@ -102,6 +125,9 @@ The current implementation uses SQLite and local file storage for zero-friction 
 - Pydantic
 - SQLAlchemy 2
 - SQLite
+- pypdf
+- python-docx
+- python-pptx
 - Pytest
 - Ruff
 - GitHub Actions
@@ -114,7 +140,7 @@ The current implementation uses SQLite and local file storage for zero-friction 
 - background workers
 - vector retrieval
 - Docker
-- LLM-assisted document analysis
+- LLM-assisted concept and exam analysis
 
 ## Local development
 
@@ -144,7 +170,7 @@ ruff check .
 pytest
 ```
 
-## Example
+## Example flow
 
 Create a course:
 
@@ -157,4 +183,6 @@ Create a course:
 }
 ```
 
-Then upload lecture slides, notes, or past papers to that course. The next milestone will turn those raw documents into structured text, concepts, and exam intelligence.
+Upload a past paper or lecture deck, then call its `/process` endpoint. StudyOS will persist the extracted text with source references and return an analysis summary including document type, extracted character count, chunk count, and whether the file appears to need OCR.
+
+The next milestone will use this source-grounded content to build the first **course topic graph** and **past-paper intelligence** layer.
