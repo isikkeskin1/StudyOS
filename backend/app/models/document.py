@@ -11,6 +11,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.course import Course
+    from app.models.document_content import DocumentAnalysis, DocumentChunk, DocumentUnit
 
 
 class Document(Base):
@@ -38,3 +39,16 @@ class Document(Base):
     )
 
     course: Mapped[Course] = relationship(back_populates="documents")
+    analysis: Mapped[DocumentAnalysis | None] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    units: Mapped[list[DocumentUnit]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
+    chunks: Mapped[list[DocumentChunk]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
