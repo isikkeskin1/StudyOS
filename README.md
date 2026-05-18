@@ -31,6 +31,10 @@ The backend can now:
 - detect PDFs with too little extractable text and flag them for future OCR
 - safely reprocess documents without duplicating extracted content
 - expose extracted content without leaking internal storage paths
+- build a course-level topic graph from processed material
+- attach source evidence to each detected topic
+- boost topic importance when concepts recur in past exams
+- infer topic relationships from source-chunk co-occurrence
 
 The extraction pipeline is deliberately deterministic and local-first. LLM-based concept extraction will be layered on top of source-grounded text instead of replacing the parsing layer.
 
@@ -47,6 +51,8 @@ The extraction pipeline is deliberately deterministic and local-first. LLM-based
 | `GET` | `/api/v1/courses/{course_id}/documents/{document_id}` | Get document metadata |
 | `POST` | `/api/v1/courses/{course_id}/documents/{document_id}/process` | Extract and classify a document |
 | `GET` | `/api/v1/courses/{course_id}/documents/{document_id}/content` | Read source units and chunks |
+| `POST` | `/api/v1/courses/{course_id}/analyze` | Build or rebuild course intelligence |
+| `GET` | `/api/v1/courses/{course_id}/intelligence` | Read topics, evidence, and relationships |
 
 FastAPI also exposes interactive API documentation at `/docs` while the server is running.
 
@@ -73,9 +79,9 @@ Scanned/image-only PDFs are currently flagged with `needs_ocr: true`; OCR itself
 - [x] PDF/DOCX/PPTX/TXT/MD text extraction
 - [x] document chunking and source references
 - [x] baseline document classification
-- [ ] concept and topic extraction
+- [x] baseline concept and topic extraction
 - [ ] past-paper question structure extraction
-- [ ] topic weighting and exam-frequency analysis
+- [x] baseline topic weighting and exam-frequency signals
 - [ ] first study-plan engine
 
 ### Phase 2 — Diagnostics and mastery
@@ -185,4 +191,4 @@ Create a course:
 
 Upload a past paper or lecture deck, then call its `/process` endpoint. StudyOS will persist the extracted text with source references and return an analysis summary including document type, extracted character count, chunk count, and whether the file appears to need OCR.
 
-The next milestone will use this source-grounded content to build the first **course topic graph** and **past-paper intelligence** layer.
+The next milestone will turn the course topic graph into **question-level past-paper intelligence** and the first **study-time allocation engine**.
