@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from docx import Document as DocxDocument
-from pypdf import PdfReader
 from pptx import Presentation
+from pypdf import PdfReader
 
 
 class DocumentExtractionError(RuntimeError):
