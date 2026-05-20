@@ -55,7 +55,10 @@ def _exam_analysis_is_stale(db: Session, course_id: str) -> bool:
 def _read_exam_intelligence(db: Session, course_id: str) -> ExamIntelligenceRead:
     analysis = db.get(ExamAnalysis, course_id)
     if analysis is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Past exams have not been analyzed")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Past exams have not been analyzed",
+        )
     if _exam_analysis_is_stale(db, course_id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
