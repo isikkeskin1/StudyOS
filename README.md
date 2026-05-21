@@ -16,7 +16,7 @@ Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solution
 - Which weak topics offer the highest expected improvement per hour?
 - What should I deprioritize when time is running out?
 
-## Current milestone — document intelligence foundation
+## Current milestone — exam intelligence and study-time planning
 
 The backend can now:
 
@@ -30,13 +30,21 @@ The backend can now:
 - deterministically classify common study-material types
 - detect PDFs with too little extractable text and flag them for future OCR
 - safely reprocess documents without duplicating extracted content
-- expose extracted content without leaking internal storage paths
 - build a course-level topic graph from processed material
 - attach source evidence to each detected topic
-- boost topic importance when concepts recur in past exams
 - infer topic relationships from source-chunk co-occurrence
+- extract numbered past-paper questions
+- detect explicit mark values such as `8 marks` or `12 points`
+- link exam questions to course topics
+- allocate question marks across matched topics
+- calculate normalized exam weights from mark share and question frequency
+- combine past-paper weight with broader course importance
+- generate per-topic study-hour allocations
+- estimate hours required to reach a target grade
+- simulate several study-time scenarios with diminishing returns
+- accept baseline and per-topic mastery overrides
 
-The extraction pipeline is deliberately deterministic and local-first. LLM-based concept extraction will be layered on top of source-grounded text instead of replacing the parsing layer.
+The current grade/time model is deliberately labelled **low confidence**. It is a planning heuristic, not a promise of an exam result. Later diagnostic and performance data will replace self-reported mastery and calibrate the learning model.
 
 ### API
 
@@ -53,8 +61,47 @@ The extraction pipeline is deliberately deterministic and local-first. LLM-based
 | `GET` | `/api/v1/courses/{course_id}/documents/{document_id}/content` | Read source units and chunks |
 | `POST` | `/api/v1/courses/{course_id}/analyze` | Build or rebuild course intelligence |
 | `GET` | `/api/v1/courses/{course_id}/intelligence` | Read topics, evidence, and relationships |
+| `POST` | `/api/v1/courses/{course_id}/exam-intelligence/analyze` | Extract questions, marks, and topic weights from past exams |
+| `GET` | `/api/v1/courses/{course_id}/exam-intelligence` | Read question-level past-paper intelligence |
+| `POST` | `/api/v1/courses/{course_id}/study-plan` | Generate a target-grade study-time plan |
 
 FastAPI also exposes interactive API documentation at `/docs` while the server is running.
+
+## Study-plan model
+
+The first planning engine combines three signals:
+
+1. **Course importance** from the topic graph.
+2. **Exam weight** from past-paper question frequency and known marks.
+3. **Mastery gap** from a baseline mastery value or per-topic overrides.
+
+Study hours are assigned incrementally to the topic with the highest marginal expected gain. Mastery gain follows a diminishing-returns curve instead of assuming every extra hour is equally valuable.
+
+Example request:
+
+```json
+{
+  "available_hours": 20,
+  "baseline_mastery": 0.5,
+  "topic_mastery": {
+    "<topic-id>": 0.8
+  }
+}
+```
+
+Example response fields include:
+
+```text
+current_estimated_grade
+estimated_hours_to_target
+projected_grade_with_available_hours
+target_reachable_with_available_time
+allocations[]
+scenarios[]
+assumptions[]
+```
+
+These projections are currently **heuristic-v1** and intentionally expose their assumptions.
 
 ## Source references
 
@@ -80,9 +127,9 @@ Scanned/image-only PDFs are currently flagged with `needs_ocr: true`; OCR itself
 - [x] document chunking and source references
 - [x] baseline document classification
 - [x] baseline concept and topic extraction
-- [ ] past-paper question structure extraction
+- [x] past-paper question structure extraction
 - [x] baseline topic weighting and exam-frequency signals
-- [ ] first study-plan engine
+- [x] first study-plan engine
 
 ### Phase 2 — Diagnostics and mastery
 Adaptive diagnostics, mastery tracking, mistake classification, and dynamic replanning.
@@ -189,6 +236,6 @@ Create a course:
 }
 ```
 
-Upload a past paper or lecture deck, then call its `/process` endpoint. StudyOS will persist the extracted text with source references and return an analysis summary including document type, extracted character count, chunk count, and whether the file appears to need OCR.
+Then upload and process lecture material and past papers, call `/analyze`, optionally call `/exam-intelligence/analyze`, and generate a plan through `/study-plan`.
 
-The next milestone will turn the course topic graph into **question-level past-paper intelligence** and the first **study-time allocation engine**.
+The next major milestone is **adaptive diagnostics and real mastery tracking**, which will replace the planner's self-reported baseline with measured student performance.
