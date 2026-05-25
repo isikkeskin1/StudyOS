@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.course import Course
 from app.models.course_intelligence import CourseTopic
+from app.models.diagnostics import TopicMastery
 from app.models.exam_intelligence import ExamTopicStat
 from app.schemas.planning import (
     GradeScenarioRead,
@@ -31,6 +32,7 @@ class PlanningTopic:
     name: str
     weight: float
     mastery: float
+    mastery_source: str
 
 
 def _next_mastery(current: float, hours: float) -> float:
@@ -100,6 +102,36 @@ def _projection(topics: list[PlanningTopic], hours: float, max_grade: float) -> 
     return round(_weighted_mastery(topics, mastery) * max_grade, 2)
 
 
+def _resolve_mastery(
+    topic: CourseTopic,
+    request: StudyPlanRequest,
+    stored: dict[str, TopicMastery],
+) -> tuple[float, str]:
+    if topic.id in request.topic_mastery:
+        return request.topic_mastery[topic.id], "override"
+    if topic.normalized_name in request.topic_mastery:
+        return request.topic_mastery[topic.normalized_name], "override"
+    if request.use_stored_mastery and topic.id in stored:
+        return stored[topic.id].mastery, "diagnostic"
+    return request.baseline_mastery, "baseline"
+
+
+def _plan_confidence(
+    topics: list[PlanningTopic],
+    stored: dict[str, TopicMastery],
+) -> str:
+    diagnostic_topics = [topic for topic in topics if topic.mastery_source == "diagnostic"]
+    if not diagnostic_topics:
+        return "low"
+
+    coverage = len(diagnostic_topics) / len(topics)
+    average_confidence = sum(stored[topic.id].confidence for topic in diagnostic_topics)
+    average_confidence /= len(diagnostic_topics)
+    if coverage >= 0.5 and average_confidence >= 0.35:
+        return "medium"
+    return "low"
+
+
 def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> StudyPlanRead:
     topics = list(
         db.scalars(
@@ -123,6 +155,13 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
             select(ExamTopicStat).where(ExamTopicStat.course_id == course.id)
         ).all()
     }
+    stored_mastery = {
+        item.topic_id: item
+        for item in db.scalars(
+            select(TopicMastery).where(TopicMastery.course_id == course.id)
+        ).all()
+    }
+
     raw_weights: dict[str, float] = {}
     for topic in topics:
         exam_weight = exam_stats[topic.id].exam_weight if topic.id in exam_stats else 0.0
@@ -133,18 +172,18 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
         )
     total_weight = sum(raw_weights.values()) or float(len(topics))
 
-    planning_topics = [
-        PlanningTopic(
-            id=topic.id,
-            name=topic.name,
-            weight=raw_weights[topic.id] / total_weight,
-            mastery=request.topic_mastery.get(
-                topic.id,
-                request.topic_mastery.get(topic.normalized_name, request.baseline_mastery),
-            ),
+    planning_topics: list[PlanningTopic] = []
+    for topic in topics:
+        mastery_value, mastery_source = _resolve_mastery(topic, request, stored_mastery)
+        planning_topics.append(
+            PlanningTopic(
+                id=topic.id,
+                name=topic.name,
+                weight=raw_weights[topic.id] / total_weight,
+                mastery=mastery_value,
+                mastery_source=mastery_source,
+            )
         )
-        for topic in topics
-    ]
 
     target_ratio = target_grade / course.max_grade
     current_mastery = {topic.id: topic.mastery for topic in planning_topics}
@@ -167,6 +206,7 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
             topic_name=topic.name,
             exam_weight=round(topic.weight, 4),
             current_mastery=round(topic.mastery, 4),
+            mastery_source=topic.mastery_source,
             projected_mastery=round(projected_mastery[topic.id], 4),
             recommended_hours=round(allocations[topic.id], 2),
             priority_score=round(topic.weight * (1.0 - topic.mastery), 4),
@@ -204,11 +244,34 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
         else None
     )
     reachable = projected_grade >= target_grade if projected_grade is not None else None
+    used_diagnostics = any(topic.mastery_source == "diagnostic" for topic in planning_topics)
+
+    assumptions = [
+        (
+            "Exam weights use extracted past-paper marks when available and "
+            "topic importance otherwise."
+        ),
+        "Grade projections are planning heuristics, not calibrated predictions or guarantees.",
+        (
+            "Learning gains use a diminishing-returns model and will be calibrated "
+            "against observed student performance over time."
+        ),
+    ]
+    if used_diagnostics:
+        assumptions.insert(
+            0,
+            "Measured topic mastery is taken from scored diagnostic evidence where available.",
+        )
+    else:
+        assumptions.insert(
+            0,
+            "No diagnostic evidence is available yet, so baseline mastery is used.",
+        )
 
     return StudyPlanRead(
         course_id=course.id,
-        planning_model="heuristic-v1",
-        confidence="low",
+        planning_model="heuristic-v2",
+        confidence=_plan_confidence(planning_topics, stored_mastery),
         target_grade=round(target_grade, 2),
         max_grade=round(course.max_grade, 2),
         current_estimated_grade=current_grade,
@@ -218,19 +281,5 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
         target_reachable_with_available_time=reachable,
         allocations=allocation_rows,
         scenarios=scenarios,
-        assumptions=[
-            (
-                "Current mastery is based on the supplied baseline and per-topic "
-                "overrides, not a diagnostic test yet."
-            ),
-            (
-                "Exam weights use extracted past-paper marks when available and "
-                "topic importance otherwise."
-            ),
-            "Grade projections are planning heuristics, not calibrated predictions or guarantees.",
-            (
-                "Learning gains use a diminishing-returns model and will be replaced "
-                "by observed student performance over time."
-            ),
-        ],
+        assumptions=assumptions,
     )
