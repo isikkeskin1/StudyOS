@@ -46,6 +46,7 @@ class StudyPlanRequest(BaseModel):
     available_hours: float | None = Field(default=None, ge=0, le=500)
     baseline_mastery: float = Field(default=0.5, ge=0, le=1)
     topic_mastery: dict[str, float] = Field(default_factory=dict)
+    use_stored_mastery: bool = True
 
     @model_validator(mode="after")
     def validate_topic_mastery(self) -> StudyPlanRequest:
@@ -60,6 +61,7 @@ class TopicStudyAllocationRead(BaseModel):
     topic_name: str
     exam_weight: float
     current_mastery: float
+    mastery_source: str
     projected_mastery: float
     recommended_hours: float
     priority_score: float
