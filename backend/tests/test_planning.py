@@ -96,13 +96,14 @@ def test_study_plan_uses_target_available_hours_and_diminishing_returns(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["planning_model"] == "heuristic-v1"
+    assert payload["planning_model"] == "heuristic-v2"
     assert payload["confidence"] == "low"
     assert payload["target_grade"] == 25
     assert payload["current_estimated_grade"] == 15
     assert payload["estimated_hours_to_target"] > 0
     assert payload["projected_grade_with_available_hours"] > payload["current_estimated_grade"]
     assert abs(sum(item["recommended_hours"] for item in payload["allocations"]) - 20) < 0.01
+    assert all(item["mastery_source"] == "baseline" for item in payload["allocations"])
     assert payload["scenarios"]
     assert payload["assumptions"]
 
@@ -125,6 +126,7 @@ def test_study_plan_accepts_topic_mastery_overrides(client: TestClient) -> None:
     allocations = {item["topic_id"]: item for item in response.json()["allocations"]}
     if strongest_topic["id"] in allocations:
         assert allocations[strongest_topic["id"]]["current_mastery"] == 0.95
+        assert allocations[strongest_topic["id"]]["mastery_source"] == "override"
 
 
 def test_exam_analysis_requires_course_topics(client: TestClient) -> None:
