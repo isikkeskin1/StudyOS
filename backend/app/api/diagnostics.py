@@ -12,6 +12,8 @@ from app.models.course_intelligence import CourseTopic
 from app.models.diagnostics import DiagnosticQuestion, DiagnosticSession
 from app.models.exam_intelligence import ExamAnalysis, ExamQuestion, ExamQuestionTopic
 from app.schemas.diagnostics import (
+    DiagnosticAnswerRead,
+    DiagnosticMistakeRead,
     DiagnosticNextRead,
     DiagnosticQuestionRead,
     DiagnosticQuestionTopicRead,
@@ -36,6 +38,11 @@ from app.services.exam_analysis import (
     CourseTopicsRequiredError,
     NoExamDocumentsError,
     analyze_exams,
+)
+from app.services.mistake_intelligence import (
+    MistakeInput,
+    get_response_answer,
+    get_response_mistakes,
 )
 
 router = APIRouter(prefix="/courses", tags=["diagnostics", "mastery"])
@@ -140,6 +147,32 @@ def _read_mastery(db: Session, course_id: str) -> list[TopicMasteryRead]:
     ]
 
 
+def _read_answer(
+    db: Session,
+    response_id: str,
+) -> tuple[DiagnosticAnswerRead | None, list[DiagnosticMistakeRead]]:
+    artifact = get_response_answer(db, response_id)
+    answer = (
+        DiagnosticAnswerRead(
+            student_answer=artifact.student_answer,
+            reference_answer=artifact.reference_answer,
+            feedback=artifact.feedback,
+        )
+        if artifact is not None
+        else None
+    )
+    mistakes = [
+        DiagnosticMistakeRead(
+            category=item.category,
+            severity=item.severity,
+            source=item.source,
+            note=item.note,
+        )
+        for item in get_response_mistakes(db, response_id)
+    ]
+    return answer, mistakes
+
+
 @router.post(
     "/{course_id}/diagnostics",
     response_model=DiagnosticSessionRead,
@@ -221,6 +254,18 @@ def submit_diagnostic_response(
             payload.confidence,
             payload.grading_source,
             payload.duration_seconds,
+            student_answer=payload.student_answer,
+            reference_answer=payload.reference_answer,
+            feedback=payload.feedback,
+            mistakes=[
+                MistakeInput(
+                    category=item.category,
+                    severity=item.severity,
+                    source=item.source,
+                    note=item.note,
+                )
+                for item in payload.mistakes
+            ],
         )
     except DuplicateDiagnosticResponseError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
@@ -230,6 +275,7 @@ def submit_diagnostic_response(
             detail=str(exc),
         ) from exc
 
+    answer, mistakes = _read_answer(db, response.id)
     return DiagnosticResponseRead(
         id=response.id,
         diagnostic_question_id=response.diagnostic_question_id,
@@ -238,6 +284,8 @@ def submit_diagnostic_response(
         grading_source=response.grading_source,
         duration_seconds=response.duration_seconds,
         created_at=response.created_at,
+        answer=answer,
+        mistakes=mistakes,
         session=_read_session(db, session),
         mastery=_read_mastery(db, course_id),
     )
