@@ -19,6 +19,7 @@ from app.models.exam_intelligence import (
     ExamQuestionTopic,
     ExamTopicStat,
 )
+from app.models.grading import DiagnosticGradeArtifact, ExamQuestionReference
 from app.models.mistakes import DiagnosticAnswerArtifact, DiagnosticMistake
 
 __all__ = [
@@ -26,6 +27,7 @@ __all__ = [
     "CourseAnalysis",
     "CourseTopic",
     "DiagnosticAnswerArtifact",
+    "DiagnosticGradeArtifact",
     "DiagnosticMistake",
     "DiagnosticQuestion",
     "DiagnosticResponse",
@@ -36,6 +38,7 @@ __all__ = [
     "DocumentUnit",
     "ExamAnalysis",
     "ExamQuestion",
+    "ExamQuestionReference",
     "ExamQuestionTopic",
     "ExamTopicStat",
     "TopicEvidence",

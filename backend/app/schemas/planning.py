@@ -18,6 +18,7 @@ class ExamQuestionRead(BaseModel):
     source_label: str
     text: str
     marks: float | None
+    automatic_grading_available: bool = False
     topics: list[ExamQuestionTopicRead]
 
 
@@ -65,8 +66,8 @@ class TopicStudyAllocationRead(BaseModel):
     projected_mastery: float
     recommended_hours: float
     priority_score: float
-    mistake_burden: float
-    mistake_focus: list[str]
+    mistake_burden: float = 0.0
+    mistake_focus: list[str] = Field(default_factory=list)
 
 
 class GradeScenarioRead(BaseModel):

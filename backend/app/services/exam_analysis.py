@@ -17,6 +17,7 @@ from app.models.exam_intelligence import (
     ExamQuestionTopic,
     ExamTopicStat,
 )
+from app.models.grading import ExamQuestionReference
 
 _EXAM_TYPES = {"past_exam", "past_exam_solution"}
 _QUESTION_START_RE = re.compile(
@@ -24,6 +25,9 @@ _QUESTION_START_RE = re.compile(
 )
 _MARK_RE = re.compile(
     r"(?i)(?:\[|\()?\s*(\d+(?:\.\d+)?)\s*(?:marks?|points?|pts?)\s*(?:\]|\))?"
+)
+_SOLUTION_MARKER_RE = re.compile(
+    r"(?im)^\s*(?:solution|answer|soluzione|risposta)\s*(?:[:.\-]\s*)?"
 )
 _WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9']*")
 
@@ -42,17 +46,47 @@ class ExtractedQuestion:
     source_label: str
     text: str
     marks: float | None
+    reference_answer: str | None
 
 
-def _extract_questions(text: str, source_label: str) -> list[ExtractedQuestion]:
+def _split_prompt_reference(
+    question_text: str,
+    *,
+    allow_reference: bool,
+) -> tuple[str, str | None]:
+    cleaned = question_text.strip()
+    if not allow_reference:
+        return cleaned, None
+
+    marker = _SOLUTION_MARKER_RE.search(cleaned)
+    if marker is None:
+        return cleaned, None
+
+    prompt = cleaned[: marker.start()].strip()
+    reference = cleaned[marker.end() :].strip()
+    if not prompt or len(reference) < 5:
+        return cleaned, None
+    return prompt, reference
+
+
+def _extract_questions(
+    text: str,
+    source_label: str,
+    *,
+    allow_reference: bool,
+) -> list[ExtractedQuestion]:
     matches = list(_QUESTION_START_RE.finditer(text))
     questions: list[ExtractedQuestion] = []
     for index, match in enumerate(matches):
         number = match.group(1) or match.group(2)
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        question_text = text[match.start() : end].strip()
-        if not question_text:
+        raw_question = text[match.start() : end].strip()
+        if not raw_question:
             continue
+        question_text, reference_answer = _split_prompt_reference(
+            raw_question,
+            allow_reference=allow_reference,
+        )
         mark_match = _MARK_RE.search(question_text)
         marks = float(mark_match.group(1)) if mark_match else None
         questions.append(
@@ -61,6 +95,7 @@ def _extract_questions(text: str, source_label: str) -> list[ExtractedQuestion]:
                 source_label=source_label,
                 text=question_text,
                 marks=marks,
+                reference_answer=reference_answer,
             )
         )
     return questions
@@ -84,6 +119,11 @@ def _clear_exam_analysis(db: Session, course_id: str) -> None:
         db.scalars(select(ExamQuestion.id).where(ExamQuestion.course_id == course_id)).all()
     )
     if question_ids:
+        db.execute(
+            delete(ExamQuestionReference).where(
+                ExamQuestionReference.question_id.in_(question_ids)
+            )
+        )
         db.execute(
             delete(ExamQuestionTopic).where(ExamQuestionTopic.question_id.in_(question_ids))
         )
@@ -117,7 +157,10 @@ def analyze_exams(db: Session, course_id: str) -> ExamAnalysis:
     if not exam_analyses:
         raise NoExamDocumentsError("Process at least one past exam before exam analysis")
 
-    exam_document_ids = [document.id for _, document in exam_analyses]
+    document_type_by_id = {
+        document.id: analysis.document_type for analysis, document in exam_analyses
+    }
+    exam_document_ids = list(document_type_by_id)
     units = list(
         db.scalars(
             select(DocumentUnit)
@@ -134,7 +177,13 @@ def analyze_exams(db: Session, course_id: str) -> ExamAnalysis:
     question_index_by_document: defaultdict[str, int] = defaultdict(int)
 
     for unit in units:
-        for extracted in _extract_questions(unit.text, unit.source_label):
+        allow_reference = document_type_by_id.get(unit.document_id) == "past_exam_solution"
+        extracted_questions = _extract_questions(
+            unit.text,
+            unit.source_label,
+            allow_reference=allow_reference,
+        )
+        for extracted in extracted_questions:
             question_index_by_document[unit.document_id] += 1
             question = ExamQuestion(
                 id=str(uuid4()),
@@ -148,6 +197,19 @@ def analyze_exams(db: Session, course_id: str) -> ExamAnalysis:
             )
             db.add(question)
             question_models.append(question)
+
+            if extracted.reference_answer is not None:
+                db.add(
+                    ExamQuestionReference(
+                        id=str(uuid4()),
+                        question_id=question.id,
+                        source_document_id=unit.document_id,
+                        source_label=unit.source_label,
+                        reference_text=extracted.reference_answer,
+                        extraction_method="inline_solution_marker",
+                        confidence=0.95,
+                    )
+                )
 
             matches: list[tuple[CourseTopic, float]] = []
             for topic in topics:
