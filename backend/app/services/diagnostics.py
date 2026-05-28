@@ -17,6 +17,7 @@ from app.models.diagnostics import (
 )
 from app.models.exam_intelligence import ExamQuestion, ExamQuestionTopic, ExamTopicStat
 from app.services.mistake_intelligence import MistakeInput, store_response_details
+from app.services.retention import retention_snapshot
 
 
 class DiagnosticUnavailableError(RuntimeError):
@@ -29,6 +30,12 @@ class DiagnosticStateError(RuntimeError):
 
 class DuplicateDiagnosticResponseError(RuntimeError):
     pass
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def session_counts(db: Session, session_id: str) -> tuple[int, int]:
@@ -163,6 +170,7 @@ def select_next_question(
         ).all()
     }
     selected_primary = Counter(question.primary_topic_id for question in selected_questions)
+    as_of = datetime.now(UTC)
 
     best_question: ExamQuestion | None = None
     best_primary_topic: str | None = None
@@ -178,8 +186,13 @@ def select_next_question(
             stat = exam_stats.get(topic.id)
             base_weight = stat.exam_weight if stat is not None else topic.importance_score
             mastery_item = mastery.get(topic.id)
-            mastery_value = mastery_item.mastery if mastery_item is not None else 0.5
-            confidence = mastery_item.confidence if mastery_item is not None else 0.0
+            if mastery_item is not None:
+                retained = retention_snapshot(mastery_item, as_of=as_of)
+                mastery_value = retained.effective_mastery
+                confidence = retained.effective_confidence
+            else:
+                mastery_value = 0.5
+                confidence = 0.0
             uncertainty = 0.55 + 0.45 * (1.0 - confidence)
             weakness = 0.90 + 0.10 * (1.0 - mastery_value)
             coverage = 1.0 / (1.0 + 0.60 * selected_primary[topic.id])
@@ -244,11 +257,13 @@ def recompute_course_mastery(db: Session, course_id: str) -> list[TopicMastery]:
     evidence: dict[str, dict[str, float]] = defaultdict(
         lambda: {"weight": 0.0, "success": 0.0, "count": 0.0}
     )
+    latest_evidence: dict[str, datetime] = {}
     for response in responses:
         diagnostic_question = question_by_id.get(response.diagnostic_question_id)
         if diagnostic_question is None:
             continue
         mappings = mappings_by_question.get(diagnostic_question.exam_question_id, [])
+        response_time = _as_utc(response.created_at)
         for mapping in mappings:
             weight = (
                 max(0.05, mapping.relevance_score)
@@ -259,6 +274,9 @@ def recompute_course_mastery(db: Session, course_id: str) -> list[TopicMastery]:
             row["weight"] += weight
             row["success"] += weight * response.score
             row["count"] += 1.0
+            previous = latest_evidence.get(mapping.topic_id)
+            if previous is None or response_time > previous:
+                latest_evidence[mapping.topic_id] = response_time
 
     existing = {
         item.topic_id: item
@@ -267,7 +285,6 @@ def recompute_course_mastery(db: Session, course_id: str) -> list[TopicMastery]:
         ).all()
     }
     updated: list[TopicMastery] = []
-    now = datetime.now(UTC)
 
     for topic_id, row in evidence.items():
         weight = row["weight"]
@@ -275,6 +292,7 @@ def recompute_course_mastery(db: Session, course_id: str) -> list[TopicMastery]:
         beta = 2.0 + weight - row["success"]
         mastery_value = alpha / (alpha + beta)
         confidence = 1.0 - math.exp(-weight / 3.0)
+        evidence_time = latest_evidence[topic_id]
 
         item = existing.get(topic_id)
         if item is None:
@@ -286,7 +304,7 @@ def recompute_course_mastery(db: Session, course_id: str) -> list[TopicMastery]:
                 confidence=confidence,
                 evidence_weight=weight,
                 response_count=int(row["count"]),
-                updated_at=now,
+                updated_at=evidence_time,
             )
             db.add(item)
         else:
@@ -294,7 +312,7 @@ def recompute_course_mastery(db: Session, course_id: str) -> list[TopicMastery]:
             item.confidence = confidence
             item.evidence_weight = weight
             item.response_count = int(row["count"])
-            item.updated_at = now
+            item.updated_at = evidence_time
         updated.append(item)
 
     db.commit()
