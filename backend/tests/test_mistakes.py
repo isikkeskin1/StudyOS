@@ -163,7 +163,7 @@ def test_classified_mistakes_feed_study_plan_focus(client: TestClient) -> None:
     )
     assert plan.status_code == 200
     payload = plan.json()
-    assert payload["planning_model"] == "heuristic-v4"
+    assert payload["planning_model"] == "heuristic-v5"
     assert any(item["mistake_burden"] > 0 for item in payload["allocations"])
     assert any("sign" in item["mistake_focus"] for item in payload["allocations"])
     assert any("mistake patterns adjust study priority" in item for item in payload["assumptions"])

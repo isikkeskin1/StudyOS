@@ -17,11 +17,11 @@ from app.schemas.planning import (
     StudyPlanRequest,
     TopicStudyAllocationRead,
 )
+from app.services.calibration import TopicCalibration, get_course_calibration
 from app.services.mistake_intelligence import topic_mistake_signals
 from app.services.retention import RetentionSnapshot, retention_snapshot
 
 _STEP_HOURS = 0.25
-_LEARNING_SCALE_HOURS = 2.8
 _MAX_ESTIMATE_HOURS = 300.0
 _MISTAKE_PRIORITY_BOOST = 0.35
 
@@ -49,12 +49,18 @@ class PlanningTopic:
     retention: RetentionSnapshot | None
     mistake_burden: float
     mistake_focus: list[str]
+    learning_rate_multiplier: float
+    learning_scale_hours: float
+    learning_calibration_confidence: str
+    retention_calibration_confidence: str
+    calibration_source: str
 
 
-def _next_mastery(current: float, hours: float) -> float:
+def _next_mastery(current: float, hours: float, learning_scale_hours: float) -> float:
     if hours <= 0:
         return current
-    return 1.0 - (1.0 - current) * math.exp(-hours / _LEARNING_SCALE_HOURS)
+    scale = max(0.5, learning_scale_hours)
+    return 1.0 - (1.0 - current) * math.exp(-hours / scale)
 
 
 def _weighted_mastery(topics: list[PlanningTopic], mastery: dict[str, float]) -> float:
@@ -67,7 +73,7 @@ def _marginal_priority(topic: PlanningTopic, mastery_value: float) -> float:
         topic.weight
         * (1.0 - mastery_value)
         * mistake_factor
-        / _LEARNING_SCALE_HOURS
+        / max(0.5, topic.learning_scale_hours)
     )
 
 
@@ -85,7 +91,11 @@ def _allocate(
             key=lambda topic: _marginal_priority(topic, mastery[topic.id]),
         )
         allocations[best.id] += _STEP_HOURS
-        mastery[best.id] = _next_mastery(mastery[best.id], _STEP_HOURS)
+        mastery[best.id] = _next_mastery(
+            mastery[best.id],
+            _STEP_HOURS,
+            best.learning_scale_hours,
+        )
         remaining -= _STEP_HOURS
 
     if remaining > 1e-6:
@@ -94,7 +104,11 @@ def _allocate(
             key=lambda topic: _marginal_priority(topic, mastery[topic.id]),
         )
         allocations[best.id] += remaining
-        mastery[best.id] = _next_mastery(mastery[best.id], remaining)
+        mastery[best.id] = _next_mastery(
+            mastery[best.id],
+            remaining,
+            best.learning_scale_hours,
+        )
 
     return allocations, mastery
 
@@ -110,7 +124,11 @@ def _hours_to_target(topics: list[PlanningTopic], target_ratio: float) -> float 
             topics,
             key=lambda topic: _marginal_priority(topic, mastery[topic.id]),
         )
-        mastery[best.id] = _next_mastery(mastery[best.id], _STEP_HOURS)
+        mastery[best.id] = _next_mastery(
+            mastery[best.id],
+            _STEP_HOURS,
+            best.learning_scale_hours,
+        )
         elapsed += _STEP_HOURS
         if _weighted_mastery(topics, mastery) >= target_ratio:
             return round(elapsed, 2)
@@ -127,6 +145,7 @@ def _resolve_mastery(
     request: StudyPlanRequest,
     stored: dict[str, TopicMastery],
     as_of: datetime,
+    calibration: TopicCalibration | None,
 ) -> MasteryResolution:
     if topic.id in request.topic_mastery:
         return MasteryResolution(request.topic_mastery[topic.id], "override", None, None)
@@ -138,7 +157,12 @@ def _resolve_mastery(
             None,
         )
     if request.use_stored_mastery and topic.id in stored:
-        snapshot = retention_snapshot(stored[topic.id], as_of=as_of)
+        half_life = calibration.retention_half_life_days if calibration is not None else None
+        snapshot = retention_snapshot(
+            stored[topic.id],
+            as_of=as_of,
+            half_life_days=half_life,
+        )
         return MasteryResolution(
             snapshot.effective_mastery,
             "diagnostic",
@@ -158,10 +182,18 @@ def _plan_confidence(
         return "low"
 
     coverage = len(diagnostic_topics) / len(topics)
-    effective_confidence = [
-        retention_snapshot(stored[topic.id], as_of=as_of).effective_confidence
-        for topic in diagnostic_topics
-    ]
+    effective_confidence: list[float] = []
+    for topic in diagnostic_topics:
+        half_life = (
+            topic.retention.half_life_days if topic.retention is not None else None
+        )
+        effective_confidence.append(
+            retention_snapshot(
+                stored[topic.id],
+                as_of=as_of,
+                half_life_days=half_life,
+            ).effective_confidence
+        )
     average_confidence = sum(effective_confidence) / len(effective_confidence)
     if coverage >= 0.5 and average_confidence >= 0.35:
         return "medium"
@@ -198,6 +230,8 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
         ).all()
     }
     mistake_signals = topic_mistake_signals(db, course.id)
+    course_calibration = get_course_calibration(db, course.id)
+    calibration_by_id = {item.topic_id: item for item in course_calibration.topics}
     as_of = datetime.now(UTC)
 
     raw_weights: dict[str, float] = {}
@@ -212,7 +246,14 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
 
     planning_topics: list[PlanningTopic] = []
     for topic in topics:
-        mastery = _resolve_mastery(topic, request, stored_mastery, as_of)
+        calibration = calibration_by_id.get(topic.id)
+        mastery = _resolve_mastery(
+            topic,
+            request,
+            stored_mastery,
+            as_of,
+            calibration,
+        )
         mistake_burden, mistake_focus = mistake_signals.get(topic.id, (0.0, []))
         planning_topics.append(
             PlanningTopic(
@@ -225,6 +266,21 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
                 retention=mastery.retention,
                 mistake_burden=mistake_burden,
                 mistake_focus=mistake_focus,
+                learning_rate_multiplier=(
+                    calibration.learning_rate_multiplier if calibration is not None else 1.0
+                ),
+                learning_scale_hours=(
+                    calibration.learning_scale_hours if calibration is not None else 2.8
+                ),
+                learning_calibration_confidence=(
+                    calibration.learning_confidence if calibration is not None else "low"
+                ),
+                retention_calibration_confidence=(
+                    calibration.retention_confidence if calibration is not None else "low"
+                ),
+                calibration_source=(
+                    calibration.calibration_source if calibration is not None else "heuristic"
+                ),
             )
         )
 
@@ -266,11 +322,16 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
             projected_mastery=round(projected_mastery[topic.id], 4),
             recommended_hours=round(allocations[topic.id], 2),
             priority_score=round(
-                _marginal_priority(topic, topic.mastery) * _LEARNING_SCALE_HOURS,
+                _marginal_priority(topic, topic.mastery) * topic.learning_scale_hours,
                 4,
             ),
             mistake_burden=round(topic.mistake_burden, 4),
             mistake_focus=topic.mistake_focus,
+            learning_rate_multiplier=topic.learning_rate_multiplier,
+            learning_scale_hours=topic.learning_scale_hours,
+            learning_calibration_confidence=topic.learning_calibration_confidence,
+            retention_calibration_confidence=topic.retention_calibration_confidence,
+            calibration_source=topic.calibration_source,
         )
         for topic in planning_topics
         if allocations[topic.id] > 0 or topic.weight >= 0.05
@@ -307,6 +368,8 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
     reachable = projected_grade >= target_grade if projected_grade is not None else None
     used_diagnostics = any(topic.mastery_source == "diagnostic" for topic in planning_topics)
     used_mistakes = any(topic.mistake_burden > 0 for topic in planning_topics)
+    used_learning_calibration = course_calibration.calibrated_learning_topic_count > 0
+    used_retention_calibration = course_calibration.calibrated_retention_topic_count > 0
 
     assumptions = [
         (
@@ -315,16 +378,16 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
         ),
         "Grade projections are planning heuristics, not calibrated predictions or guarantees.",
         (
-            "Learning gains use a diminishing-returns model and will be calibrated "
-            "against observed student performance over time."
+            "Personalized learning rates are relative adjustments inferred from mastery "
+            "history and are shrunk toward the generic curve when evidence is sparse."
         ),
     ]
     if used_diagnostics:
         assumptions.insert(
             0,
             (
-                "Measured diagnostic mastery is discounted by a transparent forgetting "
-                "curve based on evidence age and confidence."
+                "Measured diagnostic mastery is discounted by a forgetting curve based on "
+                "evidence age, confidence, and calibrated retention when available."
             ),
         )
     else:
@@ -336,10 +399,18 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
         assumptions.append(
             "Classified mistake patterns adjust study priority but do not directly change grades."
         )
+    if used_learning_calibration:
+        assumptions.append(
+            "At least one topic uses observed learning responsiveness from mastery history."
+        )
+    if used_retention_calibration:
+        assumptions.append(
+            "At least one retention half-life is blended with time-separated performance evidence."
+        )
 
     return StudyPlanRead(
         course_id=course.id,
-        planning_model="heuristic-v4",
+        planning_model="heuristic-v5",
         confidence=_plan_confidence(planning_topics, stored_mastery, as_of),
         target_grade=round(target_grade, 2),
         max_grade=round(course.max_grade, 2),
@@ -348,6 +419,8 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
         available_hours=request.available_hours,
         projected_grade_with_available_hours=projected_grade,
         target_reachable_with_available_time=reachable,
+        calibrated_learning_topic_count=course_calibration.calibrated_learning_topic_count,
+        calibrated_retention_topic_count=course_calibration.calibrated_retention_topic_count,
         allocations=allocation_rows,
         scenarios=scenarios,
         assumptions=assumptions,

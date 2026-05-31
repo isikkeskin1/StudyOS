@@ -96,7 +96,7 @@ def test_study_plan_uses_target_available_hours_and_diminishing_returns(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["planning_model"] == "heuristic-v4"
+    assert payload["planning_model"] == "heuristic-v5"
     assert payload["confidence"] == "low"
     assert payload["target_grade"] == 25
     assert payload["current_estimated_grade"] == 15
@@ -105,6 +105,8 @@ def test_study_plan_uses_target_available_hours_and_diminishing_returns(
     assert abs(sum(item["recommended_hours"] for item in payload["allocations"]) - 20) < 0.01
     assert all(item["mastery_source"] == "baseline" for item in payload["allocations"])
     assert all(item["mistake_burden"] == 0 for item in payload["allocations"])
+    assert all(item["learning_scale_hours"] == 2.8 for item in payload["allocations"])
+    assert payload["calibrated_learning_topic_count"] == 0
     assert payload["scenarios"]
     assert payload["assumptions"]
 

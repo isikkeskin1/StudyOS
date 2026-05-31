@@ -48,6 +48,8 @@ class ReviewItem:
     review_priority: float
     due_for_review: bool
     recommended_minutes: int
+    retention_calibration_confidence: str
+    retention_model: str
     reason: str
 
 
@@ -82,11 +84,15 @@ def retention_snapshot(
     mastery: TopicMastery,
     *,
     as_of: datetime | None = None,
+    half_life_days: float | None = None,
 ) -> RetentionSnapshot:
     now = _as_utc(as_of or datetime.now(UTC))
     last_evidence = _as_utc(mastery.updated_at)
     age_days = max(0.0, (now - last_evidence).total_seconds() / 86400.0)
-    half_life = _half_life_days(mastery)
+    half_life = round(
+        max(1.0, half_life_days) if half_life_days is not None else _half_life_days(mastery),
+        2,
+    )
     retention = math.pow(0.5, age_days / half_life)
     effective_mastery = _MEMORY_FLOOR + (mastery.mastery - _MEMORY_FLOOR) * retention
     confidence_half_life = max(7.0, half_life * 0.60)
@@ -147,6 +153,7 @@ def _review_reason(
     exam_weight: float,
     topic_count: int,
     due_for_review: bool,
+    retention_model: str,
 ) -> str:
     parts = [f"{snapshot.days_since_evidence:.0f} days since the latest evidence"]
     if snapshot.forgetting_loss >= 0.01:
@@ -154,8 +161,10 @@ def _review_reason(
     relative_weight = exam_weight * max(topic_count, 1)
     if relative_weight >= 1.25:
         parts.append("above-average exam weight")
+    if retention_model != "heuristic":
+        parts.append("retention curve blended with longitudinal evidence")
     if not due_for_review:
-        parts.append("not yet due under the current retention heuristic")
+        parts.append("not yet due under the current retention model")
     return "; ".join(parts) + "."
 
 
@@ -180,8 +189,12 @@ def build_review_queue(
     course: Course,
     *,
     as_of: datetime | None = None,
+    retention_half_lives: dict[str, float] | None = None,
+    retention_confidences: dict[str, str] | None = None,
 ) -> ReviewQueue:
     generated_at = _as_utc(as_of or datetime.now(UTC))
+    half_lives = retention_half_lives or {}
+    confidence_by_topic = retention_confidences or {}
     topics = list(
         db.scalars(
             select(CourseTopic).where(CourseTopic.course_id == course.id)
@@ -214,7 +227,18 @@ def build_review_queue(
             if stat is not None
             else topic.importance_score / total_importance
         )
-        snapshot = retention_snapshot(mastery, as_of=generated_at)
+        calibration_confidence = confidence_by_topic.get(topic.id, "low")
+        calibrated_half_life = half_lives.get(topic.id)
+        snapshot = retention_snapshot(
+            mastery,
+            as_of=generated_at,
+            half_life_days=calibrated_half_life,
+        )
+        retention_model = (
+            "calibrated"
+            if calibrated_half_life is not None and calibration_confidence in {"medium", "high"}
+            else "heuristic"
+        )
         interval_days = _review_interval_days(
             snapshot,
             exam_weight=exam_weight,
@@ -264,7 +288,15 @@ def build_review_queue(
                     exam_weight,
                     len(topics),
                 ),
-                reason=_review_reason(snapshot, exam_weight, len(topics), due),
+                retention_calibration_confidence=calibration_confidence,
+                retention_model=retention_model,
+                reason=_review_reason(
+                    snapshot,
+                    exam_weight,
+                    len(topics),
+                    due,
+                    retention_model,
+                ),
             )
         )
 

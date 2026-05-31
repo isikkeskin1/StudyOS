@@ -21,6 +21,8 @@ class ReviewTopicRead(BaseModel):
     review_priority: float
     due_for_review: bool
     recommended_minutes: int
+    retention_calibration_confidence: str = "low"
+    retention_model: str = "heuristic"
     reason: str
 
 
