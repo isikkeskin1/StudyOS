@@ -16,6 +16,7 @@ from app.models.diagnostics import (
     TopicMastery,
 )
 from app.models.exam_intelligence import ExamQuestion, ExamQuestionTopic, ExamTopicStat
+from app.services.mastery_history import rebuild_course_mastery_history
 from app.services.mistake_intelligence import MistakeInput, store_response_details
 from app.services.retention import retention_snapshot
 
@@ -373,6 +374,7 @@ def record_response(
     db.refresh(response)
 
     mastery = recompute_course_mastery(db, session.course_id)
+    rebuild_course_mastery_history(db, session.course_id)
     _, answered = session_counts(db, session.id)
     if answered >= session.requested_question_count:
         _finish_session(db, session)
