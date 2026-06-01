@@ -2,7 +2,7 @@
 
 StudyOS is an AI-powered study planning platform that turns course materials and student performance into adaptive, evidence-driven study plans.
 
-Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solutions. StudyOS builds a structured model of the course, measures what matters most for the exam, tracks topic mastery, learns recurring mistake patterns, grades supported diagnostic answers against extracted solutions, models forgetting over time, and recommends how to spend limited study time around a target grade.
+Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solutions. StudyOS builds a structured model of the course, measures what matters most for the exam, tracks topic mastery over time, learns recurring mistake patterns, grades supported diagnostic answers against extracted solutions, models forgetting, and recommends how to spend limited study time around a target grade.
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
@@ -15,10 +15,11 @@ Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solution
 - How much time is likely required to reach my target?
 - Which weak topics offer the highest expected improvement per hour?
 - Why am I repeatedly losing marks?
+- Am I actually improving on a topic, or just seeing noisy results?
 - Which topics are becoming stale and need review?
 - What should I deprioritize when time is running out?
 
-## Current milestone — forgetting-aware mastery and review scheduling
+## Current milestone — mastery history and trend analytics
 
 The backend can now:
 
@@ -35,16 +36,17 @@ The backend can now:
 - automatically grade supported answers against extracted reference solutions
 - keep extracted solutions hidden until an answer is submitted
 - discount stale diagnostic mastery with a transparent forgetting curve
-- decay mastery confidence separately from mastery itself
-- derive a per-topic retention half-life from mastery, confidence, and evidence weight
-- expose raw mastery, effective mastery, forgetting loss, and forgetting risk
-- generate a review queue ordered by exam weight, weakness, forgetting, and exam urgency
-- recommend review minutes per topic
-- make adaptive diagnostic selection prefer stale/uncertain evidence
-- feed forgetting-adjusted mastery into the study-time planner
-- preserve each topic's real latest-evidence timestamp instead of refreshing unrelated topics
+- generate an exam-aware review queue with recommended review minutes
+- feed forgetting-adjusted mastery into adaptive diagnostics and study planning
+- persist one mastery-history snapshot for every topic affected by every scored response
+- expose the exact source score, topic relevance, and evidence increment behind each history point
+- calculate per-topic raw mastery change, effective mastery, recent accuracy, and evidence span
+- classify learning trends as improving, stable, declining, or insufficient-data
+- report trend confidence separately from trend direction
+- estimate observed mastery gain per unit of diagnostic evidence without treating it as a calibrated learning rate
+- rebuild legacy history deterministically from existing diagnostic responses when needed
 
-The retention system is intentionally heuristic and inspectable. It does not claim to know a student's true memory state; it estimates how much confidence should be placed in old evidence until StudyOS has enough longitudinal data to calibrate the curve per student and topic.
+Trend analytics are deliberately evidence-aware. A same-day burst of two responses may show a direction, but it remains low confidence and does not pretend to be a reliable weekly learning rate. Longitudinal estimates only become stronger as evidence accumulates across time.
 
 ## API
 
@@ -69,41 +71,58 @@ The retention system is intentionally heuristic and inspectable. It does not cla
 | `POST` | `/api/v1/courses/{course_id}/diagnostics/{session_id}/grade` | Automatically grade an answer against an extracted reference solution |
 | `POST` | `/api/v1/courses/{course_id}/diagnostics/{session_id}/complete` | End a diagnostic early |
 | `GET` | `/api/v1/courses/{course_id}/mastery` | Read measured raw topic mastery |
+| `GET` | `/api/v1/courses/{course_id}/mastery/history` | Read topic mastery timelines and learning-trend analytics |
 | `GET` | `/api/v1/courses/{course_id}/mistakes` | Read course-level mistake intelligence |
 | `GET` | `/api/v1/courses/{course_id}/reviews` | Read forgetting-aware review recommendations |
 | `POST` | `/api/v1/courses/{course_id}/study-plan` | Generate a target-grade study plan |
 
 FastAPI exposes interactive API documentation at `/docs` while the server is running.
 
-## Retention and review model
+## Mastery history model
 
-StudyOS preserves the raw mastery inferred from diagnostic evidence, then computes an effective mastery at read/planning time.
+Each scored diagnostic response contributes evidence to every mapped topic. After the response, StudyOS records a snapshot for each affected topic containing:
 
-The current retention baseline uses an exponential half-life with a memory floor. The half-life grows with:
+```text
+response_id
+recorded_at
+mastery
+confidence
+evidence_weight
+response_count
+source_score
+topic_relevance
+evidence_increment
+```
 
-- measured mastery
-- mastery confidence
-- accumulated evidence weight
-
-That means strong, repeated evidence decays more slowly than one weak diagnostic answer. Confidence also decays separately so old evidence becomes less trustworthy even before the estimated mastery has fallen sharply.
-
-Each review recommendation exposes:
+The history endpoint then derives per-topic analytics:
 
 ```text
 raw_mastery
 effective_mastery
-raw_confidence
+confidence
 effective_confidence
-days_since_evidence
-half_life_days
-forgetting_loss
 forgetting_risk
-exam_weight
-review_priority
-due_for_review
-recommended_minutes
-reason
+change_from_first
+weekly_change
+trend_direction
+trend_confidence
+recent_accuracy
+recent_response_count
+observed_gain_per_evidence
+first_evidence_at
+latest_evidence_at
+evidence_span_days
 ```
+
+`weekly_change` is only emitted once the evidence spans at least a day. `observed_gain_per_evidence` is an empirical signal, not yet a personalized learning-rate parameter.
+
+## Retention and review model
+
+StudyOS preserves the raw mastery inferred from diagnostic evidence, then computes an effective mastery at read/planning time.
+
+The current retention baseline uses an exponential half-life with a memory floor. The half-life grows with measured mastery, confidence, and accumulated evidence weight. Strong, repeated evidence therefore decays more slowly than one weak diagnostic answer. Confidence also decays separately so old evidence becomes less trustworthy even before estimated mastery falls sharply.
+
+Each review recommendation exposes raw/effective mastery, raw/effective confidence, evidence age, half-life, forgetting loss/risk, exam weight, review priority, due state, recommended minutes, and an inspectable reason.
 
 Exam proximity shortens review intervals, while high exam-weight topics receive higher review priority. Unmeasured topics are treated as study targets rather than review targets.
 
@@ -119,25 +138,7 @@ Solution: F = ma, so the force is 10 N.
 
 Exam analysis stores the prompt and reference solution separately. Diagnostic clients receive only the prompt before submission.
 
-A supported answer can be submitted to `/grade`:
-
-```json
-{
-  "diagnostic_question_id": "<question-id>",
-  "student_answer": "Using F = ma, the force is 10 N.",
-  "confidence": 0.8,
-  "duration_seconds": 120
-}
-```
-
-The deterministic grader currently checks:
-
-1. answer-specific concept/token coverage relative to the extracted solution
-2. numerical-result agreement where reference numbers exist
-3. sign mismatches for numerical answers
-4. common unit agreement where units exist
-
-The response records grader confidence and evidence coverage separately from student confidence. If no reference solution was safely extracted, automatic grading returns `409` rather than inventing a mark.
+The deterministic grader currently checks answer-specific concept/token coverage, numerical-result agreement, sign mismatches, and common unit agreement. The response records grader confidence and evidence coverage separately from student confidence. If no reference solution was safely extracted, automatic grading returns `409` rather than inventing a mark.
 
 ## Mistake model
 
@@ -162,7 +163,7 @@ Each label has a severity and source (`self`, `manual`, or `automatic`). StudyOS
 
 Each diagnostic response contributes weighted evidence to every topic mapped to the source exam question. Evidence strength considers topic relevance, estimated question difficulty, response confidence, and the normalized score.
 
-Topic mastery uses a Bayesian prior and reports confidence separately, so one lucky or unlucky answer cannot create fake certainty. The raw mastery remains stored; forgetting is applied as a derived layer rather than destructively rewriting the measured evidence.
+Topic mastery uses a Bayesian prior and reports confidence separately, so one lucky or unlucky answer cannot create fake certainty. The raw mastery remains stored; forgetting is applied as a derived layer rather than destructively rewriting measured evidence.
 
 ## Study-plan model
 
@@ -200,8 +201,10 @@ Explicit topic mastery overrides remain authoritative and are not decayed. Store
 - [x] inline solution extraction with prompt/reference separation
 - [x] forgetting-aware effective mastery
 - [x] exam-aware review queue and review-minute recommendations
-- [ ] mastery history and trend analytics
+- [x] response-level mastery history
+- [x] trend direction, recent accuracy, and evidence-span analytics
 - [ ] richer grading adapters / rubric-aware grading
+- [ ] personalized learning/forgetting parameter calibration
 
 ### Phase 3 — Grade modelling
 Expected-score ranges, target-grade probabilities, study-time simulations, calibration, and uncertainty tracking.
@@ -267,8 +270,8 @@ pytest
 4. Build question-level exam intelligence; supported inline solutions are separated from prompts.
 5. Start a diagnostic and work through adaptive questions without seeing reference solutions.
 6. Automatically grade supported answers through `/grade`, or use the manual response endpoint when needed.
-7. Read measured mastery through `/mastery` and recurring error patterns through `/mistakes`.
-8. Read `/reviews` to see which measured topics have become stale and how much review time they deserve.
+7. Read `/mastery/history` to see response-level learning curves, recent accuracy, trend direction, and trend confidence.
+8. Read `/mistakes` for recurring error patterns and `/reviews` for stale topics that need reinforcement.
 9. Generate a study plan; StudyOS uses forgetting-adjusted mastery plus mistake focus when allocating time.
 
-The next Phase 2 milestone is **mastery history + trend analytics**, followed by richer rubric/LLM grading adapters.
+The next milestone is **personalized learning/forgetting calibration**, then Phase 3 grade modelling can start using the student's observed longitudinal performance instead of generic learning constants.
