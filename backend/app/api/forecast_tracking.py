@@ -14,6 +14,7 @@ from app.schemas.forecast_tracking import (
     ForecastSnapshotCreate,
     ForecastSnapshotRead,
 )
+from app.schemas.forecast_validation import ForecastValidationRead
 from app.services.exam_analysis import (
     CourseTopicsRequiredError,
     NoExamDocumentsError,
@@ -26,6 +27,7 @@ from app.services.forecast_tracking import (
     list_forecast_snapshots,
     record_forecast_outcome,
 )
+from app.services.forecast_validation import build_forecast_validation
 from app.services.grade_modeling import GradeForecastUnavailableError
 from app.services.planning import StudyPlanUnavailableError
 
@@ -102,3 +104,12 @@ def read_forecast_calibration(
 ) -> ForecastCalibrationRead:
     _course(db, course_id)
     return build_forecast_calibration(db, course_id)
+
+
+@router.get("/{course_id}/forecast-validation", response_model=ForecastValidationRead)
+def read_forecast_validation(
+    course_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> ForecastValidationRead:
+    _course(db, course_id)
+    return build_forecast_validation(db, course_id)
