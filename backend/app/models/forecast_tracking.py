@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from uuid import uuid4
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -63,3 +63,29 @@ class GradeForecastOutcome(Base):
         nullable=False,
         default=lambda: datetime.now(UTC),
     )
+
+
+class GradeForecastRecalibrationArtifact(Base):
+    __tablename__ = "grade_forecast_recalibration_artifacts"
+
+    forecast_snapshot_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("grade_forecast_snapshots.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    raw_forecast_model: Mapped[str] = mapped_column(String(40), nullable=False)
+    raw_probability_status: Mapped[str] = mapped_column(String(30), nullable=False)
+    raw_expected_grade: Mapped[float] = mapped_column(Float, nullable=False)
+    raw_standard_deviation: Mapped[float] = mapped_column(Float, nullable=False)
+    raw_likely_range_low: Mapped[float] = mapped_column(Float, nullable=False)
+    raw_likely_range_high: Mapped[float] = mapped_column(Float, nullable=False)
+    raw_target_probability: Mapped[float] = mapped_column(Float, nullable=False)
+    raw_thresholds_payload: Mapped[str] = mapped_column(Text, nullable=False)
+    calibration_model: Mapped[str] = mapped_column(String(40), nullable=False)
+    calibration_active: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    paired_outcome_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    shrinkage_weight: Mapped[float] = mapped_column(Float, nullable=False)
+    raw_bias_marks: Mapped[float] = mapped_column(Float, nullable=False)
+    applied_bias_marks: Mapped[float] = mapped_column(Float, nullable=False)
+    raw_width_multiplier: Mapped[float] = mapped_column(Float, nullable=False)
+    applied_width_multiplier: Mapped[float] = mapped_column(Float, nullable=False)
