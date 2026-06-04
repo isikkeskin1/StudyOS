@@ -2,7 +2,7 @@
 
 StudyOS is an AI-powered study planning platform that turns course materials and student performance into adaptive, evidence-driven study plans.
 
-Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solutions. StudyOS builds a structured model of the course, measures what matters most for the exam, tracks topic mastery over time, learns recurring mistake patterns, models forgetting, calibrates learning behavior from longitudinal evidence, and estimates how study time changes the probability of reaching a target grade.
+Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solutions. StudyOS builds a structured model of the course, measures what matters most for the exam, tracks topic mastery over time, learns recurring mistake patterns, models forgetting, calibrates learning behavior from longitudinal evidence, estimates how study time changes the probability of reaching a target grade, and now measures those forecasts against real exam outcomes.
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
@@ -19,9 +19,10 @@ Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solution
 - Why am I repeatedly losing marks?
 - Which topics are becoming stale and need review?
 - Does this student appear to learn or forget this topic faster than the generic model assumes?
+- Are StudyOS's historical forecasts actually accurate and well-calibrated?
 - What should I deprioritize when time is running out?
 
-## Current milestone — probabilistic grade forecasting
+## Current milestone — forecast outcome tracking and empirical calibration
 
 The backend can now:
 
@@ -39,15 +40,17 @@ The backend can now:
 - preserve response-level mastery history and trend analytics
 - calibrate per-topic learning responsiveness and retention conservatively
 - feed calibrated learning/retention signals into planning and review scheduling
-- convert the planner point estimate into a provisional score distribution
-- expose expected score, standard deviation, and a configurable likely-score interval
-- estimate `P(score >= threshold)` for the target and arbitrary requested thresholds
-- generate probability-aware study-hour scenarios
-- estimate hours required for a requested probability of reaching a target
-- expose evidence quality so clients can distinguish weak from stronger forecasts
-- widen uncertainty slightly for longer future study horizons
+- produce provisional expected-score distributions and target probabilities
+- persist immutable pre-exam forecast snapshots
+- attach the eventual real exam score to a saved snapshot
+- calculate forecast MAE, RMSE, and signed bias
+- measure likely-interval coverage against the nominal interval probability
+- score target probabilities with Brier score and log loss
+- compare mean predicted target probability with observed target-hit frequency
+- classify the available outcome evidence as insufficient, preliminary, developing, or measured
+- emit a cautious widen/stable/narrow uncertainty diagnostic only after at least three outcomes
 
-The probability layer is intentionally labelled **provisional**. It is useful for planning and comparing scenarios, but it is not yet statistically calibrated against held-out real exam outcomes. StudyOS therefore never presents the probability as a guarantee.
+Forecast snapshots are immutable by design. Once saved, the expected score, interval, target probability, evidence quality, thresholds, and assumptions remain exactly as they were before the outcome was known. This prevents later diagnostics or study activity from rewriting the historical prediction.
 
 ## API
 
@@ -78,24 +81,105 @@ The probability layer is intentionally labelled **provisional**. It is useful fo
 | `GET` | `/api/v1/courses/{course_id}/reviews` | Read forgetting-aware review recommendations |
 | `POST` | `/api/v1/courses/{course_id}/study-plan` | Generate a target-grade study plan |
 | `POST` | `/api/v1/courses/{course_id}/grade-forecast` | Generate a provisional probability-aware grade forecast |
+| `POST` | `/api/v1/courses/{course_id}/forecast-snapshots` | Generate and persist an immutable pre-exam forecast |
+| `GET` | `/api/v1/courses/{course_id}/forecast-snapshots` | Read saved forecasts and attached outcomes |
+| `POST` | `/api/v1/courses/{course_id}/forecast-snapshots/{snapshot_id}/outcome` | Attach the actual exam grade to a saved forecast |
+| `GET` | `/api/v1/courses/{course_id}/forecast-calibration` | Read empirical forecast accuracy/calibration metrics |
 
 FastAPI exposes interactive API documentation at `/docs` while the server is running.
 
-## Probabilistic grade model
+## Forecast snapshots and outcomes
 
-A forecast request can specify study hours, a target grade, arbitrary score thresholds, the desired probability for target planning, and an interval probability:
+A forecast can be saved before the exam:
 
 ```json
 {
-  "study_hours": 18,
-  "target_grade": 25,
-  "desired_probability": 0.8,
-  "interval_probability": 0.8,
-  "thresholds": [18, 21, 24, 25, 27]
+  "label": "Physics I September written exam",
+  "exam_date": "2026-09-15",
+  "forecast": {
+    "study_hours": 18,
+    "target_grade": 25,
+    "desired_probability": 0.8,
+    "interval_probability": 0.8,
+    "thresholds": [18, 21, 24, 25, 27]
+  }
 }
 ```
 
-The response exposes:
+The saved record preserves the original model/version, expected grade, uncertainty, interval, target probability, evidence quality/confidence, threshold probabilities, request payload, and model assumptions.
+
+After the exam, attach the observed grade:
+
+```json
+{
+  "actual_grade": 26,
+  "occurred_at": "2026-09-15"
+}
+```
+
+A snapshot accepts only one outcome. The actual grade cannot exceed the score maximum that was stored with that historical forecast.
+
+## Empirical forecast calibration
+
+`GET /api/v1/courses/{course_id}/forecast-calibration` evaluates completed forecast/outcome pairs.
+
+### Score accuracy
+
+StudyOS reports:
+
+```text
+mean_absolute_error
+root_mean_squared_error
+mean_signed_error
+```
+
+Signed error is `forecast - actual`, so a positive mean indicates systematic overprediction and a negative mean indicates underprediction.
+
+### Interval calibration
+
+StudyOS reports the fraction of real grades that landed inside the saved likely-score interval and compares it with the average nominal interval probability:
+
+```text
+interval_coverage
+average_nominal_interval_probability
+coverage_gap
+average_interval_width
+```
+
+If nominal 80% intervals only contain 55% of outcomes, the uncertainty model is likely too narrow. If they contain nearly every outcome, the interval may be too wide. The current `widen / stable / narrow` diagnostic is only emitted once at least three outcomes exist.
+
+### Probability calibration
+
+For the saved target threshold, StudyOS records whether the student actually met the target and evaluates the stored probability with:
+
+```text
+mean_target_probability
+observed_target_rate
+target_calibration_gap
+brier_score
+log_loss
+```
+
+Lower Brier score and log loss are better. The calibration gap is descriptive: with enough independent outcomes, predicted target probabilities should broadly agree with observed target-hit frequencies.
+
+### Evidence maturity
+
+Calibration status is intentionally conservative:
+
+```text
+< 3 outcomes   insufficient_data
+3–9 outcomes   preliminary
+10–29 outcomes developing
+30+ outcomes   measured
+```
+
+These labels describe sample maturity, not proof that the model is statistically valid. Repeated forecasts for highly similar exams are also not guaranteed to be independent observations.
+
+## Probabilistic grade model
+
+`probabilistic-v1` uses the inspectable `heuristic-v5` planner as its expected-score model and places a provisional uncertainty distribution around that mean.
+
+A forecast can expose:
 
 ```text
 forecast_model: probabilistic-v1
@@ -112,63 +196,17 @@ required-hours sensitivity band
 study-hour scenarios
 ```
 
-The expected score still comes from the inspectable `heuristic-v5` planner. The probability layer adds uncertainty around that estimate rather than pretending the planner itself has become ground truth.
+Forecast uncertainty contracts with stronger measured topic coverage, effective mastery confidence, past-paper evidence, and longitudinal learning/retention evidence. Longer future study horizons add a small uncertainty penalty.
 
-### Evidence quality
+Probability outputs remain **provisional**. Persisting outcomes now gives StudyOS the data needed to test and eventually recalibrate those assumptions rather than simply declaring them calibrated.
 
-Forecast uncertainty contracts as StudyOS gains stronger evidence from:
-
-1. measured topic coverage
-2. effective mastery confidence
-3. past-paper question/mark evidence
-4. longitudinal learning and retention history
-
-Longer future study horizons add a small uncertainty penalty because projected learning becomes less certain farther from observed evidence.
-
-### Required hours for a target probability
-
-StudyOS can answer a planning question such as:
-
-```text
-Target: 25 / 30
-Desired probability: 80%
-Estimated required study: 24.5h
-Optimistic sensitivity: 21.0h
-Conservative sensitivity: 29.0h
-```
-
-The optimistic/conservative values are **sensitivity bounds produced by changing the uncertainty width by ±15%**. They are not a formal statistical confidence interval for study time.
-
-### Probability limitations
-
-`probabilistic-v1` currently uses a normal approximation around the planner mean and a transparent evidence-quality uncertainty heuristic. The score interval is bounded to the valid course grade range, while threshold probabilities remain provisional approximations.
-
-The next calibration step is to record real exam outcomes, preserve the forecast that existed before each exam, and measure whether statements such as “80% chance” actually occur roughly 80% of the time.
-
-## Calibration model
+## Learning, retention, and planning calibration
 
 The learning/retention calibration endpoint exposes each topic's history count, evidence span, learning-rate multiplier, learning scale, learning confidence, observed gain per evidence, heuristic/calibrated retention half-life, retention confidence, observation count, and calibration source.
 
 Diagnostic response duration is **not** treated as study time. Learning-rate adjustments are confidence-shrunk toward the generic curve, while retention estimates only use meaningful time-separated performance drops.
 
-## Mastery, retention, and mistakes
-
-Each scored diagnostic response records one mastery-history point for every affected topic. StudyOS derives recent accuracy, trend direction/confidence, evidence span, and observed mastery gain while preserving raw mastery separately from forgetting-adjusted effective mastery.
-
-The review queue combines evidence age, effective mastery, exam weight, exam proximity, and the active retention half-life. Mistake intelligence separately tracks recurring concept, formula-selection, algebra, arithmetic, sign, unit, interpretation, incomplete-reasoning, careless, and other errors.
-
-## Study-plan model
-
-The current `heuristic-v5` planner combines:
-
-1. **Course importance** from the topic graph.
-2. **Exam weight** from past-paper frequency and known marks.
-3. **Forgetting-adjusted mastery gap** from measured diagnostic evidence, explicit overrides, or the fallback baseline.
-4. **Mistake focus** from classified error patterns.
-5. **Personalized learning scale** from longitudinal mastery movement when available.
-6. **Calibrated retention half-life** from time-separated performance evidence when available.
-
-The planner remains inspectable, and the probability layer is kept separate so confidence/uncertainty assumptions can evolve without hiding the underlying study-allocation logic.
+The current `heuristic-v5` planner combines course importance, past-paper exam weight, forgetting-adjusted mastery, mistake focus, personalized learning scale, and calibrated retention half-life. The probability layer remains separate so its uncertainty assumptions can be backtested without hiding the underlying study-allocation logic.
 
 ## Roadmap
 
@@ -208,9 +246,13 @@ The planner remains inspectable, and the probability layer is kept separate so c
 - [x] probability-aware study-time scenarios
 - [x] required-hours estimates for a chosen target probability
 - [x] evidence-quality-driven uncertainty width
-- [ ] persist pre-exam forecasts and real exam outcomes
-- [ ] backtesting, calibration curves, Brier/log scoring, and interval coverage
-- [ ] empirically recalibrate probability/uncertainty parameters
+- [x] immutable pre-exam forecast snapshots
+- [x] real exam outcome attachment
+- [x] MAE/RMSE/bias backtesting
+- [x] interval coverage diagnostics
+- [x] Brier/log scoring and target calibration gap
+- [ ] guarded empirical recalibration of uncertainty/probabilities
+- [ ] calibration buckets/reliability curves across larger samples
 
 ### Phase 4 — Course-aware tutor
 Retrieval over uploaded material, cited explanations, exam-style questions, and guided problem solving.
@@ -273,7 +315,9 @@ pytest
 4. Accumulate diagnostic evidence and inspect mastery/mistake trends.
 5. Use `/calibration` and `/reviews` to understand learning speed and staleness.
 6. Generate `/study-plan` for topic-level allocation.
-7. Call `/grade-forecast` with candidate study-hour budgets and target thresholds.
-8. Compare the expected score, likely range, target probability, and required-hours band.
+7. Call `/grade-forecast` while exploring possible study-hour budgets.
+8. Before the real exam, persist the chosen state with `/forecast-snapshots`.
+9. After the exam, attach the real grade to that snapshot.
+10. Use `/forecast-calibration` to inspect accuracy, interval coverage, and probability calibration over time.
 
-The next Phase 3 milestone is **forecast/outcome tracking and empirical calibration** so StudyOS can learn whether its probability statements are actually reliable over real exams.
+The next Phase 3 milestone is **guarded empirical recalibration**: use accumulated real outcomes to adjust future uncertainty width only when sample maturity is high enough, while preserving the raw uncalibrated forecast for auditability.
