@@ -15,6 +15,7 @@ from app.api.mastery_history import router as mastery_history_router
 from app.api.mistakes import router as mistakes_router
 from app.api.planning import router as planning_router
 from app.api.reviews import router as reviews_router
+from app.api.tutor import router as tutor_router
 from app.core.config import Settings, get_settings
 from app.core.database import Base, create_database_engine, create_session_factory
 
@@ -39,7 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application = FastAPI(
         title=resolved_settings.app_name,
-        version="0.15.0",
+        version="0.16.0",
         description="Backend API for StudyOS.",
         lifespan=lifespan,
     )
@@ -57,6 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(calibration_router, prefix=resolved_settings.api_prefix)
     application.include_router(grade_modeling_router, prefix=resolved_settings.api_prefix)
     application.include_router(forecast_tracking_router, prefix=resolved_settings.api_prefix)
+    application.include_router(tutor_router, prefix=resolved_settings.api_prefix)
 
     @application.get("/")
     def root() -> dict[str, str]:
