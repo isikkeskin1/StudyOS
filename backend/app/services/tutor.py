@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.course_intelligence import CourseTopic, TopicEvidence
 from app.models.document import Document
 from app.models.document_content import DocumentAnalysis, DocumentChunk, DocumentUnit
 from app.schemas.tutor import (
@@ -17,11 +18,16 @@ from app.schemas.tutor import (
     TutorSearchRead,
     TutorSearchRequest,
 )
+from app.services.tutor_provider import (
+    TutorProviderConfig,
+    build_tutor_provider,
+    validate_grounded_draft,
+)
 
-_RETRIEVAL_MODEL = "lexical-bm25-v1"
-_ANSWER_MODE = "extractive-grounded-v1"
+_LEXICAL_MODEL = "lexical-bm25-v1"
+_HYBRID_MODEL = "hybrid-topic-bm25-v1"
+_ANSWER_MODE = "grounded-synthesis-v2"
 _TOKEN_PATTERN = re.compile(r"[a-zA-Z0-9]+(?:['’-][a-zA-Z0-9]+)?")
-_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
 _STOPWORDS = {
     "a",
     "an",
@@ -66,8 +72,19 @@ class _Candidate:
     tokens: list[str]
 
 
+@dataclass(frozen=True)
+class _RetrievalResult:
+    citations: list[TutorCitationRead]
+    model: str
+    components: list[str]
+    topic_signal_applied: bool
+
+
 def _tokens(text: str) -> list[str]:
-    tokens = [match.group(0).lower().replace("’", "'") for match in _TOKEN_PATTERN.finditer(text)]
+    tokens = [
+        match.group(0).lower().replace("’", "'")
+        for match in _TOKEN_PATTERN.finditer(text)
+    ]
     meaningful = [token for token in tokens if token not in _STOPWORDS]
     return meaningful or tokens
 
@@ -103,6 +120,37 @@ def _candidate_rows(
     return candidates
 
 
+def _topic_signals(
+    db: Session,
+    course_id: str,
+    query_terms: set[str],
+) -> dict[str, tuple[float, list[str]]]:
+    topics = list(
+        db.scalars(select(CourseTopic).where(CourseTopic.course_id == course_id)).all()
+    )
+    matched_topics = [
+        topic for topic in topics if query_terms & set(_tokens(topic.normalized_name))
+    ]
+    if not matched_topics:
+        return {}
+
+    topic_by_id = {topic.id: topic for topic in matched_topics}
+    evidence = db.scalars(
+        select(TopicEvidence).where(TopicEvidence.topic_id.in_(list(topic_by_id)))
+    ).all()
+    by_chunk: dict[str, tuple[float, list[str]]] = {}
+    max_evidence = max((item.evidence_score for item in evidence), default=1.0)
+    for item in evidence:
+        topic = topic_by_id[item.topic_id]
+        normalized_evidence = item.evidence_score / max(max_evidence, 1e-9)
+        affinity = min(1.0, 0.6 * topic.importance_score + 0.4 * normalized_evidence)
+        current_score, names = by_chunk.get(item.chunk_id, (0.0, []))
+        if topic.name not in names:
+            names = [*names, topic.name]
+        by_chunk[item.chunk_id] = (max(current_score, affinity), names)
+    return by_chunk
+
+
 def _excerpt(text: str, max_chars: int = 620) -> str:
     compact = " ".join(text.split())
     if len(compact) <= max_chars:
@@ -111,31 +159,37 @@ def _excerpt(text: str, max_chars: int = 620) -> str:
 
 
 def _rank(
+    db: Session,
+    course_id: str,
     candidates: list[_Candidate],
     query: str,
     limit: int,
-) -> list[TutorCitationRead]:
+) -> _RetrievalResult:
     if not candidates:
-        return []
+        return _RetrievalResult([], _LEXICAL_MODEL, ["bm25"], False)
 
     query_terms = list(dict.fromkeys(_tokens(query)))
     if not query_terms:
-        return []
+        return _RetrievalResult([], _LEXICAL_MODEL, ["bm25"], False)
 
+    topic_signals = _topic_signals(db, course_id, set(query_terms))
     document_frequency = {
         term: sum(1 for candidate in candidates if term in set(candidate.tokens))
         for term in query_terms
     }
-    average_length = sum(len(candidate.tokens) for candidate in candidates) / len(candidates)
-    average_length = max(average_length, 1.0)
+    average_length = max(
+        sum(len(candidate.tokens) for candidate in candidates) / len(candidates),
+        1.0,
+    )
     count = len(candidates)
     query_phrase = " ".join(query.lower().split())
 
-    scored: list[tuple[float, float, list[str], _Candidate]] = []
+    scored: list[tuple[float, float, float, list[str], list[str], _Candidate]] = []
     for candidate in candidates:
         frequencies = Counter(candidate.tokens)
         matched = [term for term in query_terms if frequencies[term] > 0]
-        if not matched:
+        topic_affinity, matched_topics = topic_signals.get(candidate.chunk.id, (0.0, []))
+        if not matched and topic_affinity <= 0:
             continue
 
         bm25 = 0.0
@@ -149,23 +203,23 @@ def _rank(
             bm25 += idf * (frequency * 2.2) / denominator
 
         coverage = len(matched) / len(query_terms)
-        normalized_bm25 = bm25 / (bm25 + 2.0)
+        normalized_bm25 = bm25 / (bm25 + 2.0) if bm25 > 0 else 0.0
         phrase_match = query_phrase and query_phrase in candidate.chunk.text.lower()
         phrase_bonus = 0.08 if phrase_match else 0.0
-        relevance = min(1.0, 0.62 * coverage + 0.38 * normalized_bm25 + phrase_bonus)
-        scored.append((relevance, coverage, matched, candidate))
+        lexical = min(1.0, 0.62 * coverage + 0.38 * normalized_bm25 + phrase_bonus)
+        relevance = min(1.0, 0.78 * lexical + 0.22 * topic_affinity)
+        scored.append(
+            (relevance, lexical, topic_affinity, matched, matched_topics, candidate)
+        )
 
     scored.sort(
-        key=lambda item: (
-            item[0],
-            item[1],
-            -item[3].chunk.chunk_index,
-        ),
+        key=lambda item: (item[0], item[1], item[2], -item[5].chunk.chunk_index),
         reverse=True,
     )
 
     citations: list[TutorCitationRead] = []
-    for rank, (relevance, coverage, matched, candidate) in enumerate(scored[:limit], start=1):
+    for rank, item in enumerate(scored[:limit], start=1):
+        relevance, lexical, topic_affinity, matched, matched_topics, candidate = item
         citations.append(
             TutorCitationRead(
                 rank=rank,
@@ -181,11 +235,37 @@ def _rank(
                 ),
                 excerpt=_excerpt(candidate.chunk.text),
                 relevance_score=round(relevance, 4),
-                term_coverage=round(coverage, 4),
+                lexical_score=round(lexical, 4),
+                topic_affinity=round(topic_affinity, 4),
+                term_coverage=round(len(matched) / len(query_terms), 4),
                 matched_terms=matched,
+                matched_topics=matched_topics,
             )
         )
-    return citations
+
+    hybrid = any(citation.topic_affinity > 0 for citation in citations)
+    return _RetrievalResult(
+        citations=citations,
+        model=_HYBRID_MODEL if hybrid else _LEXICAL_MODEL,
+        components=["bm25", "course_topic_evidence"] if hybrid else ["bm25"],
+        topic_signal_applied=hybrid,
+    )
+
+
+def _retrieve(
+    db: Session,
+    course_id: str,
+    query: str,
+    limit: int,
+    document_types: list[str],
+) -> _RetrievalResult:
+    return _rank(
+        db,
+        course_id,
+        _candidate_rows(db, course_id, document_types),
+        query,
+        limit,
+    )
 
 
 def search_course_material(
@@ -193,115 +273,143 @@ def search_course_material(
     course_id: str,
     payload: TutorSearchRequest,
 ) -> TutorSearchRead:
-    citations = _rank(
-        _candidate_rows(db, course_id, payload.document_types),
+    result = _retrieve(
+        db,
+        course_id,
         payload.query,
         payload.limit,
+        payload.document_types,
     )
     return TutorSearchRead(
         course_id=course_id,
         query=payload.query,
-        retrieval_model=_RETRIEVAL_MODEL,
-        result_count=len(citations),
-        citations=citations,
+        retrieval_model=result.model,
+        retrieval_components=result.components,
+        topic_signal_applied=result.topic_signal_applied,
+        result_count=len(result.citations),
+        citations=result.citations,
     )
 
 
-def _best_sentence(excerpt: str, query_terms: set[str]) -> tuple[float, str] | None:
-    best: tuple[float, str] | None = None
-    for sentence in _SENTENCE_SPLIT.split(excerpt):
-        clean = " ".join(sentence.split()).strip()
-        if len(clean) < 12:
-            continue
-        sentence_terms = set(_tokens(clean))
-        overlap = len(query_terms & sentence_terms)
-        if overlap == 0:
-            continue
-        score = overlap / max(1, len(query_terms))
-        if best is None or score > best[0]:
-            best = (score, clean)
-    return best
+def _insufficient_answer(
+    course_id: str,
+    payload: TutorAskRequest,
+    result: _RetrievalResult,
+    note: str,
+) -> TutorAnswerRead:
+    return TutorAnswerRead(
+        course_id=course_id,
+        question=payload.question,
+        answer_mode=_ANSWER_MODE,
+        answer_style=payload.answer_style,
+        provider_requested=payload.provider,
+        synthesis_provider="not_run",
+        retrieval_model=result.model,
+        retrieval_components=result.components,
+        topic_signal_applied=result.topic_signal_applied,
+        grounding_status="insufficient_evidence",
+        validation_status="not_run",
+        answer=(
+            "I couldn't find enough support for that answer in the processed course material. "
+            "Upload or process a relevant source, or ask a question covered by the current course."
+        ),
+        citation_coverage=0.0,
+        grounding_score=0.0,
+        citations=[],
+        note=note,
+    )
 
 
 def answer_from_course_material(
     db: Session,
     course_id: str,
     payload: TutorAskRequest,
+    provider_config: TutorProviderConfig | None = None,
 ) -> TutorAnswerRead:
-    citations = _rank(
-        _candidate_rows(db, course_id, payload.document_types),
+    result = _retrieve(
+        db,
+        course_id,
         payload.question,
         payload.max_sources,
+        payload.document_types,
     )
     supported = [
-        citation for citation in citations if citation.relevance_score >= payload.minimum_relevance
+        citation
+        for citation in result.citations
+        if citation.relevance_score >= payload.minimum_relevance
     ]
-
     if not supported:
-        return TutorAnswerRead(
-            course_id=course_id,
-            question=payload.question,
-            answer_mode=_ANSWER_MODE,
-            retrieval_model=_RETRIEVAL_MODEL,
-            grounding_status="insufficient_evidence",
-            answer=(
-                "I couldn't find enough support for that answer in the processed course material. "
-                "Upload or process a relevant source, or ask a question covered by the "
-                "current course."
-            ),
-            citation_coverage=0.0,
-            citations=[],
-            note=(
-                "No answer was synthesized because the retrieved course evidence did not meet the "
-                "minimum relevance threshold."
-            ),
+        return _insufficient_answer(
+            course_id,
+            payload,
+            result,
+            "Retrieved course evidence did not meet the minimum relevance threshold.",
         )
 
-    query_terms = set(_tokens(payload.question))
-    answer_parts: list[str] = []
-    used_citations: list[TutorCitationRead] = []
-    seen_sentences: set[str] = set()
-    for citation in supported:
-        best = _best_sentence(citation.excerpt, query_terms)
-        if best is None:
-            continue
-        sentence = best[1]
-        normalized = sentence.lower()
-        if normalized in seen_sentences:
-            continue
-        seen_sentences.add(normalized)
-        used_citations.append(citation.model_copy(update={"rank": len(used_citations) + 1}))
-        answer_parts.append(f"{sentence} [{len(used_citations)}]")
-        if len(answer_parts) == 3:
-            break
+    ranked = [
+        citation.model_copy(update={"rank": index})
+        for index, citation in enumerate(supported, 1)
+    ]
+    provider = build_tutor_provider(
+        payload.provider,
+        provider_config or TutorProviderConfig(),
+    )
+    draft = provider.synthesize(payload.question, ranked, payload.answer_style)
+    if draft.insufficient_evidence:
+        response = _insufficient_answer(
+            course_id,
+            payload,
+            result,
+            "The synthesis provider determined that the citation packet was insufficient.",
+        )
+        return response.model_copy(update={"synthesis_provider": draft.provider})
 
-    if not answer_parts:
-        return TutorAnswerRead(
-            course_id=course_id,
-            question=payload.question,
-            answer_mode=_ANSWER_MODE,
-            retrieval_model=_RETRIEVAL_MODEL,
-            grounding_status="insufficient_evidence",
-            answer=(
-                "I found related material, but not a sufficiently direct statement to answer the "
-                "question without guessing."
+    validation = validate_grounded_draft(draft, ranked)
+    if validation.status != "passed":
+        response = _insufficient_answer(
+            course_id,
+            payload,
+            result,
+            (
+                "The generated draft was rejected because one or more claims were uncited, "
+                "invalidly cited, or insufficiently supported by the cited excerpt."
             ),
-            citation_coverage=0.0,
-            citations=[],
-            note="Related chunks were retrieved, but no direct grounded sentence was selected.",
+        )
+        return response.model_copy(
+            update={
+                "synthesis_provider": draft.provider,
+                "validation_status": "rejected",
+                "validation_model": validation.model,
+                "citation_coverage": validation.citation_coverage,
+                "grounding_score": validation.grounding_score,
+                "minimum_claim_support": validation.minimum_support_score,
+                "validated_claim_count": validation.validated_claim_count,
+                "unsupported_claim_count": validation.unsupported_claim_count,
+            }
         )
 
     return TutorAnswerRead(
         course_id=course_id,
         question=payload.question,
         answer_mode=_ANSWER_MODE,
-        retrieval_model=_RETRIEVAL_MODEL,
+        answer_style=payload.answer_style,
+        provider_requested=payload.provider,
+        synthesis_provider=draft.provider,
+        retrieval_model=result.model,
+        retrieval_components=result.components,
+        topic_signal_applied=result.topic_signal_applied,
         grounding_status="supported",
-        answer=" ".join(answer_parts),
-        citation_coverage=1.0,
-        citations=used_citations,
+        validation_status="passed",
+        validation_model=validation.model,
+        answer=draft.answer,
+        citation_coverage=validation.citation_coverage,
+        grounding_score=validation.grounding_score,
+        minimum_claim_support=validation.minimum_support_score,
+        validated_claim_count=validation.validated_claim_count,
+        unsupported_claim_count=0,
+        citations=ranked,
         note=(
-            "This is a deterministic extractive answer grounded only in processed course material. "
-            "A later LLM adapter can synthesize richer explanations from the same citation packet."
+            "The answer was generated through a provider-neutral grounded synthesis interface and "
+            "accepted only after local claim-to-citation validation."
         ),
     )
