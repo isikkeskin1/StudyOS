@@ -151,3 +151,53 @@ class TutorPracticeGradeArtifact(Base):
         nullable=False,
         default=lambda: datetime.now(UTC),
     )
+
+
+class TutorPracticeSession(Base):
+    __tablename__ = "tutor_practice_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    course_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("courses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    provider_requested: Mapped[str] = mapped_column(String(16), nullable=False)
+    retrieval_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    max_items: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TutorPracticeSessionItem(Base):
+    __tablename__ = "tutor_practice_session_items"
+    __table_args__ = (
+        UniqueConstraint("session_id", "sequence", name="uq_practice_session_sequence"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    session_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tutor_practice_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    practice_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tutor_practice_items.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+    )

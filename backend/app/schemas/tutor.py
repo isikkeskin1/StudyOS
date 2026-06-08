@@ -141,6 +141,7 @@ class TutorPracticeEvaluateRequest(BaseModel):
     duration_seconds: int | None = Field(default=None, ge=0, le=86400)
     generate_next: bool = True
     grading_provider: TutorProvider = "auto"
+    session_id: str | None = Field(default=None, min_length=36, max_length=36)
 
 
 class TutorPracticeMistakeRead(BaseModel):
@@ -176,6 +177,61 @@ class TutorPracticeGradingRead(BaseModel):
     criteria: list[TutorPracticeRubricCriterionRead]
 
 
+class TutorPracticeSessionCreateRequest(BaseModel):
+    target_topic: str | None = Field(default=None, min_length=2, max_length=160)
+    difficulty: Literal["easy", "medium", "hard"] = "medium"
+    marks: int | None = Field(default=None, ge=1, le=30)
+    provider: TutorProvider = "auto"
+    retrieval_mode: RetrievalMode = "auto"
+    max_sources: int = Field(default=6, ge=1, le=12)
+    max_items: int = Field(default=10, ge=1, le=50)
+
+
+class TutorPracticeSessionMistakeRead(BaseModel):
+    category: MistakeCategory
+    occurrences: int
+    severity_total: float
+    average_severity: float
+
+
+class TutorPracticeSessionTopicRead(BaseModel):
+    topic: str
+    attempt_count: int
+    average_score: float
+    average_hints: float
+    mistake_count: int
+
+
+class TutorPracticeSessionContextRead(BaseModel):
+    session_id: str
+    recent_attempt_count: int
+    recent_average_score: float | None
+    recent_average_hints: float | None
+    dominant_mistake: MistakeCategory | None
+    dominant_mistake_count: int
+    focus_topic: str | None
+    focus_reason: str | None = None
+
+
+class TutorPracticeSessionRead(BaseModel):
+    id: str
+    course_id: str
+    status: Literal["active", "completed"]
+    provider_requested: TutorProvider
+    retrieval_mode: RetrievalMode
+    max_items: int
+    item_count: int
+    attempt_count: int
+    average_score: float | None
+    average_hints: float | None
+    dominant_mistakes: list[TutorPracticeSessionMistakeRead]
+    topic_summaries: list[TutorPracticeSessionTopicRead]
+    remediation_focus: str | None
+    current_practice: TutorPracticeRead | None
+    created_at: datetime
+    completed_at: datetime | None
+
+
 class TutorPracticeEvaluationRead(BaseModel):
     attempt_id: str
     practice_id: str
@@ -196,6 +252,11 @@ class TutorPracticeEvaluationRead(BaseModel):
         "reinforce",
         "maintain",
         "reoptimize",
+        "remediate_pattern",
+        "reduce_scaffolding",
+        "session_reoptimize",
+        "session_complete",
     ]
     next_reason: str
     next_practice: TutorPracticeRead | None
+    session_context: TutorPracticeSessionContextRead | None = None

@@ -15,6 +15,8 @@ from app.schemas.tutor import (
     TutorPracticeEvaluateRequest,
     TutorPracticeEvaluationRead,
     TutorPracticeRead,
+    TutorPracticeSessionCreateRequest,
+    TutorPracticeSessionRead,
     TutorSearchRead,
     TutorSearchRequest,
     TutorSolutionRead,
@@ -35,6 +37,13 @@ from app.services.tutor_practice import (
 from app.services.tutor_practice_evaluation import (
     TutorPracticeEvaluationError,
     evaluate_practice_item,
+)
+from app.services.tutor_practice_sessions import (
+    TutorPracticeSessionError,
+    complete_practice_session,
+    create_practice_session,
+    get_practice_session,
+    practice_session_read,
 )
 from app.services.tutor_provider import (
     TutorProviderConfig,
@@ -93,7 +102,10 @@ def _raise_tutor_error(exc: Exception) -> NoReturn:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Tutor model provider failed",
         ) from exc
-    if isinstance(exc, (TutorPracticeUnavailable, TutorPracticeEvaluationError)):
+    if isinstance(
+        exc,
+        (TutorPracticeUnavailable, TutorPracticeEvaluationError, TutorPracticeSessionError),
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
@@ -176,6 +188,75 @@ def tutor_create_practice(
 
 
 @router.post(
+    "/{course_id}/tutor/practice-sessions",
+    response_model=TutorPracticeSessionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def tutor_create_practice_session(
+    course_id: str,
+    payload: TutorPracticeSessionCreateRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> TutorPracticeSessionRead:
+    _course(db, course_id)
+    try:
+        return create_practice_session(
+            db,
+            course_id,
+            payload,
+            provider_config=_provider_config(request),
+            embedding_config=_embedding_config(request),
+        )
+    except (
+        TutorProviderUnavailable,
+        TutorProviderFailure,
+        TutorEmbeddingUnavailable,
+        TutorEmbeddingFailure,
+        TutorPracticeUnavailable,
+        TutorPracticeSessionError,
+    ) as exc:
+        _raise_tutor_error(exc)
+
+
+@router.get(
+    "/{course_id}/tutor/practice-sessions/{session_id}",
+    response_model=TutorPracticeSessionRead,
+)
+def tutor_get_practice_session(
+    course_id: str,
+    session_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> TutorPracticeSessionRead:
+    _course(db, course_id)
+    session = get_practice_session(db, course_id, session_id)
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Practice session not found",
+        )
+    return practice_session_read(db, session)
+
+
+@router.post(
+    "/{course_id}/tutor/practice-sessions/{session_id}/complete",
+    response_model=TutorPracticeSessionRead,
+)
+def tutor_complete_practice_session(
+    course_id: str,
+    session_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> TutorPracticeSessionRead:
+    _course(db, course_id)
+    session = get_practice_session(db, course_id, session_id)
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Practice session not found",
+        )
+    return complete_practice_session(db, session)
+
+
+@router.post(
     "/{course_id}/tutor/practice/{practice_id}/hint",
     response_model=TutorHintRead,
 )
@@ -225,6 +306,7 @@ def tutor_evaluate_practice(
         )
     except (
         TutorPracticeEvaluationError,
+        TutorPracticeSessionError,
         TutorProviderUnavailable,
         TutorProviderFailure,
     ) as exc:

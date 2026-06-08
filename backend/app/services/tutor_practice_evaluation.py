@@ -32,6 +32,10 @@ from app.services.tutor_embeddings import (
     TutorEmbeddingUnavailable,
 )
 from app.services.tutor_practice import TutorPracticeUnavailable, create_practice_item
+from app.services.tutor_practice_sessions import (
+    adapt_practice_session,
+    validate_practice_session_item,
+)
 from app.services.tutor_provider import (
     TutorProviderConfig,
     TutorProviderFailure,
@@ -267,6 +271,9 @@ def evaluate_practice_item(
     if existing is not None:
         raise TutorPracticeEvaluationError("This practice item has already been evaluated")
 
+    if payload.session_id is not None:
+        validate_practice_session_item(db, item.course_id, payload.session_id, item)
+
     resolved_provider_config = provider_config or TutorProviderConfig()
     mastery_before = _mastery_read(db, item)
     result = grade_practice_answer(
@@ -284,33 +291,51 @@ def evaluate_practice_item(
     recompute_course_mastery(db, item.course_id)
     rebuild_course_mastery_history(db, item.course_id)
     mastery_after = _mastery_read(db, item)
-    plan = _next_plan(item, result.score, mastery_after)
 
-    next_practice = None
-    next_reason = plan.reason
-    if payload.generate_next:
-        try:
-            next_practice = create_practice_item(
-                db,
-                item.course_id,
-                TutorPracticeCreateRequest(
-                    target_topic=plan.target_topic,
-                    difficulty=plan.difficulty,
-                    provider=_next_provider(item),
-                    retrieval_mode="auto",
-                ),
-                provider_config=resolved_provider_config,
-                embedding_config=embedding_config or TutorEmbeddingConfig(),
-                embedding_provider=embedding_provider,
-            )
-        except (
-            TutorPracticeUnavailable,
-            TutorProviderUnavailable,
-            TutorProviderFailure,
-            TutorEmbeddingUnavailable,
-            TutorEmbeddingFailure,
-        ) as exc:
-            next_reason = f"{plan.reason} Next practice could not be generated: {exc}"
+    session_context = None
+    if payload.session_id is not None:
+        adaptation = adapt_practice_session(
+            db,
+            item.course_id,
+            payload.session_id,
+            item,
+            generate_next=payload.generate_next,
+            provider_config=resolved_provider_config,
+            embedding_config=embedding_config or TutorEmbeddingConfig(),
+            embedding_provider=embedding_provider,
+        )
+        next_strategy = adaptation.strategy
+        next_reason = adaptation.reason
+        next_practice = adaptation.next_practice
+        session_context = adaptation.context
+    else:
+        plan = _next_plan(item, result.score, mastery_after)
+        next_strategy = plan.strategy
+        next_reason = plan.reason
+        next_practice = None
+        if payload.generate_next:
+            try:
+                next_practice = create_practice_item(
+                    db,
+                    item.course_id,
+                    TutorPracticeCreateRequest(
+                        target_topic=plan.target_topic,
+                        difficulty=plan.difficulty,
+                        provider=_next_provider(item),
+                        retrieval_mode="auto",
+                    ),
+                    provider_config=resolved_provider_config,
+                    embedding_config=embedding_config or TutorEmbeddingConfig(),
+                    embedding_provider=embedding_provider,
+                )
+            except (
+                TutorPracticeUnavailable,
+                TutorProviderUnavailable,
+                TutorProviderFailure,
+                TutorEmbeddingUnavailable,
+                TutorEmbeddingFailure,
+            ) as exc:
+                next_reason = f"{plan.reason} Next practice could not be generated: {exc}"
 
     mistakes = [
         TutorPracticeMistakeRead(
@@ -336,7 +361,8 @@ def evaluate_practice_item(
         grading=_grading_read(result),
         mastery_before=mastery_before,
         mastery_after=mastery_after,
-        next_strategy=plan.strategy,
+        next_strategy=next_strategy,
         next_reason=next_reason,
         next_practice=next_practice,
+        session_context=session_context,
     )
