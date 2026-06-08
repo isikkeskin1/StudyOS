@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.diagnostics import TopicMastery
 from app.models.tutor_practice import (
     TutorPracticeAttempt,
+    TutorPracticeGradeArtifact,
     TutorPracticeItem,
     TutorPracticeMistake,
 )
@@ -16,12 +17,14 @@ from app.schemas.tutor import (
     TutorPracticeCreateRequest,
     TutorPracticeEvaluateRequest,
     TutorPracticeEvaluationRead,
+    TutorPracticeGradingRead,
     TutorPracticeMasteryRead,
     TutorPracticeMistakeRead,
+    TutorPracticeRubricCriterionRead,
 )
 from app.services.diagnostics import recompute_course_mastery
-from app.services.grading import AutomaticGradeResult, grade_against_reference
 from app.services.mastery_history import rebuild_course_mastery_history
+from app.services.practice_grading import PracticeGradeResult, grade_practice_answer
 from app.services.tutor_embeddings import (
     TutorEmbeddingConfig,
     TutorEmbeddingFailure,
@@ -35,7 +38,6 @@ from app.services.tutor_provider import (
     TutorProviderUnavailable,
 )
 
-_GRADER_NAME = "deterministic-practice-solution-v1"
 _DIFFICULTIES = ["easy", "medium", "hard"]
 _HINT_FACTORS = {0: 1.0, 1: 0.82, 2: 0.64, 3: 0.48}
 _DIFFICULTY_FACTORS = {"easy": 0.80, "medium": 1.0, "hard": 1.20}
@@ -74,7 +76,7 @@ def _mastery_read(db: Session, item: TutorPracticeItem) -> TutorPracticeMasteryR
     )
 
 
-def _mastery_weight(item: TutorPracticeItem, result: AutomaticGradeResult) -> float:
+def _mastery_weight(item: TutorPracticeItem, result: PracticeGradeResult) -> float:
     hint_factor = _HINT_FACTORS.get(item.hints_revealed, 0.40)
     difficulty_factor = _DIFFICULTY_FACTORS[item.difficulty]
     source_factor = 0.90 if item.generation_mode == "novel-grounded-v1" else 1.0
@@ -157,11 +159,25 @@ def _next_provider(item: TutorPracticeItem) -> str:
     return "local"
 
 
+def _criteria_payload(result: PracticeGradeResult) -> list[dict]:
+    return [
+        {
+            "criterion": criterion.criterion,
+            "max_points": criterion.max_points,
+            "awarded_points": criterion.awarded_points,
+            "rationale": criterion.rationale,
+            "mistake_category": criterion.mistake_category,
+            "mistake_severity": criterion.mistake_severity,
+        }
+        for criterion in result.criteria
+    ]
+
+
 def _store_attempt(
     db: Session,
     item: TutorPracticeItem,
     payload: TutorPracticeEvaluateRequest,
-    result: AutomaticGradeResult,
+    result: PracticeGradeResult,
     mastery_weight: float,
 ) -> TutorPracticeAttempt:
     attempt = TutorPracticeAttempt(
@@ -170,7 +186,7 @@ def _store_attempt(
         course_id=item.course_id,
         student_answer=payload.student_answer,
         score=result.score,
-        grader_name=_GRADER_NAME,
+        grader_name=result.grader_name,
         grader_confidence=result.grader_confidence,
         evidence_coverage=result.evidence_coverage,
         mastery_weight=mastery_weight,
@@ -191,9 +207,40 @@ def _store_attempt(
                 note=mistake.note,
             )
         )
+    db.add(
+        TutorPracticeGradeArtifact(
+            id=str(uuid4()),
+            attempt_id=attempt.id,
+            grading_mode=result.grading_mode,
+            grading_provider=result.grader_name,
+            criteria=_criteria_payload(result),
+            total_awarded=result.total_awarded,
+            total_possible=result.total_possible,
+        )
+    )
     db.commit()
     db.refresh(attempt)
     return attempt
+
+
+def _grading_read(result: PracticeGradeResult) -> TutorPracticeGradingRead:
+    return TutorPracticeGradingRead(
+        grading_mode=result.grading_mode,
+        grading_provider=result.grader_name,
+        total_awarded=result.total_awarded,
+        total_possible=result.total_possible,
+        criteria=[
+            TutorPracticeRubricCriterionRead(
+                criterion=criterion.criterion,
+                max_points=criterion.max_points,
+                awarded_points=criterion.awarded_points,
+                rationale=criterion.rationale,
+                mistake_category=criterion.mistake_category,
+                mistake_severity=criterion.mistake_severity,
+            )
+            for criterion in result.criteria
+        ],
+    )
 
 
 def evaluate_practice_item(
@@ -220,11 +267,15 @@ def evaluate_practice_item(
     if existing is not None:
         raise TutorPracticeEvaluationError("This practice item has already been evaluated")
 
+    resolved_provider_config = provider_config or TutorProviderConfig()
     mastery_before = _mastery_read(db, item)
-    result = grade_against_reference(
-        item.question,
-        item.solution,
-        payload.student_answer,
+    result = grade_practice_answer(
+        requested_provider=payload.grading_provider,
+        config=resolved_provider_config,
+        question=item.question,
+        reference_solution=item.solution,
+        student_answer=payload.student_answer,
+        marks=item.marks,
         reference_confidence=_reference_confidence(item),
     )
     mastery_weight = _mastery_weight(item, result)
@@ -248,7 +299,7 @@ def evaluate_practice_item(
                     provider=_next_provider(item),
                     retrieval_mode="auto",
                 ),
-                provider_config=provider_config or TutorProviderConfig(),
+                provider_config=resolved_provider_config,
                 embedding_config=embedding_config or TutorEmbeddingConfig(),
                 embedding_provider=embedding_provider,
             )
@@ -282,6 +333,7 @@ def evaluate_practice_item(
         duration_seconds=payload.duration_seconds,
         feedback=result.feedback,
         mistakes=mistakes,
+        grading=_grading_read(result),
         mastery_before=mastery_before,
         mastery_after=mastery_after,
         next_strategy=plan.strategy,

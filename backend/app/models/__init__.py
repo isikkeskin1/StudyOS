@@ -30,6 +30,7 @@ from app.models.mistakes import DiagnosticAnswerArtifact, DiagnosticMistake
 from app.models.tutor_practice import (
     TutorPracticeAttempt,
     TutorPracticeEvidence,
+    TutorPracticeGradeArtifact,
     TutorPracticeItem,
     TutorPracticeMistake,
 )
@@ -62,6 +63,7 @@ __all__ = [
     "TopicRelationship",
     "TutorPracticeAttempt",
     "TutorPracticeEvidence",
+    "TutorPracticeGradeArtifact",
     "TutorPracticeItem",
     "TutorPracticeMistake",
 ]

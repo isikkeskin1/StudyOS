@@ -223,7 +223,11 @@ def tutor_evaluate_practice(
             provider_config=_provider_config(request),
             embedding_config=_embedding_config(request),
         )
-    except TutorPracticeEvaluationError as exc:
+    except (
+        TutorPracticeEvaluationError,
+        TutorProviderUnavailable,
+        TutorProviderFailure,
+    ) as exc:
         _raise_tutor_error(exc)
 
 

@@ -140,6 +140,7 @@ class TutorPracticeEvaluateRequest(BaseModel):
     student_answer: str = Field(min_length=1, max_length=20000)
     duration_seconds: int | None = Field(default=None, ge=0, le=86400)
     generate_next: bool = True
+    grading_provider: TutorProvider = "auto"
 
 
 class TutorPracticeMistakeRead(BaseModel):
@@ -158,6 +159,23 @@ class TutorPracticeMasteryRead(BaseModel):
     response_count: int
 
 
+class TutorPracticeRubricCriterionRead(BaseModel):
+    criterion: str
+    max_points: float
+    awarded_points: float
+    rationale: str
+    mistake_category: MistakeCategory | None = None
+    mistake_severity: float | None = None
+
+
+class TutorPracticeGradingRead(BaseModel):
+    grading_mode: str
+    grading_provider: str
+    total_awarded: float
+    total_possible: float
+    criteria: list[TutorPracticeRubricCriterionRead]
+
+
 class TutorPracticeEvaluationRead(BaseModel):
     attempt_id: str
     practice_id: str
@@ -170,6 +188,7 @@ class TutorPracticeEvaluationRead(BaseModel):
     duration_seconds: int | None
     feedback: str
     mistakes: list[TutorPracticeMistakeRead]
+    grading: TutorPracticeGradingRead
     mastery_before: TutorPracticeMasteryRead | None
     mastery_after: TutorPracticeMasteryRead | None
     next_strategy: Literal[
