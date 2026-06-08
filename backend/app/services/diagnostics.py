@@ -16,6 +16,7 @@ from app.models.diagnostics import (
     TopicMastery,
 )
 from app.models.exam_intelligence import ExamQuestion, ExamQuestionTopic, ExamTopicStat
+from app.models.tutor_practice import TutorPracticeAttempt, TutorPracticeItem
 from app.services.mastery_history import rebuild_course_mastery_history
 from app.services.mistake_intelligence import MistakeInput, store_response_details
 from app.services.retention import retention_snapshot
@@ -238,19 +239,24 @@ def recompute_course_mastery(db: Session, course_id: str) -> list[TopicMastery]:
             select(DiagnosticSession.id).where(DiagnosticSession.course_id == course_id)
         ).all()
     )
-    if not session_ids:
-        return []
-
-    diagnostic_questions = list(
-        db.scalars(
-            select(DiagnosticQuestion).where(DiagnosticQuestion.session_id.in_(session_ids))
-        ).all()
+    diagnostic_questions = (
+        list(
+            db.scalars(
+                select(DiagnosticQuestion).where(DiagnosticQuestion.session_id.in_(session_ids))
+            ).all()
+        )
+        if session_ids
+        else []
     )
     question_by_id = {question.id: question for question in diagnostic_questions}
-    responses = list(
-        db.scalars(
-            select(DiagnosticResponse).where(DiagnosticResponse.session_id.in_(session_ids))
-        ).all()
+    responses = (
+        list(
+            db.scalars(
+                select(DiagnosticResponse).where(DiagnosticResponse.session_id.in_(session_ids))
+            ).all()
+        )
+        if session_ids
+        else []
     )
     exam_question_ids = list({question.exam_question_id for question in diagnostic_questions})
     mappings_by_question = _question_mappings(db, exam_question_ids)
@@ -259,6 +265,7 @@ def recompute_course_mastery(db: Session, course_id: str) -> list[TopicMastery]:
         lambda: {"weight": 0.0, "success": 0.0, "count": 0.0}
     )
     latest_evidence: dict[str, datetime] = {}
+
     for response in responses:
         diagnostic_question = question_by_id.get(response.diagnostic_question_id)
         if diagnostic_question is None:
@@ -278,6 +285,27 @@ def recompute_course_mastery(db: Session, course_id: str) -> list[TopicMastery]:
             previous = latest_evidence.get(mapping.topic_id)
             if previous is None or response_time > previous:
                 latest_evidence[mapping.topic_id] = response_time
+
+    practice_rows = db.execute(
+        select(TutorPracticeAttempt, TutorPracticeItem)
+        .join(TutorPracticeItem, TutorPracticeItem.id == TutorPracticeAttempt.practice_id)
+        .where(TutorPracticeAttempt.course_id == course_id)
+    ).all()
+    for attempt, item in practice_rows:
+        if item.topic_id is None:
+            continue
+        weight = max(0.05, attempt.mastery_weight)
+        row = evidence[item.topic_id]
+        row["weight"] += weight
+        row["success"] += weight * attempt.score
+        row["count"] += 1.0
+        attempt_time = _as_utc(attempt.created_at)
+        previous = latest_evidence.get(item.topic_id)
+        if previous is None or attempt_time > previous:
+            latest_evidence[item.topic_id] = attempt_time
+
+    if not evidence:
+        return []
 
     existing = {
         item.topic_id: item

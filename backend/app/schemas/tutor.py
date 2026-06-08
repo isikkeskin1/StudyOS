@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.diagnostics import MistakeCategory
+
 RetrievalMode = Literal["auto", "lexical", "semantic", "hybrid"]
 TutorProvider = Literal["auto", "local", "openai"]
 
@@ -132,3 +134,49 @@ class TutorSolutionRead(BaseModel):
     solution: str
     sources: list[TutorPracticeSourceRead]
     solution_revealed: bool
+
+
+class TutorPracticeEvaluateRequest(BaseModel):
+    student_answer: str = Field(min_length=1, max_length=20000)
+    duration_seconds: int | None = Field(default=None, ge=0, le=86400)
+    generate_next: bool = True
+
+
+class TutorPracticeMistakeRead(BaseModel):
+    category: MistakeCategory
+    severity: float
+    source: Literal["automatic"]
+    note: str | None
+
+
+class TutorPracticeMasteryRead(BaseModel):
+    topic_id: str
+    topic_name: str
+    mastery: float
+    confidence: float
+    evidence_weight: float
+    response_count: int
+
+
+class TutorPracticeEvaluationRead(BaseModel):
+    attempt_id: str
+    practice_id: str
+    score: float
+    grader_name: str
+    grader_confidence: float
+    evidence_coverage: float
+    mastery_weight: float
+    hints_used: int
+    duration_seconds: int | None
+    feedback: str
+    mistakes: list[TutorPracticeMistakeRead]
+    mastery_before: TutorPracticeMasteryRead | None
+    mastery_after: TutorPracticeMasteryRead | None
+    next_strategy: Literal[
+        "increase_difficulty",
+        "reinforce",
+        "maintain",
+        "reoptimize",
+    ]
+    next_reason: str
+    next_practice: TutorPracticeRead | None

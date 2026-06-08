@@ -11,6 +11,11 @@ from app.models.course_intelligence import CourseTopic
 from app.models.diagnostics import DiagnosticQuestion, DiagnosticResponse, DiagnosticSession
 from app.models.exam_intelligence import ExamQuestionTopic
 from app.models.mistakes import DiagnosticAnswerArtifact, DiagnosticMistake
+from app.models.tutor_practice import (
+    TutorPracticeAttempt,
+    TutorPracticeItem,
+    TutorPracticeMistake,
+)
 
 
 @dataclass(frozen=True)
@@ -143,9 +148,18 @@ def _course_rows(
     return responses, question_by_id, mappings
 
 
+def _severity_total(mistakes: list) -> float:
+    return sum(max(item.severity, 0.01) for item in mistakes)
+
+
 def summarize_course_mistakes(db: Session, course_id: str) -> CourseMistakeSummary:
     responses, question_by_id, mappings_by_question = _course_rows(db, course_id)
-    if not responses:
+    practice_rows = db.execute(
+        select(TutorPracticeAttempt, TutorPracticeItem)
+        .join(TutorPracticeItem, TutorPracticeItem.id == TutorPracticeAttempt.practice_id)
+        .where(TutorPracticeAttempt.course_id == course_id)
+    ).all()
+    if not responses and not practice_rows:
         return CourseMistakeSummary(0, 0, 0.0, 0.0, 0.0, [], [])
 
     response_ids = [response.id for response in responses]
@@ -155,6 +169,14 @@ def summarize_course_mistakes(db: Session, course_id: str) -> CourseMistakeSumma
             select(DiagnosticMistake).where(DiagnosticMistake.response_id.in_(response_ids))
         ).all():
             mistakes_by_response[mistake.response_id].append(mistake)
+
+    attempt_ids = [attempt.id for attempt, _ in practice_rows]
+    mistakes_by_attempt: dict[str, list[TutorPracticeMistake]] = defaultdict(list)
+    if attempt_ids:
+        for mistake in db.scalars(
+            select(TutorPracticeMistake).where(TutorPracticeMistake.attempt_id.in_(attempt_ids))
+        ).all():
+            mistakes_by_attempt[mistake.attempt_id].append(mistake)
 
     category_loss: Counter[str] = Counter()
     category_occurrences: Counter[str] = Counter()
@@ -173,7 +195,7 @@ def summarize_course_mistakes(db: Session, course_id: str) -> CourseMistakeSumma
         if response_mistakes:
             responses_with_mistakes += 1
             classified_loss_total += loss
-            severity_total = sum(max(item.severity, 0.01) for item in response_mistakes)
+            severity_total = _severity_total(response_mistakes)
             for item in response_mistakes:
                 fraction = max(item.severity, 0.01) / severity_total
                 category_loss[item.category] += loss * fraction
@@ -187,7 +209,7 @@ def summarize_course_mistakes(db: Session, course_id: str) -> CourseMistakeSumma
         if not response_mistakes or relevance_total <= 0:
             continue
 
-        severity_total = sum(max(item.severity, 0.01) for item in response_mistakes)
+        severity_total = _severity_total(response_mistakes)
         for mapping in mappings:
             relevance = max(mapping.relevance_score, 0.01)
             topic_exposure[mapping.topic_id] += relevance
@@ -197,6 +219,29 @@ def summarize_course_mistakes(db: Session, course_id: str) -> CourseMistakeSumma
                 topic_category_loss[mapping.topic_id][item.category] += (
                     loss * relevance / relevance_total * mistake_fraction
                 )
+
+    for attempt, practice in practice_rows:
+        loss = max(0.0, 1.0 - attempt.score)
+        lost_score_total += loss
+        attempt_mistakes = mistakes_by_attempt.get(attempt.id, [])
+        if not attempt_mistakes:
+            continue
+
+        responses_with_mistakes += 1
+        classified_loss_total += loss
+        severity_total = _severity_total(attempt_mistakes)
+        for item in attempt_mistakes:
+            fraction = max(item.severity, 0.01) / severity_total
+            category_loss[item.category] += loss * fraction
+            category_occurrences[item.category] += 1
+
+        if practice.topic_id is None:
+            continue
+        topic_exposure[practice.topic_id] += 1.0
+        topic_loss[practice.topic_id] += loss
+        for item in attempt_mistakes:
+            mistake_fraction = max(item.severity, 0.01) / severity_total
+            topic_category_loss[practice.topic_id][item.category] += loss * mistake_fraction
 
     categories = [
         MistakeCategorySummary(
@@ -236,7 +281,7 @@ def summarize_course_mistakes(db: Session, course_id: str) -> CourseMistakeSumma
     topics.sort(key=lambda item: item.mistake_burden, reverse=True)
 
     return CourseMistakeSummary(
-        response_count=len(responses),
+        response_count=len(responses) + len(practice_rows),
         responses_with_mistakes=responses_with_mistakes,
         lost_score_total=round(lost_score_total, 4),
         classified_loss_total=round(classified_loss_total, 4),
