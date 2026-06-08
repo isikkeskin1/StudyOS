@@ -21,6 +21,7 @@ class Settings(BaseModel):
     openai_tutor_max_output_tokens: int = Field(default=900, ge=128, le=4096)
     openai_embedding_model: str = "text-embedding-3-small"
     tutor_embedding_max_candidates: int = Field(default=128, ge=8, le=1024)
+    tutor_embedding_batch_size: int = Field(default=64, ge=1, le=256)
     allowed_extensions: tuple[str, ...] = (
         ".pdf",
         ".docx",
@@ -55,5 +56,8 @@ def get_settings() -> Settings:
         ),
         tutor_embedding_max_candidates=int(
             os.getenv("STUDYOS_TUTOR_EMBEDDING_MAX_CANDIDATES", "128")
+        ),
+        tutor_embedding_batch_size=int(
+            os.getenv("STUDYOS_TUTOR_EMBEDDING_BATCH_SIZE", "64")
         ),
     )

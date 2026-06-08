@@ -19,6 +19,7 @@ class TutorEmbeddingConfig:
     openai_api_key: str | None = None
     openai_model: str = "text-embedding-3-small"
     max_candidates: int = 128
+    batch_size: int = 64
 
 
 class TutorEmbeddingProvider(Protocol):
