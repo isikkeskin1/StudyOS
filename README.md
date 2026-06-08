@@ -15,222 +15,124 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 - Which topics are becoming stale and need review?
 - Are StudyOS forecasts accurate against real outcomes?
 - Can the tutor explain from my actual lectures, notes, exams, and solutions with exact citations?
+- Can StudyOS generate grounded practice and reveal help progressively instead of dumping the solution?
 - What should I deprioritize when time is running out?
 
-## Current milestone — grounded external tutor synthesis
+## Current milestone — semantic retrieval and guided practice
 
-The backend is now at **v0.18.0**.
+The backend is now at **v0.19.0**.
 
-The course-aware tutor now supports both a deterministic offline provider and an optional OpenAI Responses API provider behind the same grounding contract:
+The course-aware tutor now supports four retrieval modes:
+
+```text
+auto
+lexical
+semantic
+hybrid
+```
+
+The default deployment remains offline-safe. With no embedding provider configured, `auto` preserves the existing BM25 + course-topic retrieval path. When embeddings are enabled, `auto` can add vector similarity as a reranking signal.
+
+Current retrieval models include:
+
+```text
+lexical-bm25-v1
+hybrid-topic-bm25-v1
+semantic-vector-rerank-v1
+hybrid-vector-bm25-v1
+```
+
+Each citation can expose lexical, semantic, and course-topic scores independently so retrieval remains inspectable.
+
+### Optional embedding provider
+
+The first external embedding adapter uses the OpenAI embeddings API and defaults to:
+
+```text
+text-embedding-3-small
+```
+
+Configuration:
+
+```text
+STUDYOS_TUTOR_EMBEDDING_PROVIDER=none
+STUDYOS_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+STUDYOS_TUTOR_EMBEDDING_MAX_CANDIDATES=128
+```
+
+Explicit `semantic` or `hybrid` requests fail with `503` when no embedding provider is configured instead of silently pretending lexical retrieval is semantic retrieval.
+
+## Grounded tutor synthesis
+
+`POST /api/v1/courses/{course_id}/tutor/ask` still supports:
+
+```text
+provider: auto | local | openai
+```
+
+The synthesis flow remains:
 
 ```text
 question
    ↓
 course-isolated retrieval
    ↓
-BM25 + course topic/evidence signal
-   ↓
 ranked citation packet
    ↓
 local provider OR OpenAI provider
    ↓
-local claim-to-citation verification
+local citation-overlap-v2 validation
    ↓
 supported answer OR refusal
 ```
 
-The external model never receives unrestricted access to the course database. It receives only the already-ranked citation packet selected by StudyOS.
+The OpenAI provider receives only the selected citation packet, has no web tools enabled, treats source excerpts as untrusted data, and uses `store=False`. Every substantive answer sentence must contain valid source markers such as `[1]`.
 
-### Retrieval
+## Guided practice
 
-Without a course topic graph, retrieval uses:
+StudyOS now has persisted practice items with hidden solutions and progressive hints.
 
-```text
-lexical-bm25-v1
-```
-
-After course intelligence has been built, matching topic evidence becomes a second ranking signal:
+### Create practice
 
 ```text
-hybrid-topic-bm25-v1
-```
-
-Each result can expose:
-
-```text
-document_name
-document_type
-chunk_id
-source_label
-locator_type / locator_index
-source_reference
-excerpt
-relevance_score
-lexical_score
-topic_affinity
-term_coverage
-matched_terms
-matched_topics
-```
-
-References such as `lecture-slides.pptx — slide 4` and `exam.pdf — page 3` survive retrieval unchanged.
-
-## Tutor synthesis providers
-
-`POST /api/v1/courses/{course_id}/tutor/ask` accepts:
-
-```text
-provider: auto | local | openai
-```
-
-`auto` resolves to the deployment-level `STUDYOS_TUTOR_PROVIDER`. The default deployment provider is `local`, so development and CI remain deterministic and require no external credentials.
-
-### Local provider
-
-```text
-local-grounded-v1
-```
-
-This provider is deterministic and extractive. It is useful as a test baseline and as a zero-cost fallback deployment mode.
-
-### OpenAI provider
-
-When explicitly configured, StudyOS can synthesize a richer explanation through the OpenAI Responses API. The default configured tutor model is:
-
-```text
-gpt-5.6-luna
-```
-
-The model name is environment-configurable and is never hard-coded into the API contract.
-
-The provider sends:
-
-```text
-question
-requested answer style
-ranked source references
-ranked source excerpts
-```
-
-It does **not** enable web search or external tools. API response storage is disabled for these requests.
-
-Source excerpts are explicitly treated as untrusted data. The provider is instructed not to follow instructions found inside uploaded course text, reducing prompt-injection risk from documents.
-
-Every substantive generated sentence must contain one or more inline citation markers such as `[1]` or `[1][2]`. If the citation packet is insufficient, the provider can return `INSUFFICIENT_EVIDENCE` and StudyOS refuses to synthesize an answer.
-
-### Provider configuration
-
-`.env.example` documents the supported settings:
-
-```text
-STUDYOS_TUTOR_PROVIDER=local
-OPENAI_API_KEY=
-STUDYOS_OPENAI_TUTOR_MODEL=gpt-5.6-luna
-STUDYOS_OPENAI_TUTOR_MAX_OUTPUT_TOKENS=900
-```
-
-An explicit request for `provider: openai` without an API key returns `503`. Provider execution failures return `502`. StudyOS does not silently switch providers when an explicitly requested provider is unavailable.
-
-## Grounding validation
-
-Tutor answers now use:
-
-```text
-answer_mode: grounded-synthesis-v2
-validation_model: citation-overlap-v2
-```
-
-The original validator only checked whether a sentence contained a syntactically valid citation marker. That is not enough: a model could append `[1]` to an unrelated sentence.
-
-`citation-overlap-v2` therefore checks each substantive claim for:
-
-1. at least one citation marker;
-2. citation indices that exist in the retrieved packet;
-3. meaningful token overlap with the cited excerpt;
-4. at least two meaningful matching source terms for longer claims;
-5. numerical values that also appear in the cited evidence.
-
-A failed claim causes the whole generated draft to be rejected instead of partially returning unsupported text.
-
-The response exposes:
-
-```text
-provider_requested
-synthesis_provider
-retrieval_model
-retrieval_components
-topic_signal_applied
-grounding_status
-validation_status
-validation_model
-citation_coverage
-grounding_score
-minimum_claim_support
-validated_claim_count
-unsupported_claim_count
-```
-
-This is still a conservative lexical grounding check, not a full natural-language-entailment system. A later verifier can replace it behind the same contract.
-
-## Answer styles
-
-Tutor requests can select:
-
-```text
-concise
-guided
-exam
-```
-
-The style is passed through the provider boundary without changing retrieval or grounding semantics.
-
-## Tutor API
-
-### Search course material
-
-```text
-POST /api/v1/courses/{course_id}/tutor/search
+POST /api/v1/courses/{course_id}/tutor/practice
 ```
 
 Example:
 
 ```json
 {
-  "query": "net force acceleration",
-  "limit": 6,
-  "document_types": ["lecture", "notes"]
+  "difficulty": "medium",
+  "provider": "local"
 }
 ```
 
-### Ask from course material
+When no topic is specified, StudyOS chooses a topic using exam importance, measured mastery, and mastery confidence. The local provider does **not** invent synthetic questions: it reuses a mapped past-paper question only when an extracted reference solution exists.
+
+Local generation is labelled:
 
 ```text
-POST /api/v1/courses/{course_id}/tutor/ask
+generation_provider: local-past-exam-v1
+generation_mode: past-exam-reuse-v1
 ```
 
-Offline/default example:
+When `provider: openai` is configured, StudyOS can create a novel exam-style item from retrieved course evidence. The generated solution must pass the same local claim-to-citation validator before the item is saved.
 
-```json
-{
-  "question": "Why is acceleration negative in this solution?",
-  "max_sources": 6,
-  "minimum_relevance": 0.20,
-  "answer_style": "guided",
-  "provider": "auto"
-}
+### Progressive hints
+
+```text
+POST /api/v1/courses/{course_id}/tutor/practice/{practice_id}/hint
 ```
 
-Explicit external synthesis:
+Each request reveals exactly the next hint. The initial create response contains no hints and no solution text. After all three hints are exhausted, the endpoint returns `409` rather than looping or skipping state.
 
-```json
-{
-  "question": "Why is acceleration negative in this solution?",
-  "answer_style": "guided",
-  "provider": "openai"
-}
+### Reveal solution
+
+```text
+GET /api/v1/courses/{course_id}/tutor/practice/{practice_id}/solution
 ```
 
-If evidence is insufficient, StudyOS returns `grounding_status: insufficient_evidence` rather than answering from unsupported general knowledge.
+The solution is stored separately from the initial question response and is returned with its source references only when requested.
 
 ## Existing intelligence stack
 
@@ -260,9 +162,7 @@ The `heuristic-v5` planner combines course importance, exam weight, forgetting-a
 
 The `probabilistic-v1` layer adds expected score distributions, likely ranges, target probabilities, study-hour scenarios, and evidence-quality-driven uncertainty.
 
-Forecast snapshots can later receive real exam outcomes. StudyOS measures MAE, RMSE, bias, interval coverage, Brier score, and log loss, then applies guarded `empirical-v1` recalibration only after enough outcomes exist.
-
-Rolling-origin held-out validation tests whether recalibration improves forecasts it did not train on.
+Forecast snapshots can later receive real exam outcomes. StudyOS measures MAE, RMSE, bias, interval coverage, Brier score, and log loss, applies guarded `empirical-v1` recalibration only after enough outcomes exist, and evaluates it with rolling-origin held-out validation.
 
 ## API summary
 
@@ -290,6 +190,9 @@ Rolling-origin held-out validation tests whether recalibration improves forecast
 | `GET` | `/api/v1/courses/{course_id}/forecast-validation` | Held-out model validation |
 | `POST` | `/api/v1/courses/{course_id}/tutor/search` | Search grounded course evidence |
 | `POST` | `/api/v1/courses/{course_id}/tutor/ask` | Produce validated grounded answer |
+| `POST` | `/api/v1/courses/{course_id}/tutor/practice` | Create grounded practice |
+| `POST` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/hint` | Reveal next hint |
+| `GET` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/solution` | Reveal solution + sources |
 
 FastAPI exposes interactive API docs at `/docs` while the server is running.
 
@@ -317,18 +220,16 @@ FastAPI exposes interactive API docs at `/docs` while the server is running.
 - [x] deterministic course-isolated BM25 retrieval
 - [x] exact page/slide/document citations
 - [x] course topic/evidence retrieval signal
-- [x] provider-neutral synthesis interface
-- [x] deterministic local synthesis provider
-- [x] optional OpenAI Responses API synthesis provider
-- [x] prompt-injection-resistant source packet instructions
-- [x] citation validity checks
-- [x] claim-to-source lexical support validation
-- [x] insufficient-evidence refusal
-- [ ] embedding/vector retrieval adapter
-- [ ] stronger semantic entailment verification
-- [ ] exam-style question generation
-- [ ] guided problem solving and hint progression
-- [ ] personalization from mastery/mistake state
+- [x] external grounded synthesis provider
+- [x] local claim-to-citation validation
+- [x] optional embedding/vector retrieval adapter
+- [x] persisted exam-style practice items
+- [x] progressive hint and solution reveal
+- [ ] persistent embedding index / vector database
+- [ ] stronger sentence-level entailment verifier
+- [ ] adaptive difficulty from response history
+- [ ] tutor conversation/session memory
+- [ ] richer personalization from mistake state
 
 ### Phase 5 — Optimization
 - [ ] expected marks per study hour
@@ -346,9 +247,9 @@ FastAPI exposes interactive API docs at `/docs` while the server is running.
 
 ## Tech stack
 
-Python 3.12+, FastAPI, Pydantic, SQLAlchemy 2, SQLite, OpenAI SDK, pypdf, python-docx, python-pptx, Pytest, Ruff, and GitHub Actions.
+Python 3.12+, FastAPI, Pydantic, SQLAlchemy 2, SQLite, pypdf, python-docx, python-pptx, OpenAI SDK, Pytest, Ruff, and GitHub Actions.
 
-Planned infrastructure includes PostgreSQL, Redis/background workers, vector retrieval, Docker, and a Next.js/TypeScript client.
+Planned infrastructure includes PostgreSQL, Redis/background workers, a persistent vector index, Docker, and a Next.js/TypeScript client.
 
 ## Local development
 
@@ -366,4 +267,4 @@ ruff check .
 pytest
 ```
 
-The next Phase 4 milestone is **semantic/vector retrieval plus exam-style question generation and guided hint progression over the same grounded citation packet**.
+The next Phase 4 milestone is **adaptive practice evaluation**: grade a practice response, update mastery/mistakes from it, and automatically choose the next question difficulty and topic from the student's performance.

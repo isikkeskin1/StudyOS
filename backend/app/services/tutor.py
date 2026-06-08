@@ -18,6 +18,13 @@ from app.schemas.tutor import (
     TutorSearchRead,
     TutorSearchRequest,
 )
+from app.services.tutor_embeddings import (
+    TutorEmbeddingConfig,
+    TutorEmbeddingProvider,
+    TutorEmbeddingUnavailable,
+    build_embedding_provider,
+    cosine_similarity,
+)
 from app.services.tutor_provider import (
     TutorProviderConfig,
     build_tutor_provider,
@@ -25,7 +32,9 @@ from app.services.tutor_provider import (
 )
 
 _LEXICAL_MODEL = "lexical-bm25-v1"
-_HYBRID_MODEL = "hybrid-topic-bm25-v1"
+_TOPIC_MODEL = "hybrid-topic-bm25-v1"
+_SEMANTIC_MODEL = "semantic-vector-rerank-v1"
+_HYBRID_VECTOR_MODEL = "hybrid-vector-bm25-v1"
 _ANSWER_MODE = "grounded-synthesis-v2"
 _TOKEN_PATTERN = re.compile(r"[a-zA-Z0-9]+(?:['’-][a-zA-Z0-9]+)?")
 _STOPWORDS = {
@@ -73,11 +82,21 @@ class _Candidate:
 
 
 @dataclass(frozen=True)
+class _CandidateSignal:
+    lexical: float
+    topic_affinity: float
+    matched: list[str]
+    matched_topics: list[str]
+
+
+@dataclass(frozen=True)
 class _RetrievalResult:
     citations: list[TutorCitationRead]
     model: str
     components: list[str]
     topic_signal_applied: bool
+    semantic_signal_applied: bool
+    embedding_provider: str | None
 
 
 def _tokens(text: str) -> list[str]:
@@ -158,20 +177,13 @@ def _excerpt(text: str, max_chars: int = 620) -> str:
     return compact[: max_chars - 1].rstrip() + "…"
 
 
-def _rank(
+def _lexical_signals(
     db: Session,
     course_id: str,
     candidates: list[_Candidate],
     query: str,
-    limit: int,
-) -> _RetrievalResult:
-    if not candidates:
-        return _RetrievalResult([], _LEXICAL_MODEL, ["bm25"], False)
-
-    query_terms = list(dict.fromkeys(_tokens(query)))
-    if not query_terms:
-        return _RetrievalResult([], _LEXICAL_MODEL, ["bm25"], False)
-
+    query_terms: list[str],
+) -> dict[str, _CandidateSignal]:
     topic_signals = _topic_signals(db, course_id, set(query_terms))
     document_frequency = {
         term: sum(1 for candidate in candidates if term in set(candidate.tokens))
@@ -183,15 +195,12 @@ def _rank(
     )
     count = len(candidates)
     query_phrase = " ".join(query.lower().split())
+    signals: dict[str, _CandidateSignal] = {}
 
-    scored: list[tuple[float, float, float, list[str], list[str], _Candidate]] = []
     for candidate in candidates:
         frequencies = Counter(candidate.tokens)
         matched = [term for term in query_terms if frequencies[term] > 0]
         topic_affinity, matched_topics = topic_signals.get(candidate.chunk.id, (0.0, []))
-        if not matched and topic_affinity <= 0:
-            continue
-
         bm25 = 0.0
         for term in matched:
             frequency = frequencies[term]
@@ -204,22 +213,120 @@ def _rank(
 
         coverage = len(matched) / len(query_terms)
         normalized_bm25 = bm25 / (bm25 + 2.0) if bm25 > 0 else 0.0
-        phrase_match = query_phrase and query_phrase in candidate.chunk.text.lower()
+        phrase_match = bool(query_phrase and query_phrase in candidate.chunk.text.lower())
         phrase_bonus = 0.08 if phrase_match else 0.0
         lexical = min(1.0, 0.62 * coverage + 0.38 * normalized_bm25 + phrase_bonus)
-        relevance = min(1.0, 0.78 * lexical + 0.22 * topic_affinity)
-        scored.append(
-            (relevance, lexical, topic_affinity, matched, matched_topics, candidate)
+        signals[candidate.chunk.id] = _CandidateSignal(
+            lexical=lexical,
+            topic_affinity=topic_affinity,
+            matched=matched,
+            matched_topics=matched_topics,
+        )
+    return signals
+
+
+def _semantic_scores(
+    candidates: list[_Candidate],
+    query: str,
+    signals: dict[str, _CandidateSignal],
+    provider: TutorEmbeddingProvider,
+    max_candidates: int,
+) -> dict[str, float]:
+    ordered = sorted(
+        candidates,
+        key=lambda candidate: (
+            signals[candidate.chunk.id].lexical + signals[candidate.chunk.id].topic_affinity,
+            -candidate.chunk.chunk_index,
+        ),
+        reverse=True,
+    )
+    selected = ordered[:max_candidates]
+    vectors = provider.embed([query, *[candidate.chunk.text for candidate in selected]])
+    query_vector = vectors[0]
+    scores: dict[str, float] = {}
+    for candidate, vector in zip(selected, vectors[1:], strict=True):
+        scores[candidate.chunk.id] = max(0.0, cosine_similarity(query_vector, vector))
+    return scores
+
+
+def _rank(
+    db: Session,
+    course_id: str,
+    candidates: list[_Candidate],
+    query: str,
+    limit: int,
+    retrieval_mode: str,
+    embedding_config: TutorEmbeddingConfig,
+    embedding_provider: TutorEmbeddingProvider | None = None,
+) -> _RetrievalResult:
+    if not candidates:
+        return _RetrievalResult([], _LEXICAL_MODEL, ["bm25"], False, False, None)
+
+    query_terms = list(dict.fromkeys(_tokens(query)))
+    if not query_terms:
+        return _RetrievalResult([], _LEXICAL_MODEL, ["bm25"], False, False, None)
+
+    signals = _lexical_signals(db, course_id, candidates, query, query_terms)
+    provider = embedding_provider
+    semantic_requested = retrieval_mode in {"semantic", "hybrid"}
+    if retrieval_mode == "auto" and provider is None and embedding_config.provider != "none":
+        provider = build_embedding_provider(embedding_config)
+    elif semantic_requested and provider is None:
+        provider = build_embedding_provider(embedding_config)
+        if provider is None:
+            raise TutorEmbeddingUnavailable(
+                "Semantic retrieval requested but no embedding provider is configured"
+            )
+
+    semantic_scores: dict[str, float] = {}
+    resolved_mode = retrieval_mode
+    if retrieval_mode == "auto":
+        resolved_mode = "hybrid" if provider is not None else "lexical"
+    if resolved_mode in {"semantic", "hybrid"} and provider is not None:
+        semantic_scores = _semantic_scores(
+            candidates,
+            query,
+            signals,
+            provider,
+            embedding_config.max_candidates,
         )
 
+    scored: list[tuple[float, float, float, float, _CandidateSignal, _Candidate]] = []
+    for candidate in candidates:
+        signal = signals[candidate.chunk.id]
+        semantic = semantic_scores.get(candidate.chunk.id, 0.0)
+        if resolved_mode == "semantic":
+            relevance = min(1.0, 0.90 * semantic + 0.10 * signal.topic_affinity)
+            include = semantic > 0 or signal.topic_affinity > 0
+        elif resolved_mode == "hybrid" and provider is not None:
+            relevance = min(
+                1.0,
+                0.50 * signal.lexical + 0.35 * semantic + 0.15 * signal.topic_affinity,
+            )
+            include = signal.lexical > 0 or semantic > 0 or signal.topic_affinity > 0
+        else:
+            relevance = min(1.0, 0.78 * signal.lexical + 0.22 * signal.topic_affinity)
+            include = signal.lexical > 0 or signal.topic_affinity > 0
+        if include:
+            scored.append(
+                (
+                    relevance,
+                    signal.lexical,
+                    semantic,
+                    signal.topic_affinity,
+                    signal,
+                    candidate,
+                )
+            )
+
     scored.sort(
-        key=lambda item: (item[0], item[1], item[2], -item[5].chunk.chunk_index),
+        key=lambda item: (item[0], item[1], item[2], item[3], -item[5].chunk.chunk_index),
         reverse=True,
     )
 
     citations: list[TutorCitationRead] = []
     for rank, item in enumerate(scored[:limit], start=1):
-        relevance, lexical, topic_affinity, matched, matched_topics, candidate = item
+        relevance, lexical, semantic, topic_affinity, signal, candidate = item
         citations.append(
             TutorCitationRead(
                 rank=rank,
@@ -236,19 +343,38 @@ def _rank(
                 excerpt=_excerpt(candidate.chunk.text),
                 relevance_score=round(relevance, 4),
                 lexical_score=round(lexical, 4),
+                semantic_score=round(semantic, 4),
                 topic_affinity=round(topic_affinity, 4),
-                term_coverage=round(len(matched) / len(query_terms), 4),
-                matched_terms=matched,
-                matched_topics=matched_topics,
+                term_coverage=round(len(signal.matched) / len(query_terms), 4),
+                matched_terms=signal.matched,
+                matched_topics=signal.matched_topics,
             )
         )
 
-    hybrid = any(citation.topic_affinity > 0 for citation in citations)
+    topic_applied = any(citation.topic_affinity > 0 for citation in citations)
+    semantic_applied = bool(provider is not None and semantic_scores)
+    if resolved_mode == "semantic" and semantic_applied:
+        model = _SEMANTIC_MODEL
+        components = ["embedding_cosine", "course_topic_evidence"]
+    elif resolved_mode == "hybrid" and semantic_applied:
+        model = _HYBRID_VECTOR_MODEL
+        components = ["bm25", "embedding_cosine", "course_topic_evidence"]
+    elif topic_applied:
+        model = _TOPIC_MODEL
+        components = ["bm25", "course_topic_evidence"]
+    else:
+        model = _LEXICAL_MODEL
+        components = ["bm25"]
+    if not topic_applied:
+        components = [item for item in components if item != "course_topic_evidence"]
+
     return _RetrievalResult(
         citations=citations,
-        model=_HYBRID_MODEL if hybrid else _LEXICAL_MODEL,
-        components=["bm25", "course_topic_evidence"] if hybrid else ["bm25"],
-        topic_signal_applied=hybrid,
+        model=model,
+        components=components,
+        topic_signal_applied=topic_applied,
+        semantic_signal_applied=semantic_applied,
+        embedding_provider=provider.name if semantic_applied else None,
     )
 
 
@@ -258,6 +384,9 @@ def _retrieve(
     query: str,
     limit: int,
     document_types: list[str],
+    retrieval_mode: str,
+    embedding_config: TutorEmbeddingConfig | None = None,
+    embedding_provider: TutorEmbeddingProvider | None = None,
 ) -> _RetrievalResult:
     return _rank(
         db,
@@ -265,6 +394,9 @@ def _retrieve(
         _candidate_rows(db, course_id, document_types),
         query,
         limit,
+        retrieval_mode,
+        embedding_config or TutorEmbeddingConfig(),
+        embedding_provider,
     )
 
 
@@ -272,6 +404,8 @@ def search_course_material(
     db: Session,
     course_id: str,
     payload: TutorSearchRequest,
+    embedding_config: TutorEmbeddingConfig | None = None,
+    embedding_provider: TutorEmbeddingProvider | None = None,
 ) -> TutorSearchRead:
     result = _retrieve(
         db,
@@ -279,6 +413,9 @@ def search_course_material(
         payload.query,
         payload.limit,
         payload.document_types,
+        payload.retrieval_mode,
+        embedding_config,
+        embedding_provider,
     )
     return TutorSearchRead(
         course_id=course_id,
@@ -286,6 +423,8 @@ def search_course_material(
         retrieval_model=result.model,
         retrieval_components=result.components,
         topic_signal_applied=result.topic_signal_applied,
+        semantic_signal_applied=result.semantic_signal_applied,
+        embedding_provider=result.embedding_provider,
         result_count=len(result.citations),
         citations=result.citations,
     )
@@ -307,6 +446,8 @@ def _insufficient_answer(
         retrieval_model=result.model,
         retrieval_components=result.components,
         topic_signal_applied=result.topic_signal_applied,
+        semantic_signal_applied=result.semantic_signal_applied,
+        embedding_provider=result.embedding_provider,
         grounding_status="insufficient_evidence",
         validation_status="not_run",
         answer=(
@@ -325,6 +466,8 @@ def answer_from_course_material(
     course_id: str,
     payload: TutorAskRequest,
     provider_config: TutorProviderConfig | None = None,
+    embedding_config: TutorEmbeddingConfig | None = None,
+    embedding_provider: TutorEmbeddingProvider | None = None,
 ) -> TutorAnswerRead:
     result = _retrieve(
         db,
@@ -332,6 +475,9 @@ def answer_from_course_material(
         payload.question,
         payload.max_sources,
         payload.document_types,
+        payload.retrieval_mode,
+        embedding_config,
+        embedding_provider,
     )
     supported = [
         citation
@@ -398,6 +544,8 @@ def answer_from_course_material(
         retrieval_model=result.model,
         retrieval_components=result.components,
         topic_signal_applied=result.topic_signal_applied,
+        semantic_signal_applied=result.semantic_signal_applied,
+        embedding_provider=result.embedding_provider,
         grounding_status="supported",
         validation_status="passed",
         validation_model=validation.model,
