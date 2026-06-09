@@ -4,55 +4,100 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
-## Current milestone — retrieval hard-negative benchmarking
+## Current milestone — persisted retrieval benchmark regression suites
 
-The backend is now at **v0.26.0**.
+The backend is now at **v0.27.0**.
 
-StudyOS can now measure retrieval quality instead of assuming that adding embeddings automatically improves the tutor. A labeled benchmark runs the same queries against multiple ranking strategies and reports where each one succeeds or fails.
+Retrieval evaluation is no longer a one-off request. StudyOS can persist an immutable labeled benchmark suite, run it repeatedly after retrieval changes, retain every result, and compare the current run with an earlier comparable baseline.
 
 ```text
-labeled query
-+ correct course chunk IDs
+immutable labeled suite
         ↓
-retrieval-hard-negative-v1
+BM25 / topic / semantic / hybrid
         ↓
-BM25 baseline
-Topic-aware BM25
-Semantic reranking
-Hybrid reranking
+run snapshot
         ↓
-Top-1 accuracy
-Hit rate @ K
-Recall @ K
-MRR
-Mean first-relevant rank
-Failure cases
+Top-1 / Hit@K / Recall@K / MRR
+        ↓
+compare with previous same-K run
+        ↓
+PASS | REGRESSION | NO_BASELINE
 ```
 
-### Same cases, same labels
+### Persisted suites
 
-New endpoint:
+Create and inspect reusable course-level datasets through:
+
+```text
+POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites
+GET  /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites
+GET  /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}
+```
+
+A suite snapshots:
+
+```text
+name / description
+labeled queries
+relevant chunk IDs
+default retrieval modes
+default K / max results
+creation time
+```
+
+Suites are intentionally immutable. If the dataset changes, create another suite instead of silently rewriting the benchmark that produced older results.
+
+Chunk labels remain strict. If document reprocessing deletes/replaces a labeled chunk, the next suite run fails closed as stale rather than quietly evaluating a different source.
+
+### Run history and regression comparison
+
+Run and inspect a suite through:
+
+```text
+POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}/runs
+GET  /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}/runs
+GET  /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}/runs/{run_id}
+```
+
+Each run persists the full benchmark result plus:
+
+```text
+revision label
+retrieval modes
+K / max results
+best mode
+baseline run ID
+metric deltas
+regressed metrics
+regression verdict
+```
+
+By default the baseline is the most recent prior run of the same suite with the same `k`. A specific baseline run can also be requested, but it must belong to that suite and use the same `k`.
+
+The regression gate watches bounded ranking metrics:
+
+```text
+top1_accuracy
+hit_rate_at_k
+recall_at_k
+mean_reciprocal_rank
+```
+
+A configurable tolerance defaults to `0.02`. If any comparable mode drops beyond that tolerance, the run is marked `regression`. Mean first-relevant rank is still reported as a diagnostic delta, but it is not used by the initial gate because its scale is not bounded like the other metrics.
+
+History endpoints return compact summaries; the large per-case ranked payload is only returned when an individual run is fetched.
+
+## Retrieval hard-negative benchmarking
+
+The underlying benchmark remains available directly through:
 
 ```text
 POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark
 ```
 
-A benchmark case contains a stable case ID, a human-readable label, the query, and one or more chunk IDs judged relevant:
+All evaluated modes use the same labeled queries and relevant chunk IDs.
 
-```json
-{
-  "case_id": "acceleration-direction",
-  "label": "paraphrased direction relation",
-  "query": "Which way does acceleration point relative to net force?",
-  "relevant_chunk_ids": ["<chunk-id>"]
-}
-```
-
-StudyOS validates that every labeled chunk is a processed member of that course, preventing cross-course or stale labels from silently corrupting metrics.
-
-### Comparable ranking modes
-
-The benchmark supports:
+Current ranking modes:
 
 ```text
 bm25
@@ -68,27 +113,7 @@ hybrid
     0.50 lexical + 0.35 semantic + 0.15 topic affinity
 ```
 
-These weights mirror the current tutor-ranking behavior. The benchmark therefore measures the implementation StudyOS actually uses rather than an unrelated offline scoring script.
-
-If embeddings are not configured, BM25/topic modes still run and semantic/hybrid are returned as `unavailable` instead of failing the whole benchmark.
-
-### Metrics and hard-negative failures
-
-For every evaluated mode StudyOS reports:
-
-```text
-top1_accuracy
-hit_rate_at_k
-recall_at_k
-mean_reciprocal_rank
-mean_first_relevant_rank
-```
-
-Per-case output includes the ranked chunks and their lexical, semantic, topic, and final scores. Every top-1 miss is surfaced with the top-ranked distractor; cases that do not retrieve any relevant chunk inside K are explicitly marked `missed_at_k`.
-
-The response also names the best evaluated mode using MRR first, followed by top-1 accuracy, recall@K, and hit-rate@K as tie breakers. That label is descriptive for the supplied benchmark only; it is not treated as proof that one retrieval strategy is globally superior.
-
-A regression fixture includes a deliberately keyword-heavy distractor and a semantically correct paraphrase, proving that the harness can detect a lexical failure that semantic retrieval recovers.
+Metrics include Top-1 accuracy, Hit@K, Recall@K, mean reciprocal rank, mean first-relevant rank, and explicit hard-negative failures. Semantic/hybrid modes are reported as unavailable when embeddings are disabled while lexical baselines still run.
 
 ## Tutor grounding and retrieval
 
@@ -101,7 +126,7 @@ provider: auto | local | openai
 
 Current retrieval signals include BM25, course-topic evidence, embedding cosine similarity, and a persistent chunk-vector cache.
 
-Semantic vectors are persisted in SQLite with strict identity:
+Semantic vectors are persisted in SQLite using strict cache identity:
 
 ```text
 chunk ID
@@ -110,7 +135,7 @@ chunk ID
 + embedding model
 ```
 
-Normal tutor requests lazily embed only missing/stale candidate chunks. Full-course maintenance is available through:
+Normal requests lazily embed missing/stale candidates. Full-course maintenance is available through:
 
 ```text
 GET  /api/v1/courses/{course_id}/tutor/embedding-index
@@ -121,7 +146,7 @@ Vectors are currently JSON in SQLite. This is a persistent reranking cache, not 
 
 ### Atomic grounding validation
 
-Generated tutor prose is decomposed into atomic factual claims before it can be returned:
+Generated tutor prose is decomposed into atomic claims and validated locally before return:
 
 ```text
 generated answer
@@ -139,9 +164,7 @@ all claims pass → answer
 any claim fails → discard draft
 ```
 
-The deterministic validator catches explicit reversals such as same/opposite direction, positive/negative, greater/less, increase/decrease, direct/inverse proportionality, clockwise/counterclockwise, upward/downward, and negation mismatches. Numerical claims must also agree with cited evidence within a small rounding tolerance.
-
-This is deliberately described as a conservative local entailment gate, not a learned NLI model.
+The deterministic gate catches explicit polarity/direction reversals, negation mismatches, unsupported additions, and materially different numerical claims. It is intentionally described as a conservative local validator, not a learned NLI model.
 
 ## Adaptive practice
 
@@ -149,7 +172,7 @@ StudyOS can create persisted exam-style practice, keep solutions hidden, reveal 
 
 Practice evaluation supports deterministic local grading and rubric-aware OpenAI grading. Scores, mistake categories, hint usage, duration, and grader confidence feed the same mastery/history/mistake model used by diagnostics.
 
-Multi-question practice sessions remember recent scores, hint dependence, recurring mistakes, and topic-specific error burden. Session teaching can adapt both the next question and the solving process—for example, repeated sign mistakes can force axis/direction setup before substitution while unit mistakes trigger explicit dimensional checks.
+Multi-question sessions remember recent scores, hint dependence, recurring mistakes, and topic-specific error burden. Session teaching can adapt both the next question and the solving process.
 
 ## Intelligence stack
 
@@ -204,6 +227,9 @@ GET  /api/v1/courses/{course_id}/forecast-validation
 POST /api/v1/courses/{course_id}/tutor/search
 POST /api/v1/courses/{course_id}/tutor/ask
 POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark
+POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites
+POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}/runs
+GET  /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}/runs
 GET  /api/v1/courses/{course_id}/tutor/embedding-index
 POST /api/v1/courses/{course_id}/tutor/embedding-index/sync
 
@@ -243,8 +269,8 @@ FastAPI exposes interactive docs at `/docs` while the server is running.
 - [x] adaptive practice, rubric grading, session memory, remediation teaching
 - [x] atomic claim decomposition and contradiction-aware entailment
 - [x] retrieval hard-negative benchmark and comparative metrics
-- [ ] persisted benchmark datasets / benchmark history
-- [ ] external ANN/vector backend when benchmarked scale justifies it
+- [x] persisted benchmark suites, run history, and regression verdicts
+- [ ] external ANN/vector backend only when benchmarked scale justifies it
 
 ### Phase 5 — Optimization
 - [ ] expected marks per study hour
@@ -278,4 +304,4 @@ ruff check .
 pytest
 ```
 
-The next tutor-quality milestone is **persisted benchmark datasets and benchmark history**: turn one-off labeled evaluations into reusable course-level regression suites so retrieval changes can be compared against prior benchmark runs before they ship.
+The next product milestone is **Phase 5 expected marks per study hour + Emergency Mode**: use the existing exam weights, mastery, personalized learning curves, forgetting, and grade forecast to rank where each remaining hour buys the most expected marks, then explicitly surface low-value topics to skip when time is short.

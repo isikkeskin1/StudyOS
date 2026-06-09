@@ -27,6 +27,10 @@ from app.models.forecast_tracking import (
 from app.models.grading import DiagnosticGradeArtifact, ExamQuestionReference
 from app.models.mastery_history import MasterySnapshot
 from app.models.mistakes import DiagnosticAnswerArtifact, DiagnosticMistake
+from app.models.tutor_benchmark_history import (
+    TutorRetrievalBenchmarkRun,
+    TutorRetrievalBenchmarkSuite,
+)
 from app.models.tutor_embedding_index import TutorChunkEmbedding
 from app.models.tutor_practice import (
     TutorPracticeAttempt,
@@ -72,4 +76,6 @@ __all__ = [
     "TutorPracticeMistake",
     "TutorPracticeSession",
     "TutorPracticeSessionItem",
+    "TutorRetrievalBenchmarkRun",
+    "TutorRetrievalBenchmarkSuite",
 ]
