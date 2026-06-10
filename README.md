@@ -1,119 +1,151 @@
 # StudyOS
 
-StudyOS is an evidence-driven academic operating system that turns uploaded course material and student performance into adaptive study plans, mastery estimates, grade forecasts, and source-grounded tutoring.
+StudyOS is an evidence-driven academic operating system that turns uploaded course material and student performance into adaptive study plans, mastery estimates, grade forecasts, source-grounded tutoring, and time-constrained exam optimization.
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
-## Current milestone — persisted retrieval benchmark regression suites
+## Current milestone — expected marks per study hour + Emergency Mode
 
-The backend is now at **v0.27.0**.
+The backend is now at **v0.28.0**.
 
-Retrieval evaluation is no longer a one-off request. StudyOS can persist an immutable labeled benchmark suite, run it repeatedly after retrieval changes, retain every result, and compare the current run with an earlier comparable baseline.
+StudyOS can now optimize a short remaining study window explicitly around expected grade gain instead of only returning a general priority list.
 
 ```text
-immutable labeled suite
+exam/topic weight
++ current effective mastery
++ personalized learning scale
         ↓
-BM25 / topic / semantic / hybrid
+expected marginal mark gain
         ↓
-run snapshot
+greedy block allocation
         ↓
-Top-1 / Hit@K / Recall@K / MRR
-        ↓
-compare with previous same-K run
-        ↓
-PASS | REGRESSION | NO_BASELINE
+ordered emergency schedule
++ marks/hour by topic
++ target gap before/after
++ study / defer / skip decisions
 ```
 
-### Persisted suites
+### Emergency Mode
 
-Create and inspect reusable course-level datasets through:
+New endpoint:
 
 ```text
-POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites
-GET  /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites
-GET  /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}
+POST /api/v1/courses/{course_id}/emergency-plan
 ```
 
-A suite snapshots:
+Example request:
+
+```json
+{
+  "available_hours": 6,
+  "hours_until_exam": 14,
+  "target_grade": 25,
+  "block_minutes": 30
+}
+```
+
+The response exposes:
 
 ```text
-name / description
-labeled queries
-relevant chunk IDs
-default retrieval modes
-default K / max results
-creation time
+current estimated grade
+projected grade after available study time
+expected mark gain
+target gap before / after
+estimated hours to target
+urgency
+ordered study blocks
+next action
+per-topic marks/hour
+study / defer / skip decisions
 ```
 
-Suites are intentionally immutable. If the dataset changes, create another suite instead of silently rewriting the benchmark that produced older results.
+### Expected marks are not mistake-boosted scores
 
-Chunk labels remain strict. If document reprocessing deletes/replaces a labeled chunk, the next suite run fails closed as stale rather than quietly evaluating a different source.
+The ordinary planner can raise priority when repeated mistakes deserve attention. Emergency Mode deliberately separates that from the numeric expected-mark calculation.
 
-### Run history and regression comparison
-
-Run and inspect a suite through:
+A topic's expected gain is derived from:
 
 ```text
-POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}/runs
-GET  /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}/runs
-GET  /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}/runs/{run_id}
+normalized exam/topic weight
+×
+change in mastery from the calibrated learning curve
+×
+course maximum grade
 ```
 
-Each run persists the full benchmark result plus:
+Mistake categories remain visible as teaching context but do not inflate a value labelled `expected marks`.
+
+This makes quantities such as:
 
 ```text
-revision label
-retrieval modes
-K / max results
-best mode
-baseline run ID
-metric deltas
-regressed metrics
-regression verdict
+Momentum
+next hour expected gain: 1.2 marks
 ```
 
-By default the baseline is the most recent prior run of the same suite with the same `k`. A specific baseline run can also be requested, but it must belong to that suite and use the same `k`.
+inspectable under the current planning model rather than a disguised priority score.
 
-The regression gate watches bounded ranking metrics:
+### Diminishing returns and ordered blocks
+
+The optimizer `expected-marks-greedy-v1` assigns each study block to whichever topic has the largest current marginal expected mark gain.
+
+After a block, that topic's mastery rises and its marginal return falls. Later blocks can therefore move to another topic.
 
 ```text
-top1_accuracy
-hit_rate_at_k
-recall_at_k
-mean_reciprocal_rank
+Block 1  Momentum             +0.71 marks
+Block 2  Momentum             +0.59 marks
+Block 3  Rotational Dynamics  +0.56 marks
+Block 4  Momentum             +0.49 marks
+...
 ```
 
-A configurable tolerance defaults to `0.02`. If any comparable mode drops beyond that tolerance, the run is marked `regression`. Mean first-relevant rank is still reported as a diagnostic delta, but it is not used by the initial gate because its scale is not bounded like the other metrics.
+Consecutive blocks on the same topic are grouped in the response for a cleaner actionable schedule.
 
-History endpoints return compact summaries; the large per-case ranked payload is only returned when an individual run is fetched.
+### Budget-relative skip decisions
 
-## Retrieval hard-negative benchmarking
+Emergency Mode computes a cutoff from both a configurable absolute minimum and a relative fraction of the best current topic return.
 
-The underlying benchmark remains available directly through:
+Topics receiving no time can be classified as:
 
 ```text
-POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark
+study
+    receives time in the optimized schedule
+
+defer
+    useful return, but stronger topics consume this time budget
+
+skip
+    marginal return is below the emergency cutoff
 ```
 
-All evaluated modes use the same labeled queries and relevant chunk IDs.
+`skip` means **skip under this emergency time budget**. It is not stored as a permanent judgment that the course topic is unimportant.
 
-Current ranking modes:
+### Urgency context
+
+When `hours_until_exam` is supplied, StudyOS labels the context:
 
 ```text
-bm25
-    pure lexical baseline
-
-topic
-    0.78 lexical + 0.22 course-topic affinity
-
-semantic
-    0.90 embedding cosine + 0.10 topic affinity
-
-hybrid
-    0.50 lexical + 0.35 semantic + 0.15 topic affinity
+<= 12h   critical
+<= 24h   high
+<= 72h   elevated
+> 72h    standard
+omitted  unknown
 ```
 
-Metrics include Top-1 accuracy, Hit@K, Recall@K, mean reciprocal rank, mean first-relevant rank, and explicit hard-negative failures. Semantic/hybrid modes are reported as unavailable when embeddings are disabled while lexical baselines still run.
+`available_hours` cannot exceed the physical clock time remaining until the exam.
+
+### Model limits
+
+The Emergency Mode response explicitly states that expected marks remain planning heuristics rather than guaranteed exam points. Current stored mastery is retention-adjusted before optimization, but the short-horizon optimizer does not yet model fatigue, context-switch cost, breaks, or additional within-window forgetting.
+
+## Planning and grade modelling
+
+The normal `heuristic-v5` planner combines course importance, exam weight, effective mastery, mistake burden, personalized learning scale, and calibrated retention.
+
+The `probabilistic-v1` layer adds score distributions, likely ranges, target probabilities, study-hour scenarios, and evidence-quality-driven uncertainty.
+
+Immutable pre-exam forecasts can later receive real outcomes. StudyOS measures prediction error, interval coverage, Brier score, and log loss; guarded empirical recalibration is evaluated with rolling-origin held-out validation.
+
+Emergency Mode is intentionally a separate marginal-value optimizer. Its numeric mark gains do not reuse the planner's mistake-priority multiplier.
 
 ## Tutor grounding and retrieval
 
@@ -126,53 +158,24 @@ provider: auto | local | openai
 
 Current retrieval signals include BM25, course-topic evidence, embedding cosine similarity, and a persistent chunk-vector cache.
 
-Semantic vectors are persisted in SQLite using strict cache identity:
+Generated tutor prose is decomposed into atomic claims and validated locally for citation validity, contradictions, unsupported additions, and numerical consistency before return.
+
+StudyOS also supports adaptive practice, rubric-aware grading, multi-question session memory, remediation teaching, semantic retrieval, persistent incremental embeddings, and hard-negative retrieval benchmarking.
+
+### Retrieval regression suites
+
+Course-level benchmark suites persist labeled queries and relevant chunks. Repeated runs preserve full results and compare bounded ranking metrics against a prior same-K baseline.
 
 ```text
-chunk ID
-+ SHA-256(exact chunk text)
-+ embedding provider
-+ embedding model
+Top-1 accuracy
+Hit@K
+Recall@K
+MRR
+        ↓
+PASS | REGRESSION | NO_BASELINE
 ```
 
-Normal requests lazily embed missing/stale candidates. Full-course maintenance is available through:
-
-```text
-GET  /api/v1/courses/{course_id}/tutor/embedding-index
-POST /api/v1/courses/{course_id}/tutor/embedding-index/sync
-```
-
-Vectors are currently JSON in SQLite. This is a persistent reranking cache, not an ANN/vector database.
-
-### Atomic grounding validation
-
-Generated tutor prose is decomposed into atomic claims and validated locally before return:
-
-```text
-generated answer
-        ↓
-atomic-claims-v1
-        ↓
-citation validity
-+ contradiction checks
-+ numerical consistency
-+ strict content coverage
-        ↓
-atomic-entailment-v1
-        ↓
-all claims pass → answer
-any claim fails → discard draft
-```
-
-The deterministic gate catches explicit polarity/direction reversals, negation mismatches, unsupported additions, and materially different numerical claims. It is intentionally described as a conservative local validator, not a learned NLI model.
-
-## Adaptive practice
-
-StudyOS can create persisted exam-style practice, keep solutions hidden, reveal three progressive hints, and grade free responses.
-
-Practice evaluation supports deterministic local grading and rubric-aware OpenAI grading. Scores, mistake categories, hint usage, duration, and grader confidence feed the same mastery/history/mistake model used by diagnostics.
-
-Multi-question sessions remember recent scores, hint dependence, recurring mistakes, and topic-specific error burden. Session teaching can adapt both the next question and the solving process.
+This lets retrieval changes be measured before adopting additional vector-search infrastructure.
 
 ## Intelligence stack
 
@@ -196,14 +199,6 @@ Multi-question sessions remember recent scores, hint dependence, recurring mista
 - exam-aware review queue
 - practice evidence integrated into the same mastery model
 
-### Planning and grade modelling
-
-The `heuristic-v5` planner combines course importance, exam weight, effective mastery, mistakes, personalized learning scale, and calibrated retention.
-
-The `probabilistic-v1` layer adds score distributions, likely ranges, target probabilities, study-hour scenarios, and evidence-quality-driven uncertainty.
-
-Immutable pre-exam forecasts can later receive real outcomes. StudyOS measures prediction error, interval coverage, Brier score, and log loss; guarded empirical recalibration is evaluated with rolling-origin held-out validation.
-
 ## API highlights
 
 ```text
@@ -219,6 +214,7 @@ GET  /api/v1/courses/{course_id}/mistakes
 GET  /api/v1/courses/{course_id}/reviews
 
 POST /api/v1/courses/{course_id}/study-plan
+POST /api/v1/courses/{course_id}/emergency-plan
 POST /api/v1/courses/{course_id}/grade-forecast
 POST /api/v1/courses/{course_id}/grade-forecast/calibrated
 GET  /api/v1/courses/{course_id}/forecast-calibration
@@ -229,7 +225,6 @@ POST /api/v1/courses/{course_id}/tutor/ask
 POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark
 POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites
 POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}/runs
-GET  /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}/runs
 GET  /api/v1/courses/{course_id}/tutor/embedding-index
 POST /api/v1/courses/{course_id}/tutor/embedding-index/sync
 
@@ -262,19 +257,17 @@ FastAPI exposes interactive docs at `/docs` while the server is running.
 - [x] reliability curves and rolling held-out validation
 
 ### Phase 4 — Course-aware tutor
-- [x] course-isolated BM25/topic retrieval
-- [x] exact page/slide/document citations
-- [x] grounded synthesis + local validation
+- [x] grounded retrieval and exact citations
 - [x] semantic reranking and persistent embedding cache
 - [x] adaptive practice, rubric grading, session memory, remediation teaching
-- [x] atomic claim decomposition and contradiction-aware entailment
-- [x] retrieval hard-negative benchmark and comparative metrics
-- [x] persisted benchmark suites, run history, and regression verdicts
+- [x] atomic claim validation
+- [x] hard-negative retrieval benchmark
+- [x] persisted benchmark suites and regression history
 - [ ] external ANN/vector backend only when benchmarked scale justifies it
 
 ### Phase 5 — Optimization
-- [ ] expected marks per study hour
-- [ ] emergency mode
+- [x] expected marks per study hour
+- [x] Emergency Mode
 - [ ] automatic rescheduling
 - [ ] multi-course optimization
 
@@ -304,4 +297,4 @@ ruff check .
 pytest
 ```
 
-The next product milestone is **Phase 5 expected marks per study hour + Emergency Mode**: use the existing exam weights, mastery, personalized learning curves, forgetting, and grade forecast to rank where each remaining hour buys the most expected marks, then explicitly surface low-value topics to skip when time is short.
+The next optimization milestone is **automatic rescheduling**: persist study commitments/completed blocks, compare planned versus actual progress, and reallocate remaining time when a student misses a block, finishes early, or new mastery evidence changes the expected marks/hour ranking.
