@@ -13,6 +13,11 @@ from app.models.diagnostics import (
 )
 from app.models.document import Document
 from app.models.document_content import DocumentAnalysis, DocumentChunk, DocumentUnit
+from app.models.emergency_schedule import (
+    EmergencyStudySchedule,
+    EmergencyStudyScheduleBlock,
+    EmergencyStudyScheduleRevision,
+)
 from app.models.exam_intelligence import (
     ExamAnalysis,
     ExamQuestion,
@@ -56,6 +61,9 @@ __all__ = [
     "DocumentAnalysis",
     "DocumentChunk",
     "DocumentUnit",
+    "EmergencyStudySchedule",
+    "EmergencyStudyScheduleBlock",
+    "EmergencyStudyScheduleRevision",
     "ExamAnalysis",
     "ExamQuestion",
     "ExamQuestionReference",

@@ -4,66 +4,155 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
-## Current milestone — expected marks per study hour + Emergency Mode
+## Current milestone — persistent Emergency Mode + automatic rescheduling
 
-The backend is now at **v0.28.0**.
+The backend is now at **v0.29.0**.
 
-StudyOS can now optimize a short remaining study window explicitly around expected grade gain instead of only returning a general priority list.
+Emergency Mode is no longer limited to a one-shot calculation. StudyOS can persist an optimized study schedule, record what actually happened, and rebuild only the unfinished portion when time or mastery changes.
 
 ```text
-exam/topic weight
-+ current effective mastery
-+ personalized learning scale
+expected-marks emergency plan
         ↓
-expected marginal mark gain
+persist schedule revision 1
         ↓
-greedy block allocation
+start / complete / skip blocks
         ↓
-ordered emergency schedule
-+ marks/hour by topic
-+ target gap before/after
-+ study / defer / skip decisions
+actual minutes + new mastery evidence
+        ↓
+recompute remaining budget
+        ↓
+expected-marks optimizer
+        ↓
+persist revision 2, 3, ...
 ```
 
-### Emergency Mode
+### Stateless calculation and persistent execution
 
-New endpoint:
+The original endpoint remains available as a stateless calculator:
 
 ```text
 POST /api/v1/courses/{course_id}/emergency-plan
 ```
 
-Example request:
-
-```json
-{
-  "available_hours": 6,
-  "hours_until_exam": 14,
-  "target_grade": 25,
-  "block_minutes": 30
-}
-```
-
-The response exposes:
+For a schedule that survives reloads and changes over time, use:
 
 ```text
-current estimated grade
-projected grade after available study time
-expected mark gain
-target gap before / after
-estimated hours to target
-urgency
-ordered study blocks
-next action
-per-topic marks/hour
-study / defer / skip decisions
+POST /api/v1/courses/{course_id}/emergency-schedules
+GET  /api/v1/courses/{course_id}/emergency-schedules
+GET  /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}
 ```
 
-### Expected marks are not mistake-boosted scores
+Creating a persisted schedule snapshots the current Emergency Mode result as revision 1. The collection endpoint lets a client rediscover schedules after an app reload rather than depending on an in-memory ID.
 
-The ordinary planner can raise priority when repeated mistakes deserve attention. Emergency Mode deliberately separates that from the numeric expected-mark calculation.
+### Block lifecycle
 
-A topic's expected gain is derived from:
+Current-revision blocks can be acted on through:
+
+```text
+POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/blocks/{block_id}/start
+POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/blocks/{block_id}/complete
+POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/blocks/{block_id}/skip
+```
+
+Block states are:
+
+```text
+planned
+in_progress
+completed
+skipped
+superseded
+```
+
+Only current-revision unfinished blocks can be mutated. Once a replan occurs, old unfinished blocks become `superseded`; completed and skipped blocks remain as historical evidence of what actually happened.
+
+Only one current block can be `in_progress` at a time.
+
+### Actual time changes the remaining budget
+
+Completing a block records `actual_minutes` instead of assuming the planned duration was exact.
+
+```text
+planned 30 min, completed in 15
+→ only 15 minutes consumed
+→ 15 minutes remain available elsewhere
+
+planned 30 min, took 45
+→ 45 minutes consumed
+→ remaining plan shrinks by the extra 15
+```
+
+Skipping a block defaults to treating that planned block duration as lost time. A caller may provide an explicit `lost_minutes` value when reality differs.
+
+Manual refresh is available through:
+
+```text
+POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/reschedule
+```
+
+A manual refresh may reduce the remaining study budget, but it cannot invent more time than the schedule currently has available.
+
+### Revision history is immutable
+
+Every successful replan with remaining time creates a new revision rather than rewriting the old plan.
+
+```text
+revision 1  initial
+revision 2  completed_early
+revision 3  missed_block
+revision 4  manual_refresh
+```
+
+Each revision snapshots:
+
+```text
+remaining minutes
+current estimated grade
+projected grade
+expected mark gain
+target gap after the remaining plan
+mastery basis
+ordered study blocks
+```
+
+This makes the schedule auditable: StudyOS can show what it originally recommended, what changed, and why the later plan is different.
+
+### Study projections do not become fake mastery evidence
+
+Completing a study block does **not** write directly to `TopicMastery`.
+
+Instead, the schedule can apply the existing learning curve as a local planning projection when rebuilding the unfinished plan:
+
+```text
+measured mastery
++ completed study after that measurement
+        ↓
+schedule-local projected mastery
+```
+
+That projection only affects the schedule. Real diagnostic or practice responses remain the source of measured mastery evidence.
+
+If a newer `TopicMastery` measurement exists, StudyOS starts from that newer evidence and only projects completed study that happened after it. This prevents older schedule projections from being double-counted on top of a fresh diagnostic result.
+
+A manual refresh therefore can change the next topic immediately when new measured mastery changes the expected marks/hour ranking.
+
+### Wall-clock deadline still wins
+
+When the schedule was created with `hours_until_exam`, StudyOS persists the resulting exam deadline. Every reschedule caps the remaining study budget by both:
+
+```text
+remaining declared study budget
+and
+actual wall-clock time until the exam
+```
+
+The schedule cannot continue allocating study blocks past the exam simply because the original plan had unused minutes left.
+
+### Expected-marks optimizer
+
+The underlying optimizer remains `expected-marks-greedy-v1`.
+
+A topic's numeric expected gain is derived from:
 
 ```text
 normalized exam/topic weight
@@ -73,69 +162,7 @@ change in mastery from the calibrated learning curve
 course maximum grade
 ```
 
-Mistake categories remain visible as teaching context but do not inflate a value labelled `expected marks`.
-
-This makes quantities such as:
-
-```text
-Momentum
-next hour expected gain: 1.2 marks
-```
-
-inspectable under the current planning model rather than a disguised priority score.
-
-### Diminishing returns and ordered blocks
-
-The optimizer `expected-marks-greedy-v1` assigns each study block to whichever topic has the largest current marginal expected mark gain.
-
-After a block, that topic's mastery rises and its marginal return falls. Later blocks can therefore move to another topic.
-
-```text
-Block 1  Momentum             +0.71 marks
-Block 2  Momentum             +0.59 marks
-Block 3  Rotational Dynamics  +0.56 marks
-Block 4  Momentum             +0.49 marks
-...
-```
-
-Consecutive blocks on the same topic are grouped in the response for a cleaner actionable schedule.
-
-### Budget-relative skip decisions
-
-Emergency Mode computes a cutoff from both a configurable absolute minimum and a relative fraction of the best current topic return.
-
-Topics receiving no time can be classified as:
-
-```text
-study
-    receives time in the optimized schedule
-
-defer
-    useful return, but stronger topics consume this time budget
-
-skip
-    marginal return is below the emergency cutoff
-```
-
-`skip` means **skip under this emergency time budget**. It is not stored as a permanent judgment that the course topic is unimportant.
-
-### Urgency context
-
-When `hours_until_exam` is supplied, StudyOS labels the context:
-
-```text
-<= 12h   critical
-<= 24h   high
-<= 72h   elevated
-> 72h    standard
-omitted  unknown
-```
-
-`available_hours` cannot exceed the physical clock time remaining until the exam.
-
-### Model limits
-
-The Emergency Mode response explicitly states that expected marks remain planning heuristics rather than guaranteed exam points. Current stored mastery is retention-adjusted before optimization, but the short-horizon optimizer does not yet model fatigue, context-switch cost, breaks, or additional within-window forgetting.
+Mistake categories can influence teaching context but do not inflate a number labelled `expected marks`. Expected marks remain planning heuristics rather than guaranteed exam points.
 
 ## Planning and grade modelling
 
@@ -215,6 +242,10 @@ GET  /api/v1/courses/{course_id}/reviews
 
 POST /api/v1/courses/{course_id}/study-plan
 POST /api/v1/courses/{course_id}/emergency-plan
+POST /api/v1/courses/{course_id}/emergency-schedules
+GET  /api/v1/courses/{course_id}/emergency-schedules
+GET  /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}
+POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/reschedule
 POST /api/v1/courses/{course_id}/grade-forecast
 POST /api/v1/courses/{course_id}/grade-forecast/calibrated
 GET  /api/v1/courses/{course_id}/forecast-calibration
@@ -268,7 +299,7 @@ FastAPI exposes interactive docs at `/docs` while the server is running.
 ### Phase 5 — Optimization
 - [x] expected marks per study hour
 - [x] Emergency Mode
-- [ ] automatic rescheduling
+- [x] persistent schedules and automatic rescheduling
 - [ ] multi-course optimization
 
 ### Phase 6 — Study operating system
@@ -297,4 +328,4 @@ ruff check .
 pytest
 ```
 
-The next optimization milestone is **automatic rescheduling**: persist study commitments/completed blocks, compare planned versus actual progress, and reallocate remaining time when a student misses a block, finishes early, or new mastery evidence changes the expected marks/hour ranking.
+The next optimization milestone is **multi-course optimization**: let courses compete for scarce study time using a normalized objective that respects different grade scales, targets, deadlines, and evidence uncertainty rather than naively comparing raw marks/hour across unrelated exams.
