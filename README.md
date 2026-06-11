@@ -4,9 +4,44 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
-## Current milestone — multi-course optimization
+## Current milestone — semester control loop
 
-The backend is now at **v0.30.0**.
+The backend is now at **v0.31.0**.
+
+StudyOS can now persist a multi-course optimization as one executable semester study
+queue. The queue preserves immutable planning revisions while the current revision
+supports starting, completing, and skipping blocks in strict order.
+
+```text
+POST /api/v1/semester-queues
+GET  /api/v1/semester-queues
+GET  /api/v1/semester-queues/{queue_id}
+
+POST /api/v1/semester-queues/{queue_id}/blocks/{block_id}/start
+POST /api/v1/semester-queues/{queue_id}/blocks/{block_id}/complete
+POST /api/v1/semester-queues/{queue_id}/blocks/{block_id}/skip
+POST /api/v1/semester-queues/{queue_id}/refresh
+```
+
+Actual completion time reduces the shared remaining budget. Missed time is tracked
+separately. Every completion, skip, or manual budget change supersedes unfinished
+blocks and runs the cross-course optimizer again with the remaining time.
+
+Exact deadline horizons are stored as absolute timestamps, so they continue to count
+down across revisions. Each revision also stores a source fingerprint for course
+deadlines, targets, grade scales, and measured topic mastery. Reading an idle queue
+automatically creates a `source_change` revision when those inputs have changed or an
+exact deadline crosses a scheduling-block boundary. In-progress work is never
+silently superseded.
+
+Completed study contributes only a schedule-local mastery projection. New measured
+mastery supersedes older projections, so executing a queue never writes synthetic
+diagnostic evidence.
+
+Each revision exposes the optimizer model, per-course forecasts and allocations,
+aggregate target-gap metrics, utility, and its complete block history.
+
+## Multi-course optimization
 
 StudyOS can now allocate one scarce study-time budget across multiple courses with different grading scales, targets, deadlines, and evidence quality.
 
@@ -30,6 +65,10 @@ ordered cross-course study schedule
 
 ```text
 POST /api/v1/multi-course-plan
+
+POST /api/v1/semester-queues
+GET  /api/v1/semester-queues/{queue_id}
+POST /api/v1/semester-queues/{queue_id}/refresh
 ```
 
 Example request:
@@ -321,7 +360,7 @@ FastAPI exposes interactive docs at `/docs` while the server is running.
 - [x] normalized multi-course optimization
 
 ### Phase 6 — Study operating system
-- [ ] persistent semester-wide study queue
+- [x] persistent semester-wide study queue
 - [ ] semester command-center API
 - [ ] spaced-repetition workflow
 - [ ] cheat-sheet generation
@@ -347,4 +386,6 @@ ruff check .
 pytest
 ```
 
-The next milestone is **the semester control loop**: persist a multi-course plan as one executable study queue, let blocks inherit the start/complete/skip behavior from Emergency Mode, and automatically rebuild the remaining semester queue when time, deadlines, or measured mastery change.
+The next milestone is **the semester command center**: summarize every active course,
+surface the next executable block, show target risk and deadline pressure, and expose
+one concise semester status response for future clients and notifications.
