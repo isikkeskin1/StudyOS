@@ -48,7 +48,11 @@ def _translate(exc: RuntimeError) -> HTTPException:
 _ERRORS = (CalendarFocusInputError, SemesterQueueConflictError, SemesterQueueNotFoundError)
 
 
-@router.post("/calendar-plans", response_model=CalendarPlanRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/calendar-plans",
+    response_model=CalendarPlanRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_plan(
     queue_id: str,
     payload: CalendarPlanCreateRequest,
