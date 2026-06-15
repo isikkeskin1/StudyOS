@@ -3,7 +3,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
 CheatSheetItemKind = Literal["formula", "method", "key_point"]
 
 
