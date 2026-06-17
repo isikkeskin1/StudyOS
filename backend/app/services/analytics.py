@@ -349,9 +349,9 @@ def build_analytics_dashboard(
     total_completed = sum(row.focus_sessions_completed for row in course_rows)
     total_skipped = sum(row.focus_sessions_skipped for row in course_rows)
     total_focus = total_completed + total_skipped
-    answer_scores = [
-        response.score for response, _ in diagnostics
-    ] + [attempt.score for attempt in practices]
+    answer_scores = [response.score for response, _ in diagnostics] + [
+        attempt.score for attempt in practices
+    ]
 
     return AnalyticsDashboardRead(
         generated_at=now,
@@ -368,7 +368,9 @@ def build_analytics_dashboard(
             focus_minutes=sum(row.focus_minutes for row in course_rows),
             focus_sessions_completed=total_completed,
             focus_sessions_skipped=total_skipped,
-            focus_completion_rate=(round(total_completed / total_focus, 4) if total_focus else None),
+            focus_completion_rate=(
+                round(total_completed / total_focus, 4) if total_focus else None
+            ),
             answer_count=len(answer_scores),
             average_answer_score=round(mean(answer_scores), 4) if answer_scores else None,
             mastery_updates=len(mastery_updates),
@@ -377,14 +379,17 @@ def build_analytics_dashboard(
         courses=course_rows,
         activity=list(activity.values()),
         assumptions=[
-            "Daily activity is grouped in the requested IANA timezone; stored timestamps remain UTC.",
-            "Focus analytics count terminal focus sessions in the selected window. Skips do not add "
-            "study minutes.",
-            "Answer quality combines diagnostic and tutor-practice scores on their shared 0-1 scale.",
-            "Diagnostic mastery delta uses recorded diagnostic mastery snapshots only; current mastery "
-            "can also include newer tutor-practice evidence.",
-            "Forecast movement is normalized by each snapshot's maximum grade before comparison.",
-            "Mistake hotspots are all-time evidence because mistake history is currently summarized "
-            "without a time-windowed persistence layer.",
+            "Daily activity is grouped in the requested IANA timezone; stored timestamps "
+            "remain UTC.",
+            "Focus analytics count terminal focus sessions in the selected window. Skips "
+            "do not add study minutes.",
+            "Answer quality combines diagnostic and tutor-practice scores on their shared "
+            "0-1 scale.",
+            "Diagnostic mastery delta uses recorded diagnostic mastery snapshots only; "
+            "current mastery can also include newer tutor-practice evidence.",
+            "Forecast movement is normalized by each snapshot's maximum grade before "
+            "comparison.",
+            "Mistake hotspots are all-time evidence because mistake history is currently "
+            "summarized without a time-windowed persistence layer.",
         ],
     )
