@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function OfflinePage() {
   return (
     <main
@@ -54,7 +56,7 @@ export default function OfflinePage() {
           The app shell is available, but live plans, grades, reviews, and focus state stay network-only so
           StudyOS never presents stale academic data as current.
         </p>
-        <a
+        <Link
           href="/"
           style={{
             display: "inline-flex",
@@ -71,7 +73,7 @@ export default function OfflinePage() {
           }}
         >
           Try reconnecting
-        </a>
+        </Link>
       </section>
     </main>
   );
