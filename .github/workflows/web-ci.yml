@@ -30,6 +30,8 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
+      - name: PWA contract
+        run: npm run pwa:check
       - name: Build
         run: npm run build
         env:
