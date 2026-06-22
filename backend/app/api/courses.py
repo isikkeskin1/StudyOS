@@ -20,6 +20,7 @@ from app.models.course_intelligence import (
 from app.models.document import Document
 from app.models.document_content import DocumentAnalysis, DocumentChunk, DocumentUnit
 from app.schemas.course import CourseCreate, CourseRead
+from app.schemas.course_setup import CourseSetupRead
 from app.schemas.document import (
     DocumentAnalysisRead,
     DocumentChunkRead,
@@ -27,7 +28,6 @@ from app.schemas.document import (
     DocumentRead,
     DocumentUnitRead,
 )
-from app.schemas.course_setup import CourseSetupRead
 from app.schemas.intelligence import (
     CourseAnalysisRead,
     CourseIntelligenceRead,
