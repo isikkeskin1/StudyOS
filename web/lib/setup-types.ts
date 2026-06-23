@@ -29,6 +29,7 @@ export type CourseSetup = {
   processed_document_count: number;
   failed_document_count: number;
   course_analyzed: boolean;
+  analysis_stale: boolean;
   ready_for_planning: boolean;
   next_step: "upload_documents" | "process_documents" | "analyze_course" | "ready";
 };

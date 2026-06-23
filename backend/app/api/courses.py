@@ -19,7 +19,7 @@ from app.models.course_intelligence import (
 )
 from app.models.document import Document
 from app.models.document_content import DocumentAnalysis, DocumentChunk, DocumentUnit
-from app.schemas.course import CourseCreate, CourseRead
+from app.schemas.course import CourseCreate, CourseRead, CourseUpdate
 from app.schemas.course_setup import CourseSetupRead
 from app.schemas.document import (
     DocumentAnalysisRead,
@@ -83,6 +83,28 @@ def get_course_setup(
 ) -> CourseSetupRead:
     course = _get_course(db, course_id)
     return CourseSetupRead.model_validate(course_setup_status(db, course), from_attributes=True)
+
+
+@router.patch("/{course_id}", response_model=CourseRead)
+def update_course(
+    course_id: str,
+    payload: CourseUpdate,
+    db: Annotated[Session, Depends(get_db)],
+) -> Course:
+    course = _get_course(db, course_id)
+    updates = payload.model_dump(exclude_unset=True)
+    next_max = float(updates.get("max_grade", course.max_grade))
+    next_target = updates.get("target_grade", course.target_grade)
+    if next_target is not None and float(next_target) > next_max:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="target_grade cannot be greater than max_grade",
+        )
+    for key, value in updates.items():
+        setattr(course, key, value)
+    db.commit()
+    db.refresh(course)
+    return course
 
 
 @router.get("/{course_id}", response_model=CourseRead)
@@ -179,6 +201,22 @@ def list_documents(
             .order_by(Document.created_at.desc())
         ).all()
     )
+
+
+@router.delete(
+    "/{course_id}/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_document(
+    course_id: str,
+    document_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    document = _get_course_document(db, course_id, document_id)
+    storage_path = Path(document.storage_path)
+    db.delete(document)
+    db.commit()
+    storage_path.unlink(missing_ok=True)
 
 
 @router.get("/{course_id}/documents/{document_id}", response_model=DocumentRead)
