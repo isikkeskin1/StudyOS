@@ -428,7 +428,7 @@ export function Dashboard() {
                     </div>
                     <div className="course-foot">
                       <span>{course.measured_topic_count}/{course.topic_count} topics measured</span>
-                      <span>{course.latest_target_probability === null ? "No forecast" : `${formatPercent(course.latest_target_probability)} target chance`}</span>
+                      <a className="course-open" href={`/courses/${course.course_id}`}>Open workspace →</a>
                     </div>
                   </article>
                 );
