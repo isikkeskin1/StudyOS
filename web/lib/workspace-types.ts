@@ -159,3 +159,85 @@ export type WorkspaceData = {
   forecasts: ForecastSnapshot[];
   cheatSheets: CheatSheet[];
 };
+
+
+export type DiagnosticSession = {
+  id: string;
+  course_id: string;
+  status: string;
+  requested_question_count: number;
+  selected_question_count: number;
+  answered_question_count: number;
+  created_at: string;
+  completed_at: string | null;
+};
+
+export type DiagnosticQuestion = {
+  id: string;
+  exam_question_id: string;
+  sequence: number;
+  question_label: string;
+  source_label: string;
+  text: string;
+  marks: number | null;
+  difficulty: number;
+  primary_topic_id: string;
+  primary_topic_name: string;
+  automatic_grading_available: boolean;
+  topics: Array<{
+    topic_id: string;
+    topic_name: string;
+    relevance_score: number;
+  }>;
+};
+
+export type DiagnosticNext = {
+  session: DiagnosticSession;
+  question: DiagnosticQuestion | null;
+};
+
+export type DiagnosticResponse = {
+  id: string;
+  diagnostic_question_id: string;
+  score: number;
+  confidence: number;
+  grading_source: string;
+  duration_seconds: number | null;
+  created_at: string;
+  answer: {
+    student_answer: string | null;
+    reference_answer: string | null;
+    feedback: string | null;
+  } | null;
+  mistakes: Array<{
+    category: string;
+    severity: number;
+    source: string;
+    note: string | null;
+  }>;
+  session: DiagnosticSession;
+  mastery: TopicMastery[];
+};
+
+export type DiagnosticSummary = {
+  session_id: string;
+  course_id: string;
+  status: string;
+  answered_question_count: number;
+  average_score: number | null;
+  average_confidence: number | null;
+  total_duration_seconds: number;
+  automatic_grade_count: number;
+  self_grade_count: number;
+  topic_summaries: Array<{
+    topic_id: string;
+    topic_name: string;
+    question_count: number;
+    average_score: number;
+  }>;
+  mistakes: Array<{
+    category: string;
+    occurrences: number;
+    average_severity: number;
+  }>;
+};
