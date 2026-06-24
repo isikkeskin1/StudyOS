@@ -18,7 +18,13 @@ def _prepare(client: TestClient) -> tuple[str, str]:
         ),
         (
             "exam.txt",
-            b"Physics I Written Exam\nQuestion 1 (8 marks)\nCalculate force using Newton's second law.\n\nQuestion 2 (12 marks)\nUse conservation of momentum.",
+            (
+                b"Physics I Written Exam\n"
+                b"Question 1 (8 marks)\n"
+                b"Calculate force using Newton's second law.\n\n"
+                b"Question 2 (12 marks)\n"
+                b"Use conservation of momentum."
+            ),
         ),
     ]:
         upload = client.post(
