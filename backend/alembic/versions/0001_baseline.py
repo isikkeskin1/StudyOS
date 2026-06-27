@@ -7,9 +7,9 @@ Create Date: 2026-09-06
 
 from collections.abc import Sequence
 
+import app.models  # noqa: F401
 from alembic import op
 
-import app.models  # noqa: F401
 from app.core.database import Base
 
 revision: str = "0001_baseline"
