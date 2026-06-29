@@ -16,7 +16,7 @@ class SemesterStudyQueue(Base):
     user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
