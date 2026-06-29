@@ -34,10 +34,26 @@ from app.api.tutor_remediation import router as tutor_remediation_router
 from app.core.auth import AuthenticationMiddleware
 from app.core.config import Settings, get_settings
 from app.core.database import Base, create_database_engine, create_session_factory
+from app.core.observability import (
+    RequestObservabilityMiddleware,
+    configure_error_tracking,
+    configure_logging,
+)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved_settings = settings or get_settings()
+    configure_logging(resolved_settings.log_level)
+    configure_error_tracking(
+        dsn=(
+            resolved_settings.sentry_dsn.get_secret_value()
+            if resolved_settings.sentry_dsn is not None
+            else None
+        ),
+        environment=resolved_settings.environment,
+        release=resolved_settings.release,
+        traces_sample_rate=resolved_settings.sentry_traces_sample_rate,
+    )
     engine = create_database_engine(resolved_settings.database_url)
     session_factory = create_session_factory(engine)
 
@@ -57,7 +73,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application = FastAPI(
         title=resolved_settings.app_name,
-        version="0.45.0",
+        version="0.46.0",
         description="Backend API for StudyOS.",
         lifespan=lifespan,
     )
@@ -65,6 +81,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.engine = engine
     application.state.session_factory = session_factory
     application.add_middleware(AuthenticationMiddleware)
+    application.add_middleware(RequestObservabilityMiddleware)
 
     application.include_router(health_router, prefix=resolved_settings.api_prefix)
     application.include_router(auth_router, prefix=resolved_settings.api_prefix)

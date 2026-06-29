@@ -36,3 +36,6 @@ jobs:
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Build web container
+        run: docker build -f Dockerfile ..
