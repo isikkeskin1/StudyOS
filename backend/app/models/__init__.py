@@ -58,6 +58,8 @@ from app.models.tutor_practice import (
 )
 
 __all__ = [
+    "AuthSession",
+    "User",
     "FocusSession",
     "SemesterCalendarPlan",
     "CheatSheet",
