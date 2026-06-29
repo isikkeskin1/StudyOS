@@ -1,0 +1,100 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from app.core.config import Settings
+from app.main import create_app
+
+
+def _app(tmp_path: Path):
+    settings = Settings(
+        database_url=f"sqlite:///{tmp_path / 'auth.db'}",
+        data_dir=tmp_path / "uploads",
+        max_upload_mb=1,
+    )
+    return create_app(settings)
+
+
+def test_register_login_me_and_logout(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    with TestClient(app) as client:
+        register = client.post(
+            "/api/v1/auth/register",
+            json={"email": "Student@Example.com", "password": "secure-pass-123"},
+        )
+        assert register.status_code == 201
+        assert register.json()["user"]["email"] == "student@example.com"
+        assert "studyos_session" in client.cookies
+
+        me = client.get("/api/v1/auth/me")
+        assert me.status_code == 200
+        assert me.json()["email"] == "student@example.com"
+
+        logout = client.post("/api/v1/auth/logout")
+        assert logout.status_code == 204
+        assert client.get("/api/v1/auth/me").status_code == 401
+
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"email": "student@example.com", "password": "secure-pass-123"},
+        )
+        assert login.status_code == 200
+        assert client.get("/api/v1/auth/me").status_code == 200
+
+
+def test_duplicate_registration_and_bad_password_are_rejected(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    with TestClient(app) as client:
+        payload = {"email": "student@example.com", "password": "secure-pass-123"}
+        assert client.post("/api/v1/auth/register", json=payload).status_code == 201
+        assert client.post("/api/v1/auth/register", json=payload).status_code == 409
+
+        client.cookies.clear()
+        bad = client.post(
+            "/api/v1/auth/login",
+            json={"email": payload["email"], "password": "wrong-password"},
+        )
+        assert bad.status_code == 401
+
+
+def test_courses_are_strictly_isolated_between_accounts(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    with TestClient(app) as first, TestClient(app) as second:
+        assert first.post(
+            "/api/v1/auth/register",
+            json={"email": "first@example.com", "password": "first-password"},
+        ).status_code == 201
+        first_course = first.post(
+            "/api/v1/courses",
+            json={"name": "First Physics", "target_grade": 25, "max_grade": 30},
+        )
+        assert first_course.status_code == 201
+        first_course_id = first_course.json()["id"]
+
+        assert second.post(
+            "/api/v1/auth/register",
+            json={"email": "second@example.com", "password": "second-password"},
+        ).status_code == 201
+        second_course = second.post(
+            "/api/v1/courses",
+            json={"name": "Second Chemistry", "target_grade": 26, "max_grade": 30},
+        )
+        assert second_course.status_code == 201
+        second_course_id = second_course.json()["id"]
+
+        first_list = first.get("/api/v1/courses")
+        second_list = second.get("/api/v1/courses")
+        assert [item["id"] for item in first_list.json()] == [first_course_id]
+        assert [item["id"] for item in second_list.json()] == [second_course_id]
+
+        assert first.get(f"/api/v1/courses/{second_course_id}").status_code == 404
+        assert second.get(f"/api/v1/courses/{first_course_id}").status_code == 404
+
+
+def test_protected_api_requires_authentication(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    with TestClient(app) as client:
+        assert client.get("/api/v1/courses").status_code == 401
+        assert client.get("/api/v1/semester/dashboard").status_code == 401

@@ -64,7 +64,7 @@ def _get_course_document(db: Session, course_id: str, document_id: str) -> Docum
 
 @router.post("", response_model=CourseRead, status_code=status.HTTP_201_CREATED)
 def create_course(payload: CourseCreate, db: Annotated[Session, Depends(get_db)]) -> Course:
-    course = Course(**payload.model_dump())
+    course = Course(user_id=db.info["user_id"], **payload.model_dump())
     db.add(course)
     db.commit()
     db.refresh(course)

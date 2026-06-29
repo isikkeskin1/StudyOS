@@ -1,0 +1,118 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.security import hash_password, new_session_token, token_digest, verify_password
+from app.models.auth import AuthSession, User
+from app.schemas.auth import AuthRead, LoginRequest, RegisterRequest, UserRead
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+SESSION_DAYS = 30
+
+
+def _user_read(user: User) -> UserRead:
+    return UserRead(id=user.id, email=user.email, created_at=user.created_at)
+
+
+def _issue_session(
+    db: Session,
+    user: User,
+    request: Request,
+    response: Response,
+) -> AuthRead:
+    token = new_session_token()
+    expires_at = datetime.now(UTC) + timedelta(days=SESSION_DAYS)
+    auth_session = AuthSession(
+        user_id=user.id,
+        token_hash=token_digest(token),
+        expires_at=expires_at,
+    )
+    db.add(auth_session)
+    db.commit()
+    response.set_cookie(
+        "studyos_session",
+        token,
+        httponly=True,
+        secure=request.app.state.settings.environment == "production",
+        samesite="lax",
+        max_age=SESSION_DAYS * 24 * 60 * 60,
+        path="/",
+    )
+    return AuthRead(user=_user_read(user), expires_at=expires_at)
+
+
+@router.post("/register", response_model=AuthRead, status_code=status.HTTP_201_CREATED)
+def register(
+    payload: RegisterRequest,
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+) -> AuthRead:
+    user = User(email=payload.email, password_hash=hash_password(payload.password))
+    db.add(user)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists",
+        ) from exc
+    return _issue_session(db, user, request, response)
+
+
+@router.post("/login", response_model=AuthRead)
+def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+) -> AuthRead:
+    user = db.scalar(select(User).where(User.email == payload.email))
+    if user is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+    return _issue_session(db, user, request, response)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    token = request.cookies.get("studyos_session")
+    if token:
+        auth_session = db.scalar(
+            select(AuthSession).where(AuthSession.token_hash == token_digest(token))
+        )
+        if auth_session is not None:
+            db.delete(auth_session)
+            db.commit()
+    response.delete_cookie("studyos_session", path="/")
+
+
+@router.get("/me", response_model=UserRead)
+def me(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> UserRead:
+    user_id = getattr(request.state, "user_id", None)
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account not found")
+    return _user_read(user)

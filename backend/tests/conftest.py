@@ -20,4 +20,12 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
     app = create_app(settings)
 
     with TestClient(app) as test_client:
+        registered = test_client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": "test@studyos.local",
+                "password": "test-password-123",
+            },
+        )
+        assert registered.status_code == 201
         yield test_client
