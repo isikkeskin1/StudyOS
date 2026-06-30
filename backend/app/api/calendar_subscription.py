@@ -13,6 +13,7 @@ from app.schemas.integrations import (
     CalendarSubscriptionCreated,
     CalendarSubscriptionRead,
 )
+from app.services.calendar_focus import CalendarFocusInputError
 from app.services.calendar_subscription import (
     calendar_subscription_ics,
     create_calendar_subscription,
@@ -21,7 +22,6 @@ from app.services.calendar_subscription import (
     read_calendar_subscription,
     revoke_calendar_subscription,
 )
-from app.services.calendar_focus import CalendarFocusInputError
 
 router = APIRouter(
     prefix="/semester-queues/{queue_id}/calendar-subscriptions",
