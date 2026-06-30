@@ -17,7 +17,7 @@ def search(
     db: Annotated[Session, Depends(get_db)],
     q: Annotated[str, Query(min_length=1, max_length=200)],
     course_id: str | None = None,
-    kind: list[SearchKind] | None = Query(default=None),
+    kind: Annotated[list[SearchKind] | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 30,
 ) -> GlobalSearchRead:
     return global_search(

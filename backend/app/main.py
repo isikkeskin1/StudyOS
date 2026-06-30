@@ -27,8 +27,8 @@ from app.api.planning import router as planning_router
 from app.api.push_notifications import router as push_notifications_router
 from app.api.review_session import router as review_session_router
 from app.api.reviews import router as reviews_router
-from app.api.semester_dashboard import router as semester_dashboard_router
 from app.api.search import router as search_router
+from app.api.semester_dashboard import router as semester_dashboard_router
 from app.api.semester_queue import router as semester_queue_router
 from app.api.tutor import router as tutor_router
 from app.api.tutor_benchmark import router as tutor_benchmark_router
