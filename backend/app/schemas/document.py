@@ -28,6 +28,10 @@ class DocumentAnalysisRead(BaseModel):
     unit_count: int
     chunk_count: int
     extracted_characters: int
+    empty_unit_count: int
+    extraction_quality: float
+    text_sha256: str | None
+    duplicate_of_document_id: str | None
     needs_ocr: bool
     processed_at: datetime
 

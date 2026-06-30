@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CourseManager } from "@/components/course-manager";
+import { GlobalSearch } from "@/components/global-search";
 
 import type {
   AnalyticsCourse,
@@ -226,6 +227,7 @@ export function Dashboard({
             <p className="muted">One view for urgency, progress, execution, and evidence.</p>
           </div>
           <div className="topbar-actions">
+            <GlobalSearch />
             <select
               aria-label="Filter analytics by course"
               value={courseId}

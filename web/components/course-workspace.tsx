@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { ExamDayPanel } from "@/components/exam-day-panel";
+import { GlobalSearch } from "@/components/global-search";
 
 import type {
   CheatSheet,
@@ -61,6 +63,7 @@ function formatDate(value: string | null) {
 }
 
 export function CourseWorkspace({ courseId }: { courseId: string }) {
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>("overview");
   const [data, setData] = useState<WorkspaceData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -120,6 +123,24 @@ export function CourseWorkspace({ courseId }: { courseId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const requested = searchParams.get("tab");
+    const allowed: Tab[] = [
+      "overview",
+      "topics",
+      "sources",
+      "exam",
+      "mock",
+      "tutor",
+      "mistakes",
+      "forecast",
+      "cheats",
+    ];
+    if (requested && allowed.includes(requested as Tab)) {
+      setTab(requested as Tab);
+    }
+  }, [searchParams]);
 
   const masteryMap = useMemo(
     () => new Map((data?.mastery ?? []).map((item) => [item.topic_id, item])),
@@ -390,6 +411,9 @@ export function CourseWorkspace({ courseId }: { courseId: string }) {
           <span className="brand-mark">S</span>
           <span><strong>StudyOS</strong><small>Course workspace</small></span>
         </Link>
+        <div className="workspace-search">
+          <GlobalSearch />
+        </div>
         <div className="workspace-course-label">
           <span>Current course</span>
           <strong>{course.name}</strong>
