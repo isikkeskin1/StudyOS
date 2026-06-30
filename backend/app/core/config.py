@@ -18,6 +18,10 @@ class Settings(BaseModel):
     sentry_dsn: SecretStr | None = None
     sentry_traces_sample_rate: float = Field(default=0.0, ge=0, le=1)
     release: str | None = None
+    vapid_public_key: str | None = None
+    vapid_private_key: SecretStr | None = None
+    vapid_subject: str = "mailto:admin@studyos.local"
+    push_poll_seconds: int = Field(default=300, ge=60, le=3600)
 
     tutor_provider: Literal["local", "openai"] = "local"
     tutor_embedding_provider: Literal["none", "openai"] = "none"
@@ -39,10 +43,16 @@ class Settings(BaseModel):
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
 
+    @property
+    def push_enabled(self) -> bool:
+        return self.vapid_public_key is not None and self.vapid_private_key is not None
+
     @model_validator(mode="after")
     def validate_runtime(self) -> Settings:
         if self.environment == "production" and self.database_url.startswith("sqlite"):
             raise ValueError("Production requires a non-SQLite STUDYOS_DATABASE_URL")
+        if (self.vapid_public_key is None) != (self.vapid_private_key is None):
+            raise ValueError("Both VAPID public and private keys must be configured together")
         if (
             self.tutor_provider == "openai"
             or self.tutor_embedding_provider == "openai"
@@ -54,6 +64,7 @@ class Settings(BaseModel):
 def get_settings() -> Settings:
     api_key = os.getenv("OPENAI_API_KEY")
     sentry_dsn = os.getenv("STUDYOS_SENTRY_DSN")
+    vapid_private_key = os.getenv("STUDYOS_VAPID_PRIVATE_KEY")
     return Settings(
         environment=os.getenv("STUDYOS_ENV", "development").lower(),
         database_url=os.getenv("STUDYOS_DATABASE_URL", "sqlite:///./.studyos/studyos.db"),
@@ -65,6 +76,14 @@ def get_settings() -> Settings:
             os.getenv("STUDYOS_SENTRY_TRACES_SAMPLE_RATE", "0")
         ),
         release=os.getenv("STUDYOS_RELEASE"),
+        vapid_public_key=os.getenv("STUDYOS_VAPID_PUBLIC_KEY") or None,
+        vapid_private_key=(
+            SecretStr(vapid_private_key) if vapid_private_key else None
+        ),
+        vapid_subject=os.getenv(
+            "STUDYOS_VAPID_SUBJECT", "mailto:admin@studyos.local"
+        ),
+        push_poll_seconds=int(os.getenv("STUDYOS_PUSH_POLL_SECONDS", "300")),
         tutor_provider=os.getenv("STUDYOS_TUTOR_PROVIDER", "local").lower(),
         tutor_embedding_provider=os.getenv(
             "STUDYOS_TUTOR_EMBEDDING_PROVIDER", "none"

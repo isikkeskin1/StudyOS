@@ -21,6 +21,10 @@ const nextConfig: NextConfig = {
         source: "/api/:path*",
         destination: `${backendUrl}/api/:path*`,
       },
+      {
+        source: "/calendar/:path*",
+        destination: `${backendUrl}/calendar/:path*`,
+      },
     ];
   },
 };

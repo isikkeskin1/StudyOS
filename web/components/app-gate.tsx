@@ -27,6 +27,7 @@ export function AppGate() {
 
   const enterProduct = async (resolvedUser: AuthUser) => {
     setUser(resolvedUser);
+    window.dispatchEvent(new Event("studyos:authenticated"));
     const exists = await hasCourse();
     setMode(exists ? "dashboard" : "setup");
   };
@@ -44,7 +45,32 @@ export function AppGate() {
   }, []);
 
   const signOut = async () => {
+    try {
+      if ("serviceWorker" in navigator && "PushManager" in window) {
+        const registration = await navigator.serviceWorker.ready;
+        const browserSubscription = await registration.pushManager.getSubscription();
+        if (browserSubscription) {
+          const response = await fetch("/api/v1/notifications/subscriptions", {
+            cache: "no-store",
+          });
+          if (response.ok) {
+            const rows = (await response.json()) as Array<{ id: string; endpoint: string }>;
+            const current = rows.find(
+              (row) => row.endpoint === browserSubscription.endpoint,
+            );
+            if (current) {
+              await fetch(`/api/v1/notifications/subscriptions/${current.id}`, {
+                method: "DELETE",
+              });
+            }
+          }
+        }
+      }
+    } catch {
+      // Push cleanup is best-effort; logout must still complete.
+    }
     await fetch("/api/v1/auth/logout", { method: "POST" });
+    window.dispatchEvent(new Event("studyos:signed-out"));
     setUser(null);
     setMode("auth");
   };
