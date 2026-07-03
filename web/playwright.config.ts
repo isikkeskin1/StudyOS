@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 45_000,
   expect: { timeout: 8_000 },
   fullyParallel: false,
-  retries: 1,
+  retries: 0,
   reporter: [["line"]],
   use: {
     baseURL: process.env.STUDYOS_E2E_BASE_URL ?? "http://127.0.0.1:3000",
