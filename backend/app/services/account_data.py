@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -110,7 +110,7 @@ def export_user_data(db: Session, user: User) -> dict[str, Any]:
 
     return {
         "format": "studyos-account-export-v1",
-        "exported_at": datetime.now().astimezone().isoformat(),
+        "exported_at": datetime.now(UTC).isoformat(),
         "account": {
             "id": user.id,
             "email": user.email,
