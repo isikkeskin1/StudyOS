@@ -35,6 +35,7 @@ from app.schemas.intelligence import (
     TopicEvidenceRead,
     TopicRelationshipRead,
 )
+from app.services.account_data import delete_course_data
 from app.services.course_setup import course_setup_status
 from app.services.intelligence import NoProcessedDocumentsError, analyze_course
 from app.services.processing import DocumentProcessingError, process_document
@@ -118,17 +119,7 @@ def delete_course(
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
     course = _get_course(db, course_id)
-    storage_paths = [Path(document.storage_path) for document in course.documents]
-    db.delete(course)
-    db.commit()
-    for storage_path in storage_paths:
-        storage_path.unlink(missing_ok=True)
-    course_dir = storage_paths[0].parent if storage_paths else None
-    if course_dir is not None:
-        try:
-            course_dir.rmdir()
-        except OSError:
-            pass
+    delete_course_data(db, course)
 
 
 @router.post(
