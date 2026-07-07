@@ -98,3 +98,105 @@ def test_protected_api_requires_authentication(tmp_path: Path) -> None:
     with TestClient(app) as client:
         assert client.get("/api/v1/courses").status_code == 401
         assert client.get("/api/v1/semester/dashboard").status_code == 401
+
+
+def test_nested_documents_are_isolated_between_accounts(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    with TestClient(app) as first, TestClient(app) as second:
+        assert first.post(
+            "/api/v1/auth/register",
+            json={"email": "owner@example.com", "password": "owner-password"},
+        ).status_code == 201
+        course = first.post(
+            "/api/v1/courses",
+            json={"name": "Private Physics", "target_grade": 25, "max_grade": 30},
+        ).json()
+        uploaded = first.post(
+            f"/api/v1/courses/{course['id']}/documents",
+            files={"file": ("notes.txt", b"private mechanics notes", "text/plain")},
+        )
+        assert uploaded.status_code == 201
+        document_id = uploaded.json()["id"]
+
+        assert second.post(
+            "/api/v1/auth/register",
+            json={"email": "intruder@example.com", "password": "intruder-password"},
+        ).status_code == 201
+
+        base = f"/api/v1/courses/{course['id']}/documents/{document_id}"
+        assert second.get(base).status_code == 404
+        assert second.get(f"{base}/content").status_code == 404
+        assert second.post(f"{base}/process").status_code == 404
+        assert second.delete(base).status_code == 404
+
+        assert first.get(base).status_code == 200
+
+
+def test_account_export_is_scoped_and_redacts_credentials(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    with TestClient(app) as client:
+        assert client.post(
+            "/api/v1/auth/register",
+            json={"email": "export@example.com", "password": "export-password"},
+        ).status_code == 201
+        course = client.post(
+            "/api/v1/courses",
+            json={"name": "Export Physics", "target_grade": 25, "max_grade": 30},
+        )
+        assert course.status_code == 201
+
+        exported = client.get("/api/v1/auth/export")
+        assert exported.status_code == 200
+        payload = exported.json()
+        assert payload["format"] == "studyos-account-export-v1"
+        assert payload["account"]["email"] == "export@example.com"
+        assert payload["source_files_included"] is False
+        assert payload["tables"]["courses"][0]["name"] == "Export Physics"
+
+        serialized = str(payload).lower()
+        assert "password_hash" not in serialized
+        assert "token_hash" not in serialized
+        assert "storage_path" not in serialized
+
+
+def test_account_deletion_removes_login_and_uploaded_files(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    with TestClient(app) as client:
+        credentials = {
+            "email": "delete@example.com",
+            "password": "delete-password",
+        }
+        assert client.post("/api/v1/auth/register", json=credentials).status_code == 201
+        course = client.post(
+            "/api/v1/courses",
+            json={"name": "Delete Physics", "target_grade": 25, "max_grade": 30},
+        ).json()
+        uploaded = client.post(
+            f"/api/v1/courses/{course['id']}/documents",
+            files={"file": ("delete.txt", b"delete me", "text/plain")},
+        )
+        assert uploaded.status_code == 201
+
+        stored_files = list((tmp_path / "uploads" / course["id"]).iterdir())
+        assert len(stored_files) == 1
+        assert stored_files[0].exists()
+
+        wrong = client.request(
+            "DELETE",
+            "/api/v1/auth/account",
+            json={"password": "wrong-password", "confirmation": "DELETE"},
+        )
+        assert wrong.status_code == 403
+        assert client.get("/api/v1/auth/me").status_code == 200
+
+        deleted = client.request(
+            "DELETE",
+            "/api/v1/auth/account",
+            json={"password": credentials["password"], "confirmation": "DELETE"},
+        )
+        assert deleted.status_code == 204
+        assert not stored_files[0].exists()
+        assert client.get("/api/v1/auth/me").status_code == 401
+
+        login = client.post("/api/v1/auth/login", json=credentials)
+        assert login.status_code == 401
