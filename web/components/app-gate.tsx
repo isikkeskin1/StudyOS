@@ -84,5 +84,15 @@ export function AppGate() {
   if (mode === "setup") {
     return <SetupWizard onReady={() => setMode("dashboard")} />;
   }
-  return <Dashboard userEmail={user?.email ?? null} onSignOut={() => void signOut()} />;
+  return (
+    <Dashboard
+      userEmail={user?.email ?? null}
+      onSignOut={() => void signOut()}
+      onAccountDeleted={() => {
+        window.dispatchEvent(new Event("studyos:signed-out"));
+        setUser(null);
+        setMode("auth");
+      }}
+    />
+  );
 }
