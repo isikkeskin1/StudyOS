@@ -41,6 +41,7 @@ export function CourseManager({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
   const selected = useMemo(
     () => courses.find((course) => course.id === selectedId) ?? null,
@@ -60,7 +61,9 @@ export function CourseManager({
     const statusMap = Object.fromEntries(statusPairs);
     setCourses(list);
     setSetups(statusMap);
-    const nextId = preferredId ?? selectedId ?? list[0]?.id ?? null;
+    const nextId = preferredId === null
+      ? list[0]?.id ?? null
+      : preferredId ?? selectedId ?? list[0]?.id ?? null;
     setSelectedId(nextId);
     if (nextId) {
       setDocuments(await api<CourseDocument[]>(`/api/v1/courses/${nextId}/documents`));
@@ -180,6 +183,17 @@ export function CourseManager({
     });
   };
 
+  const removeCourse = () => {
+    if (!selected || deleteConfirmation !== selected.name) return;
+    void run(async () => {
+      await api(`/api/v1/courses/${selected.id}`, { method: "DELETE" });
+      setDeleteConfirmation("");
+      setSelectedId(null);
+      await load(null);
+      setNotice("Course and its StudyOS data were deleted.");
+    });
+  };
+
   const analyze = () => {
     if (!selected) return;
     void run(async () => {
@@ -296,6 +310,31 @@ export function CourseManager({
                   </p>
                   <button className="ghost-button" type="button" disabled={busy || !setup?.processed_document_count} onClick={analyze}>
                     {setup?.course_analyzed ? "Re-run analysis" : "Analyze course"}
+                  </button>
+                </section>
+
+                <section className="manager-section manager-danger-section">
+                  <div className="manager-section-head">
+                    <div><span>Danger zone</span><strong>Delete this course</strong></div>
+                  </div>
+                  <p className="manager-note">
+                    This permanently removes the course, uploaded source records, mastery evidence,
+                    study history, forecasts, and course-specific schedules.
+                  </p>
+                  <label className="manager-delete-confirm">
+                    Type <strong>{selected.name}</strong> to confirm
+                    <input
+                      value={deleteConfirmation}
+                      onChange={(event) => setDeleteConfirmation(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    className="danger-button"
+                    type="button"
+                    disabled={busy || deleteConfirmation !== selected.name}
+                    onClick={removeCourse}
+                  >
+                    Delete course permanently
                   </button>
                 </section>
               </>
