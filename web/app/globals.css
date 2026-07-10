@@ -2499,3 +2499,29 @@ button,
     width: 100%;
   }
 }
+
+
+.manager-danger-section {
+  border-color: rgba(255,127,134,.18);
+  background: rgba(255,127,134,.025);
+}
+.manager-delete-confirm {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.manager-delete-confirm strong { color: var(--text); }
+.manager-delete-confirm input {
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #080d13;
+  color: var(--text);
+  outline: none;
+}
+.manager-delete-confirm input:focus { border-color: rgba(255,127,134,.38); }
+@media (max-width: 760px) {
+  .manager-delete-confirm input { min-height: 46px; font-size: 16px; }
+}
