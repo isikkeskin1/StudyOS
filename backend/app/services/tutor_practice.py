@@ -489,6 +489,9 @@ def create_practice_item(
         solution_revealed=False,
     )
     db.add(item)
+    # Evidence rows reference the practice item. Flush the parent first so databases
+    # with enforced foreign keys never depend on ORM insertion ordering here.
+    db.flush()
     for source in generated.sources:
         db.add(
             TutorPracticeEvidence(
