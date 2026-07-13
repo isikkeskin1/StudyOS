@@ -22,6 +22,8 @@ class Settings(BaseModel):
     vapid_private_key: SecretStr | None = None
     vapid_subject: str = "mailto:admin@studyos.local"
     push_poll_seconds: int = Field(default=300, ge=60, le=3600)
+    auth_rate_limit_attempts: int = Field(default=10, ge=2, le=100)
+    auth_rate_limit_window_seconds: int = Field(default=60, ge=10, le=3600)
 
     tutor_provider: Literal["local", "openai"] = "local"
     tutor_embedding_provider: Literal["none", "openai"] = "none"
@@ -84,6 +86,10 @@ def get_settings() -> Settings:
             "STUDYOS_VAPID_SUBJECT", "mailto:admin@studyos.local"
         ),
         push_poll_seconds=int(os.getenv("STUDYOS_PUSH_POLL_SECONDS", "300")),
+        auth_rate_limit_attempts=int(os.getenv("STUDYOS_AUTH_RATE_LIMIT_ATTEMPTS", "10")),
+        auth_rate_limit_window_seconds=int(
+            os.getenv("STUDYOS_AUTH_RATE_LIMIT_WINDOW_SECONDS", "60")
+        ),
         tutor_provider=os.getenv("STUDYOS_TUTOR_PROVIDER", "local").lower(),
         tutor_embedding_provider=os.getenv(
             "STUDYOS_TUTOR_EMBEDDING_PROVIDER", "none"
