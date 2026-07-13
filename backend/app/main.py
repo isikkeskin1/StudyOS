@@ -38,6 +38,7 @@ from app.api.tutor_remediation import router as tutor_remediation_router
 from app.core.auth import AuthenticationMiddleware
 from app.core.config import Settings, get_settings
 from app.core.database import Base, create_database_engine, create_session_factory
+from app.core.hardening import AuthRateLimitMiddleware, SecurityHeadersMiddleware
 from app.core.observability import (
     RequestObservabilityMiddleware,
     configure_error_tracking,
@@ -77,7 +78,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application = FastAPI(
         title=resolved_settings.app_name,
-        version="0.49.0",
+        version="0.50.0",
         description="Backend API for StudyOS.",
         lifespan=lifespan,
     )
@@ -85,7 +86,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.engine = engine
     application.state.session_factory = session_factory
     application.add_middleware(AuthenticationMiddleware)
+    application.add_middleware(
+        AuthRateLimitMiddleware,
+        attempts=resolved_settings.auth_rate_limit_attempts,
+        window_seconds=resolved_settings.auth_rate_limit_window_seconds,
+    )
     application.add_middleware(RequestObservabilityMiddleware)
+    application.add_middleware(SecurityHeadersMiddleware)
 
     application.include_router(health_router, prefix=resolved_settings.api_prefix)
     application.include_router(auth_router, prefix=resolved_settings.api_prefix)
