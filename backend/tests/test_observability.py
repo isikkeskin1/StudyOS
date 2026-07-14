@@ -22,7 +22,7 @@ def test_health_endpoints_report_liveness_and_readiness(tmp_path: Path) -> None:
         live = client.get("/api/v1/health/live")
         assert live.status_code == 200
         assert live.json()["status"] == "alive"
-        assert live.json()["version"] == "0.49.0"
+        assert live.json()["version"] == "0.50.0"
         assert live.headers["x-request-id"]
 
         ready = client.get("/api/v1/health/ready")
