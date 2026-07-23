@@ -9,5 +9,5 @@ exec uvicorn app.main:app \
   --host 0.0.0.0 \
   --port "${PORT:-8000}" \
   --proxy-headers \
-  --forwarded-allow-ips="${STUDYOS_FORWARDED_ALLOW_IPS:-*}" \
+  --forwarded-allow-ips="${STUDYOS_FORWARDED_ALLOW_IPS:-127.0.0.1}" \
   --no-access-log
