@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, SecretStr, model_validator
 
 class Settings(BaseModel):
     app_name: str = "StudyOS"
-    environment: Literal["development", "test", "production"] = "development"
+    environment: Literal["development", "test", "desktop", "production"] = "development"
     api_prefix: str = "/api/v1"
     database_url: str = "sqlite:///./.studyos/studyos.db"
     data_dir: Path = Path("./.studyos/uploads")
