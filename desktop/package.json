@@ -40,17 +40,25 @@
       {
         "from": "../web/public",
         "to": "web/public"
+      },
+      {
+        "from": "build/backend",
+        "to": "backend"
       }
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "StudyOS-${version}-Windows-${arch}.${ext}"
