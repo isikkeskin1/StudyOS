@@ -6,6 +6,7 @@ const path = require("path");
 const net = require("net");
 const { spawn } = require("child_process");
 
+let backendProcess = null;
 let nextProcess = null;
 let proxyServer = null;
 let appWindow = null;
@@ -32,7 +33,11 @@ function normalizeBackendUrl(value) {
   if (!["https:", "http:"].includes(parsed.protocol)) {
     throw new Error("StudyOS server must use HTTPS or HTTP.");
   }
-  if (app.isPackaged && parsed.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(parsed.hostname)) {
+  if (
+    app.isPackaged &&
+    parsed.protocol !== "https:" &&
+    !["localhost", "127.0.0.1"].includes(parsed.hostname)
+  ) {
     throw new Error("Packaged StudyOS requires HTTPS for remote servers.");
   }
   return parsed.origin;
@@ -63,7 +68,7 @@ function getOpenPort() {
   });
 }
 
-function waitForHttp(url, timeoutMs = 30000) {
+function waitForHttp(url, timeoutMs = 30000, label = "StudyOS service") {
   const started = Date.now();
   return new Promise((resolve, reject) => {
     const attempt = () => {
@@ -80,13 +85,65 @@ function waitForHttp(url, timeoutMs = 30000) {
     };
     const retry = () => {
       if (Date.now() - started >= timeoutMs) {
-        reject(new Error("StudyOS web shell did not start."));
+        reject(new Error(`${label} did not start.`));
         return;
       }
       setTimeout(attempt, 250);
     };
     attempt();
   });
+}
+
+function bundledBackendPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "backend", "StudyOSBackend.exe");
+  }
+  return path.resolve(__dirname, "build/backend/StudyOSBackend.exe");
+}
+
+async function startLocalBackend() {
+  const executable = bundledBackendPath();
+  if (!fs.existsSync(executable)) {
+    throw new Error("Bundled StudyOS backend is missing.");
+  }
+
+  const port = await getOpenPort();
+  const dataRoot = path.join(app.getPath("userData"), "data");
+  const uploads = path.join(dataRoot, "uploads");
+  const databasePath = path.join(dataRoot, "studyos.db").replace(/\\/g, "/");
+  fs.mkdirSync(uploads, { recursive: true });
+
+  backendProcess = spawn(executable, [], {
+    cwd: path.dirname(executable),
+    windowsHide: true,
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      STUDYOS_ENV: "desktop",
+      STUDYOS_DESKTOP_HOST: "127.0.0.1",
+      STUDYOS_DESKTOP_PORT: String(port),
+      STUDYOS_DATABASE_URL: `sqlite:///${databasePath}`,
+      STUDYOS_DATA_DIR: uploads,
+      STUDYOS_TUTOR_PROVIDER: "local",
+      STUDYOS_TUTOR_EMBEDDING_PROVIDER: "none",
+      STUDYOS_LOG_LEVEL: "WARNING",
+      STUDYOS_RELEASE: app.getVersion(),
+    },
+  });
+
+  backendProcess.once("exit", (code) => {
+    if (!app.isQuitting && code !== 0) {
+      console.error(`StudyOS backend exited with code ${code}`);
+    }
+  });
+
+  const origin = `http://127.0.0.1:${port}`;
+  await waitForHttp(
+    `${origin}/api/v1/health/ready`,
+    45000,
+    "StudyOS local backend",
+  );
+  return origin;
 }
 
 function webRoot() {
@@ -105,20 +162,18 @@ async function startNextServer() {
     );
   }
 
-  const env = {
-    ...process.env,
-    NODE_ENV: "production",
-    HOSTNAME: "127.0.0.1",
-    PORT: String(port),
-    STUDYOS_ENV: "production",
-    ELECTRON_RUN_AS_NODE: "1",
-  };
-
   nextProcess = spawn(process.execPath, [serverPath], {
     cwd: root,
-    env,
     windowsHide: true,
     stdio: "ignore",
+    env: {
+      ...process.env,
+      NODE_ENV: "production",
+      HOSTNAME: "127.0.0.1",
+      PORT: String(port),
+      STUDYOS_ENV: "production",
+      ELECTRON_RUN_AS_NODE: "1",
+    },
   });
 
   nextProcess.once("exit", (code) => {
@@ -127,7 +182,11 @@ async function startNextServer() {
     }
   });
 
-  await waitForHttp(`http://127.0.0.1:${port}/`);
+  await waitForHttp(
+    `http://127.0.0.1:${port}/`,
+    30000,
+    "StudyOS web shell",
+  );
   return port;
 }
 
@@ -143,7 +202,6 @@ function forwardRequest(req, res, targetOrigin) {
 
   const client = target.protocol === "https:" ? https : http;
   const headers = { ...req.headers, host: target.host };
-  delete headers["content-length"];
 
   const upstream = client.request(
     target,
@@ -191,9 +249,7 @@ async function startProxy(backendUrl, nextPort) {
 function configureSessionSecurity(appOrigin) {
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     const url = webContents.getURL();
-    const allowed =
-      permission === "notifications" && url.startsWith(appOrigin);
-    callback(allowed);
+    callback(permission === "notifications" && url.startsWith(appOrigin));
   });
 }
 
@@ -217,9 +273,7 @@ function createAppWindow(appOrigin) {
 
   appWindow.once("ready-to-show", () => appWindow.show());
   appWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https://")) {
-      void shell.openExternal(url);
-    }
+    if (url.startsWith("https://")) void shell.openExternal(url);
     return { action: "deny" };
   });
   appWindow.webContents.on("will-navigate", (event, url) => {
@@ -228,13 +282,11 @@ function createAppWindow(appOrigin) {
       if (url.startsWith("https://")) void shell.openExternal(url);
     }
   });
-  appWindow.loadURL(appOrigin);
+  void appWindow.loadURL(appOrigin);
 }
 
 function createSetupWindow() {
-  const setupPath = path.join(__dirname, "setup.html");
-  const preloadPath = path.join(__dirname, "preload.cjs");
-
+  if (setupWindow) return;
   setupWindow = new BrowserWindow({
     width: 620,
     height: 620,
@@ -242,14 +294,14 @@ function createSetupWindow() {
     backgroundColor: "#080c12",
     autoHideMenuBar: true,
     webPreferences: {
-      preload: preloadPath,
+      preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
       webSecurity: true,
     },
   });
-  setupWindow.loadFile(setupPath);
+  void setupWindow.loadFile(path.join(__dirname, "setup.html"));
 }
 
 ipcMain.handle("studyos:save-backend", async (event, backendUrl) => {
@@ -266,12 +318,10 @@ ipcMain.handle("studyos:save-backend", async (event, backendUrl) => {
 
 async function launchStudyOS() {
   const config = readConfig();
-  if (!config.backendUrl) {
-    createSetupWindow();
-    return;
-  }
+  const backendUrl = config.backendUrl
+    ? normalizeBackendUrl(config.backendUrl)
+    : await startLocalBackend();
 
-  const backendUrl = normalizeBackendUrl(config.backendUrl);
   const nextPort = await startNextServer();
   const proxyPort = await startProxy(backendUrl, nextPort);
   createAppWindow(`http://127.0.0.1:${proxyPort}`);
@@ -296,6 +346,7 @@ app.on("before-quit", () => {
   app.isQuitting = true;
   if (proxyServer) proxyServer.close();
   if (nextProcess) nextProcess.kill();
+  if (backendProcess) backendProcess.kill();
 });
 
 app.on("window-all-closed", () => {
