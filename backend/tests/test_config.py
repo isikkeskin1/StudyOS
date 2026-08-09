@@ -20,3 +20,13 @@ def test_push_is_enabled_only_with_both_vapid_keys() -> None:
 
     assert disabled.push_enabled is False
     assert enabled.push_enabled is True
+
+
+def test_desktop_environment_allows_local_sqlite() -> None:
+    settings = Settings(
+        environment="desktop",
+        database_url="sqlite:///desktop-studyos.db",
+    )
+
+    assert settings.environment == "desktop"
+    assert settings.database_url.startswith("sqlite")
