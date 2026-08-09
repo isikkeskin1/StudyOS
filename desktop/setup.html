@@ -46,14 +46,14 @@
 <body>
   <main>
     <div class="mark">🧠</div>
-    <h1>Connect StudyOS</h1>
-    <p>This desktop beta keeps the StudyOS interface on your computer and securely connects it to your StudyOS server for accounts, course data, and AI features.</p>
+    <h1>StudyOS needs a server</h1>
+    <p>The bundled local StudyOS backend could not start. You can connect this desktop client to a hosted StudyOS server instead.</p>
     <form id="form">
       <label>
         StudyOS server URL
         <input id="url" type="url" required placeholder="https://api.your-studyos-domain.com" autocomplete="url" />
       </label>
-      <button id="submit" type="submit">Connect & launch StudyOS</button>
+      <button id="submit" type="submit">Connect to hosted StudyOS</button>
       <div id="status" role="alert"></div>
     </form>
     <p class="note">Remote servers must use HTTPS. Local development may use http://localhost or http://127.0.0.1.</p>
