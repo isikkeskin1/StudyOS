@@ -1,6 +1,6 @@
 # StudyOS Desktop
 
-StudyOS Desktop packages the existing StudyOS web client as a Windows desktop application.
+StudyOS Desktop packages the existing StudyOS web client and a local FastAPI backend as a Windows desktop application.
 
 ## Architecture
 
@@ -9,23 +9,28 @@ output, starts it on a private loopback port, and places a tiny local reverse pr
 of it.
 
 - UI/static requests -> bundled Next.js server
-- `/api/*` and `/calendar/*` -> configured StudyOS backend
+- `/api/*` and `/calendar/*` -> bundled local FastAPI backend by default
+- local academic state -> SQLite + uploads under Electron's per-user AppData
+- optional cloud mode -> configured hosted StudyOS backend
 - Browser renderer -> sandboxed Electron window with Node integration disabled
 
-This preserves StudyOS' existing same-origin browser behavior while allowing the desktop
-binary to connect to any deployed StudyOS backend.
+This preserves StudyOS' existing same-origin browser behavior and gives normal users a
+double-click local desktop experience without requiring Python, Node, Docker, or a server URL.
 
 ## First launch
 
-If `STUDYOS_BACKEND_URL` is not provided, the app displays a first-run connection screen.
-The chosen backend origin is saved to Electron's per-user application data directory.
+The packaged app starts its bundled FastAPI sidecar on a private loopback port and creates a
+local SQLite database plus upload storage under the user's AppData directory.
 
-Packaged builds reject non-HTTPS remote servers. Plain HTTP remains available only for
-`localhost` / `127.0.0.1` development.
+A hosted backend can still be selected via `STUDYOS_BACKEND_URL` or the fallback connection
+screen if the local sidecar cannot start. Packaged builds reject non-HTTPS remote servers;
+plain HTTP remains available only for `localhost` / `127.0.0.1`.
 
 ## Local desktop build
 
-Build the Next.js standalone bundle first:
+For local Electron development, build the Next.js standalone bundle first. Packaged Windows
+builds also require `desktop/build/backend/StudyOSBackend.exe`, which CI creates with PyInstaller.
+
 
 ```powershell
 cd web
