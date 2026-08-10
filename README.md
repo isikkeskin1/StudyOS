@@ -29,7 +29,7 @@
 
 **StudyOS now ships as a desktop app.**
 
-The Windows build bundles the production StudyOS interface into a sandboxed Electron desktop shell and keeps your normal StudyOS account/data flow through your configured StudyOS server.
+The Windows build bundles the production StudyOS interface **and a local FastAPI backend** into one desktop package. Normal users can install it and run StudyOS without installing Python, Node, Docker, or configuring a server.
 
 ### Windows downloads
 
@@ -40,7 +40,7 @@ When a GitHub Release is published, CI automatically attaches:
 
 👉 **[Download the latest StudyOS release](https://github.com/isikkeskin1/StudyOS/releases/latest)**
 
-On first launch, the desktop beta asks for your StudyOS server URL. Remote servers must use HTTPS; localhost remains available for development.
+On first launch, StudyOS starts a private local backend automatically and stores its SQLite database plus uploaded course files under your Windows AppData. Hosted/cloud mode remains optional; remote servers must use HTTPS.
 
 > **Beta signing note:** current Windows beta binaries are unsigned, so Microsoft SmartScreen may display an “unknown publisher” warning. Code signing is planned before broad public distribution.
 
