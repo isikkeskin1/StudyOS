@@ -12,6 +12,19 @@ let proxyServer = null;
 let appWindow = null;
 let setupWindow = null;
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    const window = appWindow || setupWindow;
+    if (!window) return;
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
+  });
+}
+
 function configPath() {
   return path.join(app.getPath("userData"), "desktop.json");
 }
