@@ -6,6 +6,8 @@ const path = require("path");
 const net = require("net");
 const { spawn } = require("child_process");
 
+app.setAppUserModelId("com.studyos.desktop");
+
 let backendProcess = null;
 let nextProcess = null;
 let proxyServer = null;
@@ -340,14 +342,16 @@ async function launchStudyOS() {
   createAppWindow(`http://127.0.0.1:${proxyPort}`);
 }
 
-app.whenReady().then(async () => {
-  try {
-    await launchStudyOS();
-  } catch (error) {
-    console.error(error);
-    createSetupWindow();
-  }
-});
+if (hasSingleInstanceLock) {
+  app.whenReady().then(async () => {
+    try {
+      await launchStudyOS();
+    } catch (error) {
+      console.error(error);
+      createSetupWindow();
+    }
+  });
+}
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
