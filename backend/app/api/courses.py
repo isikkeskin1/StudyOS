@@ -12,8 +12,16 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.course import Course
 from app.models.document import Document
+from app.models.document_content import DocumentAnalysis, DocumentChunk, DocumentUnit
 from app.schemas.course import CourseCreate, CourseRead
-from app.schemas.document import DocumentRead
+from app.schemas.document import (
+    DocumentAnalysisRead,
+    DocumentChunkRead,
+    DocumentContentRead,
+    DocumentRead,
+    DocumentUnitRead,
+)
+from app.services.processing import DocumentProcessingError, process_document
 from app.services.storage import (
     UnsupportedFileTypeError,
     UploadTooLargeError,
@@ -21,6 +29,21 @@ from app.services.storage import (
 )
 
 router = APIRouter(prefix="/courses", tags=["courses"])
+
+
+def _get_course(db: Session, course_id: str) -> Course:
+    course = db.get(Course, course_id)
+    if course is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+    return course
+
+
+def _get_course_document(db: Session, course_id: str, document_id: str) -> Document:
+    _get_course(db, course_id)
+    document = db.get(Document, document_id)
+    if document is None or document.course_id != course_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    return document
 
 
 @router.post("", response_model=CourseRead, status_code=status.HTTP_201_CREATED)
@@ -39,10 +62,7 @@ def list_courses(db: Annotated[Session, Depends(get_db)]) -> list[Course]:
 
 @router.get("/{course_id}", response_model=CourseRead)
 def get_course(course_id: str, db: Annotated[Session, Depends(get_db)]) -> Course:
-    course = db.get(Course, course_id)
-    if course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
-    return course
+    return _get_course(db, course_id)
 
 
 @router.post(
@@ -56,9 +76,7 @@ async def upload_document(
     file: Annotated[UploadFile, File()],
     db: Annotated[Session, Depends(get_db)],
 ) -> Document:
-    course = db.get(Course, course_id)
-    if course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+    _get_course(db, course_id)
 
     settings = request.app.state.settings
     document_id = str(uuid4())
@@ -128,14 +146,79 @@ def list_documents(
     course_id: str,
     db: Annotated[Session, Depends(get_db)],
 ) -> list[Document]:
-    course = db.get(Course, course_id)
-    if course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
-
+    _get_course(db, course_id)
     return list(
         db.scalars(
             select(Document)
             .where(Document.course_id == course_id)
             .order_by(Document.created_at.desc())
         ).all()
+    )
+
+
+@router.get("/{course_id}/documents/{document_id}", response_model=DocumentRead)
+def get_document(
+    course_id: str,
+    document_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> Document:
+    return _get_course_document(db, course_id, document_id)
+
+
+@router.post(
+    "/{course_id}/documents/{document_id}/process",
+    response_model=DocumentAnalysisRead,
+)
+def process_uploaded_document(
+    course_id: str,
+    document_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> DocumentAnalysis:
+    document = _get_course_document(db, course_id, document_id)
+    try:
+        return process_document(db, document)
+    except DocumentProcessingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/{course_id}/documents/{document_id}/content",
+    response_model=DocumentContentRead,
+)
+def get_document_content(
+    course_id: str,
+    document_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> DocumentContentRead:
+    document = _get_course_document(db, course_id, document_id)
+    analysis = db.get(DocumentAnalysis, document_id)
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Document has not been processed",
+        )
+
+    units = list(
+        db.scalars(
+            select(DocumentUnit)
+            .where(DocumentUnit.document_id == document_id)
+            .order_by(DocumentUnit.unit_index)
+        ).all()
+    )
+    chunks = list(
+        db.scalars(
+            select(DocumentChunk)
+            .where(DocumentChunk.document_id == document_id)
+            .order_by(DocumentChunk.chunk_index)
+        ).all()
+    )
+
+    return DocumentContentRead(
+        document=DocumentRead.model_validate(document),
+        analysis=DocumentAnalysisRead.model_validate(analysis),
+        units=[DocumentUnitRead.model_validate(unit) for unit in units],
+        chunks=[DocumentChunkRead.model_validate(chunk) for chunk in chunks],
     )
