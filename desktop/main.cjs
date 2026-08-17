@@ -13,6 +13,29 @@ let nextProcess = null;
 let proxyServer = null;
 let appWindow = null;
 let setupWindow = null;
+let lastStartupError = "";
+
+function desktopLogPath() {
+  return path.join(app.getPath("userData"), "desktop.log");
+}
+
+function logDesktop(message, error) {
+  const detail = error instanceof Error ? `${error.message}\n${error.stack || ""}` : error ? String(error) : "";
+  const line = `[${new Date().toISOString()}] ${message}${detail ? `\n${detail}` : ""}\n`;
+  try {
+    fs.mkdirSync(path.dirname(desktopLogPath()), { recursive: true });
+    fs.appendFileSync(desktopLogPath(), line, "utf8");
+  } catch {
+    // Logging must never prevent StudyOS from starting.
+  }
+  if (error) console.error(message, error);
+  else console.log(message);
+}
+
+function childLogFd() {
+  fs.mkdirSync(path.dirname(desktopLogPath()), { recursive: true });
+  return fs.openSync(desktopLogPath(), "a");
+}
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
@@ -128,10 +151,11 @@ async function startLocalBackend() {
   const databasePath = path.join(dataRoot, "studyos.db").replace(/\\/g, "/");
   fs.mkdirSync(uploads, { recursive: true });
 
+  const backendLogFd = childLogFd();
   backendProcess = spawn(executable, [], {
     cwd: path.dirname(executable),
     windowsHide: true,
-    stdio: "ignore",
+    stdio: ["ignore", backendLogFd, backendLogFd],
     env: {
       ...process.env,
       STUDYOS_ENV: "desktop",
@@ -146,9 +170,13 @@ async function startLocalBackend() {
     },
   });
 
+  fs.closeSync(backendLogFd);
+  backendProcess.once("error", (error) => {
+    logDesktop("Failed to spawn bundled StudyOS backend.", error);
+  });
   backendProcess.once("exit", (code) => {
     if (!app.isQuitting && code !== 0) {
-      console.error(`StudyOS backend exited with code ${code}`);
+      logDesktop(`StudyOS backend exited with code ${code}`);
     }
   });
 
@@ -177,10 +205,11 @@ async function startNextServer() {
     );
   }
 
+  const webLogFd = childLogFd();
   nextProcess = spawn(process.execPath, [serverPath], {
     cwd: root,
     windowsHide: true,
-    stdio: "ignore",
+    stdio: ["ignore", webLogFd, webLogFd],
     env: {
       ...process.env,
       NODE_ENV: "production",
@@ -191,9 +220,13 @@ async function startNextServer() {
     },
   });
 
+  fs.closeSync(webLogFd);
+  nextProcess.once("error", (error) => {
+    logDesktop("Failed to spawn bundled StudyOS web shell.", error);
+  });
   nextProcess.once("exit", (code) => {
     if (!app.isQuitting && code !== 0) {
-      console.error(`StudyOS web shell exited with code ${code}`);
+      logDesktop(`StudyOS web shell exited with code ${code}`);
     }
   });
 
@@ -300,7 +333,30 @@ function createAppWindow(appOrigin) {
   void appWindow.loadURL(appOrigin);
 }
 
-function createSetupWindow() {
+function probeBackend(origin, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const target = new URL("/api/v1/health/ready", origin);
+    const client = target.protocol === "https:" ? https : http;
+    const request = client.get(target, (response) => {
+      response.resume();
+      if (response.statusCode === 200) {
+        resolve(true);
+      } else {
+        reject(new Error(`StudyOS server readiness returned HTTP ${response.statusCode || "unknown"}.`));
+      }
+    });
+    request.setTimeout(timeoutMs, () => {
+      request.destroy(new Error("StudyOS server readiness check timed out."));
+    });
+    request.on("error", reject);
+  });
+}
+
+function createSetupWindow(error) {
+  if (error) {
+    lastStartupError = error instanceof Error ? error.message : String(error);
+    logDesktop("StudyOS desktop startup failed.", error);
+  }
   if (setupWindow) return;
   setupWindow = new BrowserWindow({
     width: 620,
@@ -319,14 +375,35 @@ function createSetupWindow() {
   void setupWindow.loadFile(path.join(__dirname, "setup.html"));
 }
 
+ipcMain.handle("studyos:get-startup-error", () => ({
+  message: lastStartupError,
+  logPath: desktopLogPath(),
+}));
+
+ipcMain.handle("studyos:use-local-backend", async () => {
+  try {
+    fs.unlinkSync(configPath());
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  setupWindow?.close();
+  setupWindow = null;
+  lastStartupError = "";
+  await launchStudyOS();
+  return true;
+});
+
 ipcMain.handle("studyos:save-backend", async (event, backendUrl) => {
   const senderUrl = event.senderFrame?.url || "";
   if (!senderUrl.startsWith("file:") || !senderUrl.endsWith("/setup.html")) {
     throw new Error("Invalid configuration request.");
   }
-  saveConfig(backendUrl);
+  const normalized = normalizeBackendUrl(backendUrl);
+  await probeBackend(normalized);
+  saveConfig(normalized);
   setupWindow?.close();
   setupWindow = null;
+  lastStartupError = "";
   await launchStudyOS();
   return true;
 });
@@ -347,15 +424,14 @@ if (hasSingleInstanceLock) {
     try {
       await launchStudyOS();
     } catch (error) {
-      console.error(error);
-      createSetupWindow();
+      createSetupWindow(error);
     }
   });
 }
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    void launchStudyOS();
+    void launchStudyOS().catch((error) => createSetupWindow(error));
   }
 });
 
