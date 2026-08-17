@@ -16,7 +16,8 @@ let setupWindow = null;
 let lastStartupError = "";
 
 function desktopLogPath() {
-  return path.join(app.getPath("userData"), "desktop.log");
+  return process.env.STUDYOS_DESKTOP_LOG_PATH?.trim()
+    || path.join(app.getPath("userData"), "desktop.log");
 }
 
 function logDesktop(message, error) {
@@ -201,6 +202,7 @@ async function startLocalBackend() {
     45000,
     "StudyOS local backend",
   );
+  logDesktop(`Bundled backend ready at ${origin}`);
   return origin;
 }
 
@@ -250,6 +252,7 @@ async function startNextServer() {
     30000,
     "StudyOS web shell",
   );
+  logDesktop(`Bundled web shell ready at http://127.0.0.1:${port}`);
   return port;
 }
 
@@ -433,7 +436,9 @@ async function launchStudyOS() {
 
   const nextPort = await startNextServer();
   const proxyPort = await startProxy(backendUrl, nextPort);
-  createAppWindow(`http://127.0.0.1:${proxyPort}`);
+  const appOrigin = `http://127.0.0.1:${proxyPort}`;
+  createAppWindow(appOrigin);
+  logDesktop(`StudyOS desktop ready at ${appOrigin}`);
 }
 
 if (hasSingleInstanceLock) {
