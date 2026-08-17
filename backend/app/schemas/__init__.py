@@ -6,13 +6,25 @@ from app.schemas.document import (
     DocumentRead,
     DocumentUnitRead,
 )
+from app.schemas.intelligence import (
+    CourseAnalysisRead,
+    CourseIntelligenceRead,
+    CourseTopicRead,
+    TopicEvidenceRead,
+    TopicRelationshipRead,
+)
 
 __all__ = [
+    "CourseAnalysisRead",
     "CourseCreate",
+    "CourseIntelligenceRead",
     "CourseRead",
+    "CourseTopicRead",
     "DocumentAnalysisRead",
     "DocumentChunkRead",
     "DocumentContentRead",
     "DocumentRead",
     "DocumentUnitRead",
+    "TopicEvidenceRead",
+    "TopicRelationshipRead",
 ]

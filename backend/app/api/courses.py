@@ -11,6 +11,12 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.course import Course
+from app.models.course_intelligence import (
+    CourseAnalysis,
+    CourseTopic,
+    TopicEvidence,
+    TopicRelationship,
+)
 from app.models.document import Document
 from app.models.document_content import DocumentAnalysis, DocumentChunk, DocumentUnit
 from app.schemas.course import CourseCreate, CourseRead
@@ -21,6 +27,14 @@ from app.schemas.document import (
     DocumentRead,
     DocumentUnitRead,
 )
+from app.schemas.intelligence import (
+    CourseAnalysisRead,
+    CourseIntelligenceRead,
+    CourseTopicRead,
+    TopicEvidenceRead,
+    TopicRelationshipRead,
+)
+from app.services.intelligence import NoProcessedDocumentsError, analyze_course
 from app.services.processing import DocumentProcessingError, process_document
 from app.services.storage import (
     UnsupportedFileTypeError,
@@ -222,3 +236,99 @@ def get_document_content(
         units=[DocumentUnitRead.model_validate(unit) for unit in units],
         chunks=[DocumentChunkRead.model_validate(chunk) for chunk in chunks],
     )
+
+
+def _read_course_intelligence(db: Session, course_id: str) -> CourseIntelligenceRead:
+    analysis = db.get(CourseAnalysis, course_id)
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Course has not been analyzed",
+        )
+
+    topics = list(
+        db.scalars(
+            select(CourseTopic)
+            .where(CourseTopic.course_id == course_id)
+            .order_by(CourseTopic.importance_score.desc(), CourseTopic.name)
+        ).all()
+    )
+    topic_ids = [topic.id for topic in topics]
+
+    evidence_by_topic: dict[str, list[TopicEvidence]] = {topic_id: [] for topic_id in topic_ids}
+    if topic_ids:
+        for evidence in db.scalars(
+            select(TopicEvidence)
+            .where(TopicEvidence.topic_id.in_(topic_ids))
+            .order_by(TopicEvidence.evidence_score.desc())
+        ).all():
+            evidence_by_topic[evidence.topic_id].append(evidence)
+
+    topic_name_by_id = {topic.id: topic.name for topic in topics}
+    relationships = list(
+        db.scalars(
+            select(TopicRelationship)
+            .where(TopicRelationship.course_id == course_id)
+            .order_by(
+                TopicRelationship.cooccurrence_count.desc(),
+                TopicRelationship.weight.desc(),
+            )
+        ).all()
+    )
+
+    return CourseIntelligenceRead(
+        analysis=CourseAnalysisRead.model_validate(analysis),
+        topics=[
+            CourseTopicRead(
+                id=topic.id,
+                name=topic.name,
+                normalized_name=topic.normalized_name,
+                importance_score=topic.importance_score,
+                mention_count=topic.mention_count,
+                document_count=topic.document_count,
+                exam_mention_count=topic.exam_mention_count,
+                lecture_mention_count=topic.lecture_mention_count,
+                evidence=[
+                    TopicEvidenceRead.model_validate(evidence)
+                    for evidence in evidence_by_topic[topic.id]
+                ],
+            )
+            for topic in topics
+        ],
+        relationships=[
+            TopicRelationshipRead(
+                source_topic_id=relationship.source_topic_id,
+                source_topic_name=topic_name_by_id[relationship.source_topic_id],
+                target_topic_id=relationship.target_topic_id,
+                target_topic_name=topic_name_by_id[relationship.target_topic_id],
+                cooccurrence_count=relationship.cooccurrence_count,
+                weight=relationship.weight,
+            )
+            for relationship in relationships
+        ],
+    )
+
+
+@router.post("/{course_id}/analyze", response_model=CourseIntelligenceRead)
+def analyze_course_documents(
+    course_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> CourseIntelligenceRead:
+    _get_course(db, course_id)
+    try:
+        analyze_course(db, course_id)
+    except NoProcessedDocumentsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    return _read_course_intelligence(db, course_id)
+
+
+@router.get("/{course_id}/intelligence", response_model=CourseIntelligenceRead)
+def get_course_intelligence(
+    course_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> CourseIntelligenceRead:
+    _get_course(db, course_id)
+    return _read_course_intelligence(db, course_id)
