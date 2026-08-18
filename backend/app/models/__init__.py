@@ -7,6 +7,12 @@ from app.models.course_intelligence import (
 )
 from app.models.document import Document
 from app.models.document_content import DocumentAnalysis, DocumentChunk, DocumentUnit
+from app.models.exam_intelligence import (
+    ExamAnalysis,
+    ExamQuestion,
+    ExamQuestionTopic,
+    ExamTopicStat,
+)
 
 __all__ = [
     "Course",
@@ -16,6 +22,10 @@ __all__ = [
     "DocumentAnalysis",
     "DocumentChunk",
     "DocumentUnit",
+    "ExamAnalysis",
+    "ExamQuestion",
+    "ExamQuestionTopic",
+    "ExamTopicStat",
     "TopicEvidence",
     "TopicRelationship",
 ]

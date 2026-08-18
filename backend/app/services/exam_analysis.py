@@ -1,0 +1,223 @@
+from __future__ import annotations
+
+import re
+from collections import defaultdict
+from dataclasses import dataclass
+from uuid import uuid4
+
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
+from app.models.course_intelligence import CourseTopic
+from app.models.document import Document
+from app.models.document_content import DocumentAnalysis, DocumentUnit
+from app.models.exam_intelligence import (
+    ExamAnalysis,
+    ExamQuestion,
+    ExamQuestionTopic,
+    ExamTopicStat,
+)
+
+_EXAM_TYPES = {"past_exam", "past_exam_solution"}
+_QUESTION_START_RE = re.compile(
+    r"(?im)^\s*(?:(?:question|q)\s*(\d{1,2})|(\d{1,2})[.)])\s*[:\-]?\s*"
+)
+_MARK_RE = re.compile(
+    r"(?i)(?:\[|\()?\s*(\d+(?:\.\d+)?)\s*(?:marks?|points?|pts?)\s*(?:\]|\))?"
+)
+_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9']*")
+
+
+class NoExamDocumentsError(RuntimeError):
+    pass
+
+
+class CourseTopicsRequiredError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class ExtractedQuestion:
+    label: str
+    source_label: str
+    text: str
+    marks: float | None
+
+
+def _extract_questions(text: str, source_label: str) -> list[ExtractedQuestion]:
+    matches = list(_QUESTION_START_RE.finditer(text))
+    questions: list[ExtractedQuestion] = []
+    for index, match in enumerate(matches):
+        number = match.group(1) or match.group(2)
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        question_text = text[match.start() : end].strip()
+        if not question_text:
+            continue
+        mark_match = _MARK_RE.search(question_text)
+        marks = float(mark_match.group(1)) if mark_match else None
+        questions.append(
+            ExtractedQuestion(
+                label=f"Q{number}",
+                source_label=source_label,
+                text=question_text,
+                marks=marks,
+            )
+        )
+    return questions
+
+
+def _topic_relevance(question_text: str, normalized_topic: str) -> float:
+    lowered = question_text.lower()
+    if normalized_topic in lowered:
+        return 1.0
+
+    topic_tokens = set(_WORD_RE.findall(normalized_topic.lower()))
+    question_tokens = set(_WORD_RE.findall(lowered))
+    if not topic_tokens:
+        return 0.0
+    overlap = len(topic_tokens & question_tokens) / len(topic_tokens)
+    return round(overlap, 4) if overlap >= 0.6 else 0.0
+
+
+def _clear_exam_analysis(db: Session, course_id: str) -> None:
+    question_ids = list(
+        db.scalars(select(ExamQuestion.id).where(ExamQuestion.course_id == course_id)).all()
+    )
+    if question_ids:
+        db.execute(
+            delete(ExamQuestionTopic).where(ExamQuestionTopic.question_id.in_(question_ids))
+        )
+    db.execute(delete(ExamTopicStat).where(ExamTopicStat.course_id == course_id))
+    db.execute(delete(ExamQuestion).where(ExamQuestion.course_id == course_id))
+    db.execute(delete(ExamAnalysis).where(ExamAnalysis.course_id == course_id))
+
+
+def analyze_exams(db: Session, course_id: str) -> ExamAnalysis:
+    topics = list(
+        db.scalars(
+            select(CourseTopic)
+            .where(CourseTopic.course_id == course_id)
+            .order_by(CourseTopic.importance_score.desc())
+        ).all()
+    )
+    if not topics:
+        raise CourseTopicsRequiredError("Analyze the course before analyzing past exams")
+
+    exam_analyses = list(
+        db.execute(
+            select(DocumentAnalysis, Document)
+            .join(Document, Document.id == DocumentAnalysis.document_id)
+            .where(
+                Document.course_id == course_id,
+                Document.status == "processed",
+                DocumentAnalysis.document_type.in_(_EXAM_TYPES),
+            )
+        ).all()
+    )
+    if not exam_analyses:
+        raise NoExamDocumentsError("Process at least one past exam before exam analysis")
+
+    exam_document_ids = [document.id for _, document in exam_analyses]
+    units = list(
+        db.scalars(
+            select(DocumentUnit)
+            .where(DocumentUnit.document_id.in_(exam_document_ids))
+            .order_by(DocumentUnit.document_id, DocumentUnit.unit_index)
+        ).all()
+    )
+
+    _clear_exam_analysis(db, course_id)
+
+    question_models: list[ExamQuestion] = []
+    topic_question_ids: defaultdict[str, set[str]] = defaultdict(set)
+    topic_marks: defaultdict[str, float] = defaultdict(float)
+    question_index_by_document: defaultdict[str, int] = defaultdict(int)
+
+    for unit in units:
+        for extracted in _extract_questions(unit.text, unit.source_label):
+            question_index_by_document[unit.document_id] += 1
+            question = ExamQuestion(
+                id=str(uuid4()),
+                course_id=course_id,
+                document_id=unit.document_id,
+                question_index=question_index_by_document[unit.document_id],
+                question_label=extracted.label,
+                source_label=extracted.source_label,
+                text=extracted.text,
+                marks=extracted.marks,
+            )
+            db.add(question)
+            question_models.append(question)
+
+            matches: list[tuple[CourseTopic, float]] = []
+            for topic in topics:
+                relevance = _topic_relevance(extracted.text, topic.normalized_name)
+                if relevance > 0:
+                    matches.append((topic, relevance))
+            matches.sort(key=lambda item: item[1], reverse=True)
+            matches = matches[:3]
+            total_relevance = sum(score for _, score in matches)
+            for topic, relevance in matches:
+                allocated_marks = (
+                    extracted.marks * relevance / total_relevance
+                    if extracted.marks is not None and total_relevance > 0
+                    else None
+                )
+                topic_question_ids[topic.id].add(question.id)
+                if allocated_marks is not None:
+                    topic_marks[topic.id] += allocated_marks
+                db.add(
+                    ExamQuestionTopic(
+                        id=str(uuid4()),
+                        question_id=question.id,
+                        topic_id=topic.id,
+                        relevance_score=round(relevance, 4),
+                        allocated_marks=(
+                            round(allocated_marks, 4) if allocated_marks is not None else None
+                        ),
+                    )
+                )
+
+    mapped_question_count = max(
+        1,
+        len({question_id for ids in topic_question_ids.values() for question_id in ids}),
+    )
+    total_allocated_marks = sum(topic_marks.values())
+    stat_rows: list[tuple[CourseTopic, int, float, float, float, float]] = []
+    for topic in topics:
+        question_count = len(topic_question_ids[topic.id])
+        question_share = question_count / mapped_question_count
+        mark_share = topic_marks[topic.id] / total_allocated_marks if total_allocated_marks else 0.0
+        raw_weight = (
+            0.7 * mark_share + 0.3 * question_share if total_allocated_marks else question_share
+        )
+        stat_rows.append(
+            (topic, question_count, topic_marks[topic.id], question_share, mark_share, raw_weight)
+        )
+
+    total_raw_weight = sum(row[5] for row in stat_rows) or 1.0
+    for topic, question_count, known_marks, question_share, mark_share, raw_weight in stat_rows:
+        db.add(
+            ExamTopicStat(
+                id=str(uuid4()),
+                course_id=course_id,
+                topic_id=topic.id,
+                question_count=question_count,
+                known_marks=round(known_marks, 4),
+                question_share=round(question_share, 4),
+                mark_share=round(mark_share, 4),
+                exam_weight=round(raw_weight / total_raw_weight, 4),
+            )
+        )
+
+    analysis = ExamAnalysis(
+        course_id=course_id,
+        exam_document_count=len(exam_document_ids),
+        question_count=len(question_models),
+        marked_question_count=sum(question.marks is not None for question in question_models),
+        total_known_marks=round(sum(question.marks or 0.0 for question in question_models), 4),
+    )
+    db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+    return analysis
