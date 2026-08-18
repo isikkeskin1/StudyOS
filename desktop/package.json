@@ -30,16 +30,8 @@
     ],
     "extraResources": [
       {
-        "from": "../web/.next/standalone",
+        "from": "build/web",
         "to": "web"
-      },
-      {
-        "from": "../web/.next/static",
-        "to": "web/.next/static"
-      },
-      {
-        "from": "../web/public",
-        "to": "web/public"
       },
       {
         "from": "build/backend",
