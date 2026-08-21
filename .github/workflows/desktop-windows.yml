@@ -146,6 +146,17 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run dist:win
 
+      - name: Verify packaged web runtime
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist/win-unpacked/resources/web/server.js")) {
+            throw "Packaged StudyOS is missing web/server.js"
+          }
+          if (!(Test-Path "dist/win-unpacked/resources/web/node_modules/next/package.json")) {
+            throw "Packaged StudyOS is missing the Next.js runtime"
+          }
+
       - name: Smoke packaged portable app
         working-directory: desktop
         shell: pwsh
