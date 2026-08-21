@@ -43,7 +43,10 @@ def _weighted_mastery(topics: list[PlanningTopic], mastery: dict[str, float]) ->
     return sum(topic.weight * mastery[topic.id] for topic in topics)
 
 
-def _allocate(topics: list[PlanningTopic], hours: float) -> tuple[dict[str, float], dict[str, float]]:
+def _allocate(
+    topics: list[PlanningTopic],
+    hours: float,
+) -> tuple[dict[str, float], dict[str, float]]:
     allocations = {topic.id: 0.0 for topic in topics}
     mastery = {topic.id: topic.mastery for topic in topics}
     remaining = max(0.0, hours)
@@ -145,7 +148,10 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
 
     target_ratio = target_grade / course.max_grade
     current_mastery = {topic.id: topic.mastery for topic in planning_topics}
-    current_grade = round(_weighted_mastery(planning_topics, current_mastery) * course.max_grade, 2)
+    current_grade = round(
+        _weighted_mastery(planning_topics, current_mastery) * course.max_grade,
+        2,
+    )
     estimated_hours = _hours_to_target(planning_topics, target_ratio)
 
     planning_hours = (
@@ -169,7 +175,8 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
         if allocations[topic.id] > 0 or topic.weight >= 0.05
     ]
     allocation_rows.sort(
-        key=lambda item: (item.recommended_hours, item.priority_score), reverse=True
+        key=lambda item: (item.recommended_hours, item.priority_score),
+        reverse=True,
     )
 
     scenario_hours = {0.0, 5.0, 10.0, 15.0, 20.0, 30.0}
@@ -177,18 +184,19 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
         scenario_hours.add(estimated_hours)
     if request.available_hours is not None:
         scenario_hours.add(request.available_hours)
-    scenarios = [
-        GradeScenarioRead(
-            study_hours=round(hours, 2),
-            projected_grade=_projection(planning_topics, hours, course.max_grade),
-            projected_ratio=round(
-                _projection(planning_topics, hours, course.max_grade) / course.max_grade,
-                4,
-            ),
+
+    scenarios: list[GradeScenarioRead] = []
+    for hours in sorted(scenario_hours):
+        if hours > _MAX_ESTIMATE_HOURS:
+            continue
+        projected = _projection(planning_topics, hours, course.max_grade)
+        scenarios.append(
+            GradeScenarioRead(
+                study_hours=round(hours, 2),
+                projected_grade=projected,
+                projected_ratio=round(projected / course.max_grade, 4),
+            )
         )
-        for hours in sorted(scenario_hours)
-        if hours <= _MAX_ESTIMATE_HOURS
-    ]
 
     projected_grade = (
         _projection(planning_topics, request.available_hours, course.max_grade)
@@ -211,9 +219,18 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
         allocations=allocation_rows,
         scenarios=scenarios,
         assumptions=[
-            "Current mastery is based on the supplied baseline and per-topic overrides, not a diagnostic test yet.",
-            "Exam weights use extracted past-paper marks when available and topic importance otherwise.",
+            (
+                "Current mastery is based on the supplied baseline and per-topic "
+                "overrides, not a diagnostic test yet."
+            ),
+            (
+                "Exam weights use extracted past-paper marks when available and "
+                "topic importance otherwise."
+            ),
             "Grade projections are planning heuristics, not calibrated predictions or guarantees.",
-            "Learning gains use a diminishing-returns model and will be replaced by observed student performance over time.",
+            (
+                "Learning gains use a diminishing-returns model and will be replaced "
+                "by observed student performance over time."
+            ),
         ],
     )
