@@ -157,18 +157,15 @@ jobs:
             throw "Packaged StudyOS is missing the Next.js runtime"
           }
 
-      - name: Smoke packaged portable app
+      - name: Smoke packaged installed payload
         working-directory: desktop
         shell: pwsh
         run: |
-          $portable = Get-ChildItem "dist/*Portable.exe" | Select-Object -First 1
-          if (-not $portable) {
-            throw "Portable StudyOS executable was not produced"
-          }
+          $appExe = Resolve-Path "dist/win-unpacked/StudyOS.exe"
           $logPath = Join-Path $env:RUNNER_TEMP "studyos-packaged-desktop.log"
           Remove-Item $logPath -ErrorAction SilentlyContinue
           $env:STUDYOS_DESKTOP_LOG_PATH = $logPath
-          $process = Start-Process $portable.FullName -PassThru
+          $process = Start-Process $appExe -PassThru
           try {
             $ready = $false
             for ($attempt = 0; $attempt -lt 120; $attempt++) {
@@ -183,7 +180,8 @@ jobs:
                 }
               }
               if ($process.HasExited) {
-                throw "Packaged StudyOS exited before becoming ready"
+                $log = if (Test-Path $logPath) { Get-Content $logPath -Raw } else { "<no desktop log>" }
+                throw "Packaged StudyOS exited before becoming ready. Log: $log"
               }
               Start-Sleep -Milliseconds 500
             }
