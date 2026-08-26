@@ -7,6 +7,9 @@ const net = require("net");
 const { spawn } = require("child_process");
 
 app.setAppUserModelId("com.studyos.desktop");
+app.setName("StudyOS");
+const studyosUserData = path.join(app.getPath("appData"), "StudyOS");
+app.setPath("userData", studyosUserData);
 
 let backendProcess = null;
 let nextProcess = null;
@@ -17,7 +20,11 @@ let lastStartupError = "";
 
 function desktopLogPath() {
   return process.env.STUDYOS_DESKTOP_LOG_PATH?.trim()
-    || path.join(app.getPath("userData"), "desktop.log");
+    || path.join(app.getPath("userData"), "logs", "desktop.log");
+}
+
+function diagnosticsDir() {
+  return path.dirname(desktopLogPath());
 }
 
 function logDesktop(message, error) {
@@ -397,6 +404,12 @@ ipcMain.handle("studyos:get-startup-error", () => ({
   message: lastStartupError,
   logPath: desktopLogPath(),
 }));
+
+ipcMain.handle("studyos:open-diagnostics", async () => {
+  fs.mkdirSync(diagnosticsDir(), { recursive: true });
+  await shell.openPath(diagnosticsDir());
+  return true;
+});
 
 ipcMain.handle("studyos:use-local-backend", async () => {
   stopRuntime();
