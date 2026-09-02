@@ -155,3 +155,45 @@ def test_study_plan_requires_course_analysis(client: TestClient) -> None:
     )
 
     assert response.status_code == 409
+
+
+def test_exam_intelligence_rejects_numbered_exam_instructions(
+    client: TestClient,
+) -> None:
+    course_id = _create_course(client)
+    _upload_and_process(
+        client,
+        course_id,
+        "lecture-mechanics.txt",
+        (
+            b"Newton's Laws\n"
+            b"Newton's second law relates force, mass, and acceleration. "
+            b"Momentum is conserved in isolated systems."
+        ),
+    )
+    _upload_and_process(
+        client,
+        course_id,
+        "2026-written-exam.txt",
+        (
+            b"Physics I Written Exam\n"
+            b"Question 1 (8 marks)\n"
+            b"Calculate the net force using Newton's second law.\n\n"
+            b"30).\n"
+            b"During the written exam, students are allowed to bring the course textbook. "
+            b"Absolutely no loose sheets of paper are allowed. Blank sheets will be provided. "
+            b"No laptops, ipads, electronic devices or mobile phones are allowed in the classroom. "
+            b"No communication is allowed between students or via Internet during the written exam. "
+            b"Any student caught communicating will fail the exam, with disciplinary consequences."
+        ),
+    )
+    analysis = client.post(f"/api/v1/courses/{course_id}/analyze")
+    assert analysis.status_code == 200
+
+    response = client.post(f"/api/v1/courses/{course_id}/exam-intelligence/analyze")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["question_count"] == 1
+    assert [question["question_label"] for question in payload["questions"]] == ["Q1"]
+    assert "students are allowed" not in payload["questions"][0]["text"].lower()
