@@ -30,6 +30,28 @@ _SOLUTION_MARKER_RE = re.compile(
     r"(?im)^\s*(?:solution|answer|soluzione|risposta)\s*(?:[:.\-]\s*)?"
 )
 _WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9']*")
+_TASK_RE = re.compile(
+    r"(?i)\b(?:calculate|compute|determine|derive|evaluate|explain|find|give|"
+    r"identify|prove|show|solve|state|write|sketch|draw|compare|discuss|"
+    r"estimate|classify|choose|complete|obtain|use)\b"
+)
+_ADMIN_RE = re.compile(
+    r"(?i)\b(?:"
+    r"students? (?:are|is) (?:allowed|not allowed)|"
+    r"no (?:laptops?|ipads?|phones?|electronic|communication)|"
+    r"electronic devices?|mobile phones?|"
+    r"course textbook|loose sheets?|blank sheets?|"
+    r"during the (?:written )?exam|classroom|"
+    r"zero tolerance|disciplinary consequences?|"
+    r"fail the exam|exam (?:is|will be) (?:stopped|terminated)|"
+    r"returned at the end|internet during the exam|"
+    r"communication (?:is|between students)"
+    r")\b"
+)
+_ADMIN_HEADING_RE = re.compile(
+    r"(?im)^\s*(?:general\s+)?(?:exam(?:ination)?\s+)?"
+    r"(?:instructions?|rules?|regulations?|important information|allowed materials?)\s*[:\-]?"
+)
 
 
 class NoExamDocumentsError(RuntimeError):
@@ -69,6 +91,26 @@ def _split_prompt_reference(
     return prompt, reference
 
 
+def _is_answerable_question(question_text: str) -> bool:
+    """Reject administrative/cover-page blocks that only look numbered like questions."""
+    cleaned = question_text.strip()
+    if not cleaned:
+        return False
+
+    admin_hits = len(_ADMIN_RE.findall(cleaned))
+    has_admin_heading = _ADMIN_HEADING_RE.search(cleaned) is not None
+    has_task = _TASK_RE.search(cleaned) is not None or "?" in cleaned
+
+    if admin_hits >= 2 or (has_admin_heading and admin_hits >= 1):
+        return False
+
+    word_count = len(_WORD_RE.findall(cleaned))
+    if word_count >= 120 and not has_task:
+        return False
+
+    return True
+
+
 def _extract_questions(
     text: str,
     source_label: str,
@@ -87,6 +129,8 @@ def _extract_questions(
             raw_question,
             allow_reference=allow_reference,
         )
+        if not _is_answerable_question(question_text):
+            continue
         mark_match = _MARK_RE.search(question_text)
         marks = float(mark_match.group(1)) if mark_match else None
         questions.append(
