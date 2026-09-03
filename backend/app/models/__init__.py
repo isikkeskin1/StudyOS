@@ -1,5 +1,6 @@
 from app.models.auth import AuthSession, User
 from app.models.calendar_focus import FocusSession, SemesterCalendarPlan
+from app.models.catalog import CatalogCourse
 from app.models.cheat_sheet import CheatSheet
 from app.models.course import Course
 from app.models.course_intelligence import (
@@ -64,6 +65,7 @@ __all__ = [
     "FocusSession",
     "SemesterCalendarPlan",
     "CheatSheet",
+    "CatalogCourse",
     "ReviewSession",
     "Course",
     "CourseAnalysis",
