@@ -171,13 +171,19 @@ def test_automatic_grading_requires_extracted_reference_solution(
         client,
         course_id,
         "lecture-momentum.txt",
-        b"Momentum\nMomentum is conserved. Momentum equals mass times velocity. Momentum is vector.",
+        (
+            b"Momentum\nMomentum is conserved. Momentum equals mass times velocity. "
+            b"Momentum is vector."
+        ),
     )
     _upload_and_process(
         client,
         course_id,
         "2025-written-exam.txt",
-        b"Physics I Written Exam\nQuestion 1 (10 marks)\nCalculate momentum using mass and velocity.",
+        (
+            b"Physics I Written Exam\nQuestion 1 (10 marks)\n"
+            b"Calculate momentum using mass and velocity."
+        ),
     )
     assert client.post(f"/api/v1/courses/{course_id}/analyze").status_code == 200
     assert (

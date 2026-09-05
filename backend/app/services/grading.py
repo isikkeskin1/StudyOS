@@ -227,7 +227,11 @@ def grade_against_reference(
         )
 
     if reference_numbers and numeric_coverage < 1.0:
-        category = "sign" if _has_sign_mismatch(reference_numbers, student_numbers) else "arithmetic"
+        category = (
+            "sign"
+            if _has_sign_mismatch(reference_numbers, student_numbers)
+            else "arithmetic"
+        )
         mistakes.append(
             MistakeInput(
                 category=category,
