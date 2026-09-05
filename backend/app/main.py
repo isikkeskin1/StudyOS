@@ -5,8 +5,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import models  # noqa: F401
-from app.api.calibration import router as calibration_router
 from app.api.calendar_focus import router as calendar_focus_router
+from app.api.calibration import router as calibration_router
 from app.api.cheat_sheet import router as cheat_sheet_router
 from app.api.courses import router as courses_router
 from app.api.diagnostics import router as diagnostics_router
