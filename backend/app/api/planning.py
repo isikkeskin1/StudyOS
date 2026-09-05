@@ -15,6 +15,7 @@ from app.models.exam_intelligence import (
     ExamQuestionTopic,
     ExamTopicStat,
 )
+from app.models.grading import ExamQuestionReference
 from app.schemas.planning import (
     ExamIntelligenceRead,
     ExamQuestionRead,
@@ -80,6 +81,7 @@ def _read_exam_intelligence(db: Session, course_id: str) -> ExamIntelligenceRead
     mappings_by_question: dict[str, list[ExamQuestionTopic]] = {
         question_id: [] for question_id in question_ids
     }
+    reference_question_ids: set[str] = set()
     if question_ids:
         for mapping in db.scalars(
             select(ExamQuestionTopic)
@@ -87,6 +89,13 @@ def _read_exam_intelligence(db: Session, course_id: str) -> ExamIntelligenceRead
             .order_by(ExamQuestionTopic.relevance_score.desc())
         ).all():
             mappings_by_question[mapping.question_id].append(mapping)
+        reference_question_ids = set(
+            db.scalars(
+                select(ExamQuestionReference.question_id).where(
+                    ExamQuestionReference.question_id.in_(question_ids)
+                )
+            ).all()
+        )
 
     stats = list(
         db.scalars(
@@ -111,6 +120,7 @@ def _read_exam_intelligence(db: Session, course_id: str) -> ExamIntelligenceRead
                 source_label=question.source_label,
                 text=question.text,
                 marks=question.marks,
+                automatic_grading_available=question.id in reference_question_ids,
                 topics=[
                     ExamQuestionTopicRead(
                         topic_id=mapping.topic_id,

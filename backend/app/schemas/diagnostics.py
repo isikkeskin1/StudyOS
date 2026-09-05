@@ -51,6 +51,7 @@ class DiagnosticQuestionRead(BaseModel):
     difficulty: float
     primary_topic_id: str
     primary_topic_name: str
+    automatic_grading_available: bool = False
     topics: list[DiagnosticQuestionTopicRead]
 
 
@@ -85,6 +86,13 @@ class DiagnosticResponseCreate(BaseModel):
         return self
 
 
+class DiagnosticAutoGradeCreate(BaseModel):
+    diagnostic_question_id: str
+    student_answer: str = Field(min_length=1, max_length=20000)
+    confidence: float = Field(default=0.5, ge=0, le=1)
+    duration_seconds: int | None = Field(default=None, ge=0, le=86400)
+
+
 class TopicMasteryRead(BaseModel):
     topic_id: str
     topic_name: str
@@ -108,6 +116,14 @@ class DiagnosticMistakeRead(BaseModel):
     note: str | None
 
 
+class DiagnosticGradingRead(BaseModel):
+    grader_name: str
+    grader_confidence: float
+    evidence_coverage: float
+    reference_source_label: str
+    reference_extraction_method: str
+
+
 class DiagnosticResponseRead(BaseModel):
     id: str
     diagnostic_question_id: str
@@ -118,5 +134,6 @@ class DiagnosticResponseRead(BaseModel):
     created_at: datetime
     answer: DiagnosticAnswerRead | None
     mistakes: list[DiagnosticMistakeRead]
+    grading: DiagnosticGradingRead | None = None
     session: DiagnosticSessionRead
     mastery: list[TopicMasteryRead]

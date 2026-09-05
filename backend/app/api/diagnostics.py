@@ -11,8 +11,11 @@ from app.models.course import Course
 from app.models.course_intelligence import CourseTopic
 from app.models.diagnostics import DiagnosticQuestion, DiagnosticSession
 from app.models.exam_intelligence import ExamAnalysis, ExamQuestion, ExamQuestionTopic
+from app.models.grading import ExamQuestionReference
 from app.schemas.diagnostics import (
     DiagnosticAnswerRead,
+    DiagnosticAutoGradeCreate,
+    DiagnosticGradingRead,
     DiagnosticMistakeRead,
     DiagnosticNextRead,
     DiagnosticQuestionRead,
@@ -38,6 +41,11 @@ from app.services.exam_analysis import (
     CourseTopicsRequiredError,
     NoExamDocumentsError,
     analyze_exams,
+)
+from app.services.grading import (
+    ReferenceSolutionUnavailableError,
+    get_grade_artifact,
+    grade_diagnostic_response,
 )
 from app.services.mistake_intelligence import (
     MistakeInput,
@@ -101,6 +109,14 @@ def _read_question(db: Session, question: DiagnosticQuestion) -> DiagnosticQuest
         topic.id: topic.name
         for topic in db.scalars(select(CourseTopic).where(CourseTopic.id.in_(topic_ids))).all()
     }
+    automatic_grading_available = (
+        db.scalar(
+            select(ExamQuestionReference.id).where(
+                ExamQuestionReference.question_id == exam_question.id
+            )
+        )
+        is not None
+    )
 
     return DiagnosticQuestionRead(
         id=question.id,
@@ -113,6 +129,7 @@ def _read_question(db: Session, question: DiagnosticQuestion) -> DiagnosticQuest
         difficulty=question.difficulty,
         primary_topic_id=question.primary_topic_id,
         primary_topic_name=topics.get(question.primary_topic_id, "Unknown topic"),
+        automatic_grading_available=automatic_grading_available,
         topics=[
             DiagnosticQuestionTopicRead(
                 topic_id=mapping.topic_id,
@@ -150,7 +167,11 @@ def _read_mastery(db: Session, course_id: str) -> list[TopicMasteryRead]:
 def _read_answer(
     db: Session,
     response_id: str,
-) -> tuple[DiagnosticAnswerRead | None, list[DiagnosticMistakeRead]]:
+) -> tuple[
+    DiagnosticAnswerRead | None,
+    list[DiagnosticMistakeRead],
+    DiagnosticGradingRead | None,
+]:
     artifact = get_response_answer(db, response_id)
     answer = (
         DiagnosticAnswerRead(
@@ -170,7 +191,37 @@ def _read_answer(
         )
         for item in get_response_mistakes(db, response_id)
     ]
-    return answer, mistakes
+    grade_artifact = get_grade_artifact(db, response_id)
+    grading = (
+        DiagnosticGradingRead(
+            grader_name=grade_artifact.grader_name,
+            grader_confidence=grade_artifact.grader_confidence,
+            evidence_coverage=grade_artifact.evidence_coverage,
+            reference_source_label=grade_artifact.reference_source_label,
+            reference_extraction_method=grade_artifact.reference_extraction_method,
+        )
+        if grade_artifact is not None
+        else None
+    )
+    return answer, mistakes, grading
+
+
+def _response_read(db: Session, course_id: str, session: DiagnosticSession, response):
+    answer, mistakes, grading = _read_answer(db, response.id)
+    return DiagnosticResponseRead(
+        id=response.id,
+        diagnostic_question_id=response.diagnostic_question_id,
+        score=response.score,
+        confidence=response.confidence,
+        grading_source=response.grading_source,
+        duration_seconds=response.duration_seconds,
+        created_at=response.created_at,
+        answer=answer,
+        mistakes=mistakes,
+        grading=grading,
+        session=_read_session(db, session),
+        mastery=_read_mastery(db, course_id),
+    )
 
 
 @router.post(
@@ -275,20 +326,37 @@ def submit_diagnostic_response(
             detail=str(exc),
         ) from exc
 
-    answer, mistakes = _read_answer(db, response.id)
-    return DiagnosticResponseRead(
-        id=response.id,
-        diagnostic_question_id=response.diagnostic_question_id,
-        score=response.score,
-        confidence=response.confidence,
-        grading_source=response.grading_source,
-        duration_seconds=response.duration_seconds,
-        created_at=response.created_at,
-        answer=answer,
-        mistakes=mistakes,
-        session=_read_session(db, session),
-        mastery=_read_mastery(db, course_id),
-    )
+    return _response_read(db, course_id, session, response)
+
+
+@router.post(
+    "/{course_id}/diagnostics/{session_id}/grade",
+    response_model=DiagnosticResponseRead,
+)
+def automatically_grade_diagnostic_response(
+    course_id: str,
+    session_id: str,
+    payload: DiagnosticAutoGradeCreate,
+    db: Annotated[Session, Depends(get_db)],
+) -> DiagnosticResponseRead:
+    session = _get_session(db, course_id, session_id)
+    try:
+        response = grade_diagnostic_response(
+            db,
+            session,
+            payload.diagnostic_question_id,
+            payload.student_answer,
+            confidence=payload.confidence,
+            duration_seconds=payload.duration_seconds,
+        )
+    except ReferenceSolutionUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except DuplicateDiagnosticResponseError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except DiagnosticStateError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    return _response_read(db, course_id, session, response)
 
 
 @router.post(
