@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 
 class Settings(BaseModel):
@@ -13,6 +14,10 @@ class Settings(BaseModel):
     database_url: str = "sqlite:///./.studyos/studyos.db"
     data_dir: Path = Path("./.studyos/uploads")
     max_upload_mb: int = Field(default=50, ge=1, le=500)
+    tutor_provider: Literal["local", "openai"] = "local"
+    openai_api_key: SecretStr | None = None
+    openai_tutor_model: str = "gpt-5.6-luna"
+    openai_tutor_max_output_tokens: int = Field(default=900, ge=128, le=4096)
     allowed_extensions: tuple[str, ...] = (
         ".pdf",
         ".docx",
@@ -27,9 +32,16 @@ class Settings(BaseModel):
 
 
 def get_settings() -> Settings:
+    api_key = os.getenv("OPENAI_API_KEY")
     return Settings(
         environment=os.getenv("STUDYOS_ENV", "development"),
         database_url=os.getenv("STUDYOS_DATABASE_URL", "sqlite:///./.studyos/studyos.db"),
         data_dir=Path(os.getenv("STUDYOS_DATA_DIR", "./.studyos/uploads")),
         max_upload_mb=int(os.getenv("STUDYOS_MAX_UPLOAD_MB", "50")),
+        tutor_provider=os.getenv("STUDYOS_TUTOR_PROVIDER", "local").lower(),
+        openai_api_key=SecretStr(api_key) if api_key else None,
+        openai_tutor_model=os.getenv("STUDYOS_OPENAI_TUTOR_MODEL", "gpt-5.6-luna"),
+        openai_tutor_max_output_tokens=int(
+            os.getenv("STUDYOS_OPENAI_TUTOR_MAX_OUTPUT_TOKENS", "900")
+        ),
     )

@@ -13,32 +13,176 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 - What is the probability of reaching my target grade?
 - Why am I repeatedly losing marks?
 - Which topics are becoming stale and need review?
-- Does this student learn or forget a topic faster than the generic model assumes?
-- Are StudyOS forecasts accurate and calibrated against real outcomes?
-- Can the tutor answer from my actual lectures, notes, exams, and solutions with exact citations?
+- Are StudyOS forecasts accurate against real outcomes?
+- Can the tutor explain from my actual lectures, notes, exams, and solutions with exact citations?
 - What should I deprioritize when time is running out?
 
-## Current milestone — course-aware grounded tutor retrieval
+## Current milestone — grounded external tutor synthesis
 
-The backend is now at **v0.16.0**.
+The backend is now at **v0.18.0**.
 
-StudyOS can search processed course material and answer conservatively from retrieved evidence while preserving exact source references.
+The course-aware tutor now supports both a deterministic offline provider and an optional OpenAI Responses API provider behind the same grounding contract:
 
-Current tutor behavior:
+```text
+question
+   ↓
+course-isolated retrieval
+   ↓
+BM25 + course topic/evidence signal
+   ↓
+ranked citation packet
+   ↓
+local provider OR OpenAI provider
+   ↓
+local claim-to-citation verification
+   ↓
+supported answer OR refusal
+```
 
-- searches only documents belonging to the requested course
-- uses processed source-aware chunks from PDF, PPTX, DOCX, TXT, and Markdown uploads
-- ranks chunks with deterministic `lexical-bm25-v1` retrieval
-- optionally filters retrieval by classified document type
-- returns document name, document type, chunk id, source label, locator type/index, excerpt, relevance score, query-term coverage, and matched terms
-- preserves references such as `lecture-slides.pptx — slide 4` or `exam.pdf — page 3`
-- exposes a deterministic `extractive-grounded-v1` answer mode
-- adds inline citation markers such as `[1]`
-- refuses to synthesize an answer when retrieved evidence is below the requested relevance threshold
-- refuses to turn merely related text into an unsupported explanation
-- keeps the retrieval/answer contract independent from any future LLM provider
+The external model never receives unrestricted access to the course database. It receives only the already-ranked citation packet selected by StudyOS.
 
-This first tutor milestone is intentionally retrieval-first. StudyOS does **not** claim that the extractive answerer is a full AI tutor. The next tutor layer can use an LLM to synthesize explanations from the same retrieved citation packet without weakening source grounding.
+### Retrieval
+
+Without a course topic graph, retrieval uses:
+
+```text
+lexical-bm25-v1
+```
+
+After course intelligence has been built, matching topic evidence becomes a second ranking signal:
+
+```text
+hybrid-topic-bm25-v1
+```
+
+Each result can expose:
+
+```text
+document_name
+document_type
+chunk_id
+source_label
+locator_type / locator_index
+source_reference
+excerpt
+relevance_score
+lexical_score
+topic_affinity
+term_coverage
+matched_terms
+matched_topics
+```
+
+References such as `lecture-slides.pptx — slide 4` and `exam.pdf — page 3` survive retrieval unchanged.
+
+## Tutor synthesis providers
+
+`POST /api/v1/courses/{course_id}/tutor/ask` accepts:
+
+```text
+provider: auto | local | openai
+```
+
+`auto` resolves to the deployment-level `STUDYOS_TUTOR_PROVIDER`. The default deployment provider is `local`, so development and CI remain deterministic and require no external credentials.
+
+### Local provider
+
+```text
+local-grounded-v1
+```
+
+This provider is deterministic and extractive. It is useful as a test baseline and as a zero-cost fallback deployment mode.
+
+### OpenAI provider
+
+When explicitly configured, StudyOS can synthesize a richer explanation through the OpenAI Responses API. The default configured tutor model is:
+
+```text
+gpt-5.6-luna
+```
+
+The model name is environment-configurable and is never hard-coded into the API contract.
+
+The provider sends:
+
+```text
+question
+requested answer style
+ranked source references
+ranked source excerpts
+```
+
+It does **not** enable web search or external tools. API response storage is disabled for these requests.
+
+Source excerpts are explicitly treated as untrusted data. The provider is instructed not to follow instructions found inside uploaded course text, reducing prompt-injection risk from documents.
+
+Every substantive generated sentence must contain one or more inline citation markers such as `[1]` or `[1][2]`. If the citation packet is insufficient, the provider can return `INSUFFICIENT_EVIDENCE` and StudyOS refuses to synthesize an answer.
+
+### Provider configuration
+
+`.env.example` documents the supported settings:
+
+```text
+STUDYOS_TUTOR_PROVIDER=local
+OPENAI_API_KEY=
+STUDYOS_OPENAI_TUTOR_MODEL=gpt-5.6-luna
+STUDYOS_OPENAI_TUTOR_MAX_OUTPUT_TOKENS=900
+```
+
+An explicit request for `provider: openai` without an API key returns `503`. Provider execution failures return `502`. StudyOS does not silently switch providers when an explicitly requested provider is unavailable.
+
+## Grounding validation
+
+Tutor answers now use:
+
+```text
+answer_mode: grounded-synthesis-v2
+validation_model: citation-overlap-v2
+```
+
+The original validator only checked whether a sentence contained a syntactically valid citation marker. That is not enough: a model could append `[1]` to an unrelated sentence.
+
+`citation-overlap-v2` therefore checks each substantive claim for:
+
+1. at least one citation marker;
+2. citation indices that exist in the retrieved packet;
+3. meaningful token overlap with the cited excerpt;
+4. at least two meaningful matching source terms for longer claims;
+5. numerical values that also appear in the cited evidence.
+
+A failed claim causes the whole generated draft to be rejected instead of partially returning unsupported text.
+
+The response exposes:
+
+```text
+provider_requested
+synthesis_provider
+retrieval_model
+retrieval_components
+topic_signal_applied
+grounding_status
+validation_status
+validation_model
+citation_coverage
+grounding_score
+minimum_claim_support
+validated_claim_count
+unsupported_claim_count
+```
+
+This is still a conservative lexical grounding check, not a full natural-language-entailment system. A later verifier can replace it behind the same contract.
+
+## Answer styles
+
+Tutor requests can select:
+
+```text
+concise
+guided
+exam
+```
+
+The style is passed through the provider boundary without changing retrieval or grounding semantics.
 
 ## Tutor API
 
@@ -48,7 +192,7 @@ This first tutor milestone is intentionally retrieval-first. StudyOS does **not*
 POST /api/v1/courses/{course_id}/tutor/search
 ```
 
-Example request:
+Example:
 
 ```json
 {
@@ -58,196 +202,67 @@ Example request:
 }
 ```
 
-A result exposes fields such as:
-
-```text
-document_name
-source_label
-locator_type
-locator_index
-source_reference
-excerpt
-relevance_score
-term_coverage
-matched_terms
-```
-
 ### Ask from course material
 
 ```text
 POST /api/v1/courses/{course_id}/tutor/ask
 ```
 
-Example:
+Offline/default example:
 
 ```json
 {
-  "question": "What does Newton's second law say about force and acceleration?",
+  "question": "Why is acceleration negative in this solution?",
   "max_sources": 6,
-  "minimum_relevance": 0.20
+  "minimum_relevance": 0.20,
+  "answer_style": "guided",
+  "provider": "auto"
 }
 ```
 
-Supported responses identify:
+Explicit external synthesis:
 
-```text
-answer_mode: extractive-grounded-v1
-retrieval_model: lexical-bm25-v1
-grounding_status: supported
-citation_coverage: 1.0
+```json
+{
+  "question": "Why is acceleration negative in this solution?",
+  "answer_style": "guided",
+  "provider": "openai"
+}
 ```
 
-If the current course material cannot support the question:
-
-```text
-grounding_status: insufficient_evidence
-citation_coverage: 0.0
-citations: []
-```
-
-The service then explicitly declines to guess.
+If evidence is insufficient, StudyOS returns `grounding_status: insufficient_evidence` rather than answering from unsupported general knowledge.
 
 ## Existing intelligence stack
 
-Before tutoring, StudyOS already builds a fairly deep student/course model.
-
 ### Course intelligence
 
-- course creation and persistence
-- upload/deduplication for `.pdf`, `.docx`, `.pptx`, `.txt`, and `.md`
-- source-aware extraction
-- PDF page and PowerPoint slide references
-- document classification
-- chunking
-- course topic graph
-- source evidence and topic relationships
-- past-paper question extraction
-- explicit mark extraction
+- upload/deduplication for PDF, DOCX, PPTX, TXT, and Markdown
+- source-aware extraction with PDF page and PowerPoint slide references
+- document classification and chunking
+- course topic graph, source evidence, and topic relationships
+- past-paper question/mark extraction
 - topic frequency and normalized exam weighting
 
 ### Diagnostics and mastery
 
-- adaptive diagnostics using actual past-paper questions
-- persistent Bayesian topic mastery
-- mastery confidence and evidence weighting
-- answer capture
-- deterministic solution-grounded grading where a trustworthy reference exists
+- adaptive diagnostics from real past-paper questions
+- persistent Bayesian topic mastery and confidence
+- answer capture and solution-grounded deterministic grading
 - mistake taxonomy and recurring mistake analytics
-- response-level mastery history
-- trend analytics
+- response-level mastery history and trends
 - forgetting-aware effective mastery
-- personalized learning responsiveness
-- retention-half-life calibration from time-separated evidence
+- personalized learning responsiveness and retention calibration
 - exam-aware review queue
 
-### Planning
+### Planning and grade modelling
 
-The current `heuristic-v5` planner combines:
+The `heuristic-v5` planner combines course importance, exam weight, forgetting-adjusted mastery, mistakes, personalized learning scale, and calibrated retention.
 
-```text
-course importance
-+ past-paper exam weight
-+ effective mastery after forgetting
-+ mistake patterns
-+ personalized learning scale
-+ calibrated retention
-→ study allocation
-```
+The `probabilistic-v1` layer adds expected score distributions, likely ranges, target probabilities, study-hour scenarios, and evidence-quality-driven uncertainty.
 
-Explicit topic mastery overrides remain available and are not silently decayed.
+Forecast snapshots can later receive real exam outcomes. StudyOS measures MAE, RMSE, bias, interval coverage, Brier score, and log loss, then applies guarded `empirical-v1` recalibration only after enough outcomes exist.
 
-### Probabilistic grade modelling
-
-The raw forecasting layer is `probabilistic-v1`.
-
-It provides:
-
-- expected grade
-- uncertainty / standard deviation
-- configurable likely-score interval
-- probability of reaching the target
-- probabilities for arbitrary score thresholds
-- study-hour scenarios
-- estimated hours for a requested probability of reaching a target
-- evidence-quality-driven uncertainty width
-
-Probability outputs remain labelled provisional rather than falsely presented as guaranteed statistical calibration.
-
-## Forecast outcome calibration
-
-StudyOS can persist immutable pre-exam forecast snapshots and attach the eventual real grade afterward.
-
-It measures:
-
-```text
-MAE
-RMSE
-signed bias
-interval coverage
-coverage gap
-Brier score
-log loss
-target-probability calibration gap
-```
-
-### Guarded empirical recalibration
-
-`empirical-v1` can adjust future score bias and uncertainty width, but only conservatively:
-
-```text
-0–4 outcomes    inactive
-5–9 outcomes    guarded
-10–29 outcomes  developing
-30+ outcomes    measured
-```
-
-Corrections are confidence-shrunk, capped, and kept separate from the raw forecast.
-
-Adjusted snapshots preserve a one-to-one raw forecast artifact so later calibration trains against original predictions instead of recursively learning from previous corrections.
-
-### Rolling held-out validation
-
-StudyOS does not judge recalibration only by in-sample fit.
-
-`GET /api/v1/courses/{course_id}/forecast-validation` performs chronological rolling-origin validation:
-
-```text
-Outcomes 1–5 known
-      ↓
-fit empirical-v1
-      ↓
-forecast 6 is held out
-      ↓
-outcome 6 arrives
-      ↓
-compare raw vs recalibrated
-```
-
-The evaluated forecast's own outcome is never used to recalibrate that forecast.
-
-Held-out comparisons use the same exams for both models and compare:
-
-```text
-MAE
-RMSE
-signed bias
-interval coverage
-coverage gap
-Brier score
-log loss
-```
-
-StudyOS also exposes fixed reliability buckets:
-
-```text
-0–20%
-20–40%
-40–60%
-60–80%
-80–100%
-```
-
-with predicted-vs-observed target-hit rates and sample counts.
+Rolling-origin held-out validation tests whether recalibration improves forecasts it did not train on.
 
 ## API summary
 
@@ -255,21 +270,14 @@ with predicted-vs-observed target-hit rates and sample counts.
 |---|---|---|
 | `GET` | `/api/v1/health` | Service health |
 | `POST` | `/api/v1/courses` | Create a course |
-| `GET` | `/api/v1/courses` | List courses |
-| `GET` | `/api/v1/courses/{course_id}` | Get one course |
 | `POST` | `/api/v1/courses/{course_id}/documents` | Upload material |
-| `GET` | `/api/v1/courses/{course_id}/documents` | List material |
 | `POST` | `/api/v1/courses/{course_id}/documents/{document_id}/process` | Extract/classify material |
-| `GET` | `/api/v1/courses/{course_id}/documents/{document_id}/content` | Read source units/chunks |
 | `POST` | `/api/v1/courses/{course_id}/analyze` | Build course intelligence |
-| `GET` | `/api/v1/courses/{course_id}/intelligence` | Read topic intelligence |
 | `POST` | `/api/v1/courses/{course_id}/exam-intelligence/analyze` | Analyze past papers |
-| `GET` | `/api/v1/courses/{course_id}/exam-intelligence` | Read exam intelligence |
 | `POST` | `/api/v1/courses/{course_id}/diagnostics` | Start adaptive diagnostic |
-| `GET` | `/api/v1/courses/{course_id}/diagnostics/{session_id}/next` | Get next question |
 | `POST` | `/api/v1/courses/{course_id}/diagnostics/{session_id}/responses` | Score/store response |
 | `POST` | `/api/v1/courses/{course_id}/diagnostics/{session_id}/grade` | Auto-grade from extracted solution |
-| `GET` | `/api/v1/courses/{course_id}/mastery` | Read raw mastery |
+| `GET` | `/api/v1/courses/{course_id}/mastery` | Read mastery |
 | `GET` | `/api/v1/courses/{course_id}/mastery/history` | Read mastery history/trends |
 | `GET` | `/api/v1/courses/{course_id}/calibration` | Read learning/retention calibration |
 | `GET` | `/api/v1/courses/{course_id}/mistakes` | Read mistake analytics |
@@ -277,70 +285,58 @@ with predicted-vs-observed target-hit rates and sample counts.
 | `POST` | `/api/v1/courses/{course_id}/study-plan` | Build study plan |
 | `POST` | `/api/v1/courses/{course_id}/grade-forecast` | Raw probabilistic forecast |
 | `POST` | `/api/v1/courses/{course_id}/grade-forecast/calibrated` | Raw + empirical forecast |
-| `POST` | `/api/v1/courses/{course_id}/forecast-snapshots` | Persist pre-exam forecast |
-| `POST` | `/api/v1/courses/{course_id}/forecast-snapshots/{snapshot_id}/outcome` | Attach actual grade |
+| `POST` | `/api/v1/courses/{course_id}/forecast-snapshots` | Save pre-exam forecast |
 | `GET` | `/api/v1/courses/{course_id}/forecast-calibration` | Historical forecast metrics |
 | `GET` | `/api/v1/courses/{course_id}/forecast-validation` | Held-out model validation |
 | `POST` | `/api/v1/courses/{course_id}/tutor/search` | Search grounded course evidence |
-| `POST` | `/api/v1/courses/{course_id}/tutor/ask` | Answer conservatively from course evidence |
+| `POST` | `/api/v1/courses/{course_id}/tutor/ask` | Produce validated grounded answer |
 
 FastAPI exposes interactive API docs at `/docs` while the server is running.
 
 ## Roadmap
 
 ### Phase 1 — Course intelligence and planning
-
-- [x] course/document model
-- [x] source-aware extraction and chunking
-- [x] topic intelligence
-- [x] past-paper weighting
-- [x] first planning engine
+- [x] source-aware document pipeline
+- [x] topic intelligence and past-paper weighting
+- [x] first study planner
 
 ### Phase 2 — Diagnostics and mastery
-
-- [x] adaptive diagnostics
-- [x] persistent mastery/confidence
+- [x] adaptive diagnostics and persistent mastery
 - [x] mistakes and answer evidence
-- [x] solution-grounded deterministic grading
-- [x] forgetting-aware mastery/reviews
-- [x] mastery history/trends
-- [x] personalized learning/retention calibration
+- [x] forgetting-aware reviews
+- [x] mastery history and personalized learning/retention calibration
 - [ ] richer rubric/LLM grading adapter
 
 ### Phase 3 — Grade modelling
-
-- [x] probabilistic score distributions
-- [x] target probabilities and study-hour scenarios
+- [x] probabilistic score distributions and target probabilities
 - [x] immutable forecasts and real outcomes
-- [x] empirical calibration metrics
-- [x] guarded empirical recalibration
-- [x] raw-vs-adjusted audit trail
-- [x] reliability curves
-- [x] chronological rolling held-out validation
+- [x] empirical calibration/recalibration
+- [x] reliability curves and rolling held-out validation
 
 ### Phase 4 — Course-aware tutor
-
-- [x] deterministic course-chunk retrieval
+- [x] deterministic course-isolated BM25 retrieval
 - [x] exact page/slide/document citations
-- [x] course isolation and document-type filtering
-- [x] grounded extractive answer fallback
+- [x] course topic/evidence retrieval signal
+- [x] provider-neutral synthesis interface
+- [x] deterministic local synthesis provider
+- [x] optional OpenAI Responses API synthesis provider
+- [x] prompt-injection-resistant source packet instructions
+- [x] citation validity checks
+- [x] claim-to-source lexical support validation
 - [x] insufficient-evidence refusal
-- [ ] semantic/vector retrieval
-- [ ] LLM synthesis constrained to retrieved evidence
-- [ ] citation verification / claim-to-source coverage
-- [ ] exam-style question generation from course material
+- [ ] embedding/vector retrieval adapter
+- [ ] stronger semantic entailment verification
+- [ ] exam-style question generation
 - [ ] guided problem solving and hint progression
-- [ ] tutor personalization from mastery/mistake state
+- [ ] personalization from mastery/mistake state
 
 ### Phase 5 — Optimization
-
 - [ ] expected marks per study hour
 - [ ] emergency mode
 - [ ] automatic rescheduling
 - [ ] multi-course optimization
 
 ### Phase 6 — Study operating system
-
 - [ ] semester dashboard
 - [ ] spaced repetition workflow
 - [ ] cheat-sheet generation
@@ -350,28 +346,9 @@ FastAPI exposes interactive API docs at `/docs` while the server is running.
 
 ## Tech stack
 
-**Current**
+Python 3.12+, FastAPI, Pydantic, SQLAlchemy 2, SQLite, OpenAI SDK, pypdf, python-docx, python-pptx, Pytest, Ruff, and GitHub Actions.
 
-- Python 3.12+
-- FastAPI
-- Pydantic
-- SQLAlchemy 2
-- SQLite
-- pypdf
-- python-docx
-- python-pptx
-- Pytest
-- Ruff
-- GitHub Actions
-
-**Planned**
-
-- Next.js / TypeScript
-- PostgreSQL
-- Redis/background workers
-- semantic/vector retrieval
-- Docker
-- LLM-assisted tutoring/grading
+Planned infrastructure includes PostgreSQL, Redis/background workers, vector retrieval, Docker, and a Next.js/TypeScript client.
 
 ## Local development
 
@@ -389,17 +366,4 @@ ruff check .
 pytest
 ```
 
-## Typical end-to-end flow
-
-1. Create a course with target grade and exam date.
-2. Upload and process lectures, notes, past papers, and solutions.
-3. Build course and exam intelligence.
-4. Run diagnostics to collect measured mastery evidence.
-5. Inspect mistakes, mastery history, calibration, and review queue.
-6. Generate an adaptive study plan.
-7. Explore raw/calibrated grade forecasts.
-8. Save a pre-exam forecast and attach the real result afterward.
-9. Use forecast calibration/validation to measure whether the model improves.
-10. Use `/tutor/search` or `/tutor/ask` to retrieve explanations directly from processed course material.
-
-The next Phase 4 milestone is **semantic retrieval + an LLM synthesis adapter that is forced to cite the retrieved evidence and can refuse unsupported claims**.
+The next Phase 4 milestone is **semantic/vector retrieval plus exam-style question generation and guided hint progression over the same grounded citation packet**.
