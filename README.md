@@ -13,194 +13,130 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 - What is the probability of reaching my target grade?
 - Why am I repeatedly losing marks?
 - Which topics are becoming stale and need review?
-- Are StudyOS forecasts accurate against real outcomes?
 - Can the tutor explain from my actual course files with exact citations?
 - Can StudyOS create, grade, and adapt practice without revealing solutions too early?
-- Can the tutor remember recurring mistakes across several questions instead of reacting to one score?
-- Can the tutor change how it teaches when the same error pattern keeps appearing?
+- Can the tutor remember recurring mistakes and change how it teaches?
 - What should I deprioritize when time is running out?
 
-## Current milestone — session-aware remediation teaching
+## Current milestone — persistent incremental embedding index
 
-The backend is now at **v0.23.0**.
+The backend is now at **v0.24.0**.
 
-Practice sessions can now change **how** StudyOS teaches, not only which question it chooses next. For the current unanswered session item, StudyOS snapshots the recent learning context and produces a deterministic teaching plan:
-
-```text
-last five completed attempts
-+ scores
-+ hint usage
-+ recurring mistake categories
-+ topic carrying the mistake burden
-        ↓
-deterministic-session-remediation-v1
-        ↓
-teaching intro
-+ three coaching steps
-        ↓
-normal hidden course hint
-```
-
-The course hint and solution remain unchanged and hidden until explicitly revealed. Remediation changes the student's solving process rather than leaking the answer.
-
-### Mistake-specific coaching
-
-If a mistake category repeats at least twice in the recent session window, StudyOS switches to `remediate_pattern` and uses category-specific process coaching. Current patterns include:
+Semantic retrieval no longer needs to recompute unchanged course-chunk embeddings on every tutor request. StudyOS now persists chunk vectors and reuses them across search, tutor, and grounded practice retrieval.
 
 ```text
-concept
-formula_selection
-algebra
-arithmetic
-sign
-units
-interpretation
-incomplete_reasoning
-careless
-other
+processed course chunks
+        ↓
+provider + model + exact content hash
+        ↓
+TutorChunkEmbedding
+        ↓
+reusable chunk vectors
+        ↓
+semantic / hybrid reranking
 ```
 
-For example, repeated `sign` mistakes produce guidance such as:
+The query itself is still embedded for each request. Only the comparatively expensive repeated source-chunk work is cached.
+
+### Strict cache identity and invalidation
+
+An embedding is reusable only when all of the following still match:
 
 ```text
-1. Choose and write the positive axis.
-2. Mark each relevant direction relative to that axis.
-3. Substitute signed quantities only after the symbolic relationship is correct.
+chunk ID
++ SHA-256 of exact chunk text
++ embedding provider
++ embedding model
 ```
 
-Repeated `units` mistakes instead make the student annotate every quantity with units, convert to a consistent system, and check final dimensions. Formula-selection errors make the student identify the target variable and governing relation before substituting numbers.
+Changing the chunk text makes that row stale. Reprocessing a document creates new chunks, which appear as missing while old rows become orphaned. Switching embedding model or provider uses a separate cache namespace instead of silently reusing incompatible vectors.
 
-The remediation category is not hard-coded by topic. StudyOS uses whichever mistake evidence actually dominates the recent attempts.
+This keeps invalidation deterministic rather than relying on timestamps or fuzzy content comparisons.
 
-### Teaching plans are persisted and auditable
+### Lazy indexing and explicit full-course sync
 
-Each session/practice pair can receive one `TutorPracticeTeachingArtifact`. It stores:
+StudyOS supports both paths:
 
 ```text
-strategy
-focus topic
-dominant mistake + count
-recent attempt count
-recent average score
-recent average hint use
-teaching intro
-three coaching steps
-teaching model name
+normal semantic request
+        ↓
+select candidate chunks
+        ↓
+reuse current cached vectors
+        ↓
+embed only missing/stale candidates
 ```
 
-Once materialized, repeated reads return the same teaching snapshot even if later session evidence changes. The table is new rather than an added column on existing practice rows, preserving the current create-only SQLAlchemy schema strategy.
-
-### Session-aware hints
-
-A new session-specific hint endpoint first resolves the persisted teaching plan, then reveals the existing hidden course hint and prepends the appropriate coaching step.
-
-For example:
+and:
 
 ```text
-Teaching plan:
-Recurring sign-convention issue
-
-Hint 1:
-Choose and write the positive axis before doing any algebra.
-
-[original grounded Hint 1 follows]
+explicit index sync
+        ↓
+scan all processed course chunks
+        ↓
+embed only missing/stale chunks
+        ↓
+remove orphan rows
+        ↓
+ready index
 ```
 
-The underlying hint counter is shared with the existing standalone hint endpoint, so there is still only one sequence of three hints and no duplicate reveal path.
+A fully synced course therefore typically needs only the query-vector provider call during later semantic searches.
 
-### Baseline, scaffolding, and challenge modes
+### Index observability
 
-When no recurring mistake dominates, StudyOS can use:
+New endpoints:
 
 ```text
-baseline
-reduce_scaffolding
-reinforce
-challenge
-maintain
+GET  /api/v1/courses/{course_id}/tutor/embedding-index
+POST /api/v1/courses/{course_id}/tutor/embedding-index/sync
 ```
 
-The first session question establishes a clean baseline. High recent hint dependence tells the student to complete the setup independently before opening support. Weak recent accuracy emphasizes slower explicit setup. Two strong unassisted answers switch the next item to `challenge`, asking for a fully independent attempt before any help is opened.
-
-Cross-session practice IDs are validated before a teaching artifact or hint can be created.
-
-## Practice-session memory and personalized remediation
-
-StudyOS runs persisted multi-question practice sessions. The next-question policy uses the recent sequence rather than only the immediately previous answer:
+The status endpoint reports:
 
 ```text
-recent scores
-+ hint usage
-+ repeated mistake categories
-+ topic-level performance
-        ↓
-session remediation policy
-        ↓
-next topic + difficulty
+status: disabled | empty | stale | ready
+provider_name
+model_name
+total_chunks
+indexed_chunks
+missing_chunks
+stale_chunks
+orphaned_embeddings
+coverage
+dimensions
 ```
 
-The active adaptation window is the latest five completed attempts, while the full session history remains available for reporting.
-
-Repeated mistake evidence takes priority over a one-off score. High recent hint usage can trigger `reduce_scaffolding`; weak accuracy can reinforce the lowest-scoring recent topic; two strong unassisted answers can return control to the course-wide weakness optimizer. Sessions also enforce a hard `max_items` limit.
-
-Practice-to-session membership is validated **before grading**, so another session's item cannot accidentally create score, mastery, or mistake evidence.
-
-## Rubric-aware free-response grading
-
-Practice evaluation supports:
+A sync response additionally reports:
 
 ```text
-grading_provider: auto | local | openai
+embedded_now
+reused_chunks
+deleted_orphans
 ```
 
-`auto` prefers the rubric-aware OpenAI grader when `OPENAI_API_KEY` is configured and otherwise uses the deterministic local grader. Explicit `openai` requests fail with `503` when the provider is not configured.
+`force=true` can rebuild every current course chunk. Sync also accepts an optional batch-size override.
 
-The OpenAI grader can accept mathematically or scientifically equivalent methods and award method credit rather than requiring lexical overlap with the reference solution.
+### Storage boundary
 
-StudyOS locally verifies the returned rubric before it can affect mastery:
+Vectors are currently stored as JSON in SQLite. That is intentional.
 
-- criterion maximums must sum to the item's mark total,
-- awarded marks must stay inside each criterion range,
-- confidence must be in `[0, 1]`,
-- mistake categories must use the StudyOS taxonomy,
-- duplicate mistake categories are collapsed to the strongest evidence,
-- the final normalized score is recomputed locally.
+This milestone provides **persistent embedding storage, deterministic invalidation, incremental indexing, and a stable service boundary**. It does not claim that SQLite JSON scanning is an approximate-nearest-neighbor index or a production vector database.
 
-Every evaluated practice attempt stores an auditable grading artifact with the grading mode, provider, criteria, awarded marks, and total marks.
+A later ANN/vector backend can replace the storage/search implementation behind the same retrieval interface without changing tutor behavior.
 
-Offline/CI evaluation remains available as `deterministic-reference-v1`.
-
-## Adaptive practice loop
-
-Practice now forms one continuous learning loop:
+Semantic retrieval keeps the existing model names:
 
 ```text
-weakness / requested topic
-        ↓
-grounded practice question
-        ↓
-session teaching plan
-        ↓
-progressive hints
-        ↓
-student answer
-        ↓
-rubric-aware or deterministic grading
-        ↓
-score + feedback + mistake categories
-        ↓
-hint-aware mastery evidence
-        ↓
-mastery/history/mistake update
-        ↓
-session-aware or one-shot adaptation
+semantic-vector-rerank-v1
+hybrid-vector-bm25-v1
 ```
 
-Correctness and mastery evidence remain separate. Hints do not turn a correct answer into a wrong one; instead they reduce how strongly that attempt updates mastery. Once the full solution is revealed, that item is no longer accepted as mastery evidence.
+and adds `persistent_embedding_cache` to the reported retrieval components when the cache-backed semantic path is used.
 
-Standalone practice still uses the original one-attempt policy. Session memory and remediation activate only when a practice session is used.
+## Adaptive tutor stack
 
-## Grounded tutor retrieval and synthesis
+### Grounded retrieval and synthesis
 
 Tutor requests support:
 
@@ -209,16 +145,9 @@ retrieval_mode: auto | lexical | semantic | hybrid
 provider: auto | local | openai
 ```
 
-Current retrieval models include:
+Current retrieval signals include BM25, course-topic evidence, embedding cosine similarity, and the persistent embedding cache.
 
-```text
-lexical-bm25-v1
-hybrid-topic-bm25-v1
-semantic-vector-rerank-v1
-hybrid-vector-bm25-v1
-```
-
-The OpenAI synthesis provider receives only selected course-source excerpts. Every substantive answer claim must include source markers, and a local `citation-overlap-v2` validator checks that cited evidence actually overlaps the claim before an answer is returned.
+The OpenAI synthesis provider receives only selected course-source excerpts. Every substantive answer claim must include source markers, and a local `citation-overlap-v2` validator checks that cited evidence actually supports the claim before the answer is returned.
 
 Optional embedding configuration:
 
@@ -226,54 +155,86 @@ Optional embedding configuration:
 STUDYOS_TUTOR_EMBEDDING_PROVIDER=none
 STUDYOS_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 STUDYOS_TUTOR_EMBEDDING_MAX_CANDIDATES=128
+STUDYOS_TUTOR_EMBEDDING_BATCH_SIZE=64
 ```
 
-## Existing intelligence stack
+With the embedding provider set to `none`, offline BM25/topic retrieval remains fully available and explicit semantic requests fail clearly rather than pretending lexical search is semantic search.
+
+### Guided practice and grading
+
+StudyOS can create persisted exam-style practice, reveal three progressive hints, hide the full solution until requested, and grade free responses.
+
+Practice evaluation supports:
+
+```text
+grading_provider: auto | local | openai
+```
+
+The rubric-aware OpenAI grader can award method credit for equivalent reasoning. Its structured rubric is locally validated before any score affects mastery. Offline deterministic grading remains available for CI and local use.
+
+Correctness and mastery evidence are separate: hints do not make a correct answer wrong, but they reduce how strongly that attempt updates mastery. Revealing the full solution makes that item ineligible as scored mastery evidence.
+
+### Session memory and remediation teaching
+
+Multi-question practice sessions use the latest five completed attempts to adapt topic, difficulty, and teaching style.
+
+```text
+recent scores
++ hint use
++ recurring mistake categories
++ topic-specific error burden
+        ↓
+next topic / difficulty
++ teaching intro
++ mistake-specific coaching
+```
+
+Repeated sign mistakes can trigger axis/direction coaching; unit errors trigger dimensional checks; formula-selection errors force target-variable and governing-relation setup before substitution.
+
+Teaching plans are persisted as auditable snapshots, so later attempts do not silently rewrite what the student was shown on an earlier question.
+
+## Intelligence stack
 
 ### Course intelligence
 
-- upload/deduplication for PDF, DOCX, PPTX, TXT, and Markdown
-- source-aware extraction with PDF page and PowerPoint slide references
-- document classification and chunking
-- course topic graph, source evidence, and topic relationships
+- PDF, DOCX, PPTX, TXT, and Markdown upload/deduplication
+- page/slide-aware extraction and deterministic chunking
+- document classification
+- course topic graph and source evidence
 - past-paper question/mark extraction
 - topic frequency and normalized exam weighting
 
 ### Diagnostics and mastery
 
 - adaptive diagnostics from real past-paper questions
-- persistent Bayesian topic mastery and confidence
-- answer capture and solution-grounded grading
+- persistent Bayesian mastery and confidence
+- deterministic and rubric-aware grading
 - mistake taxonomy and recurring mistake analytics
 - response-level mastery history and trends
 - forgetting-aware effective mastery
 - personalized learning responsiveness and retention calibration
 - exam-aware review queue
-- practice attempts integrated into the same mastery and mistake model
-- multi-question practice-session memory derived from immutable attempts
-- persisted remediation teaching snapshots derived from recent attempt evidence
+- practice evidence integrated into the same mastery model
 
 ### Planning and grade modelling
 
-The `heuristic-v5` planner combines course importance, exam weight, forgetting-adjusted mastery, mistakes, personalized learning scale, and calibrated retention.
+The `heuristic-v5` planner combines course importance, exam weight, effective mastery, mistakes, personalized learning scale, and calibrated retention.
 
 The `probabilistic-v1` layer adds expected score distributions, likely ranges, target probabilities, study-hour scenarios, and evidence-quality-driven uncertainty.
 
-Forecast snapshots can later receive real exam outcomes. StudyOS measures MAE, RMSE, bias, interval coverage, Brier score, and log loss, applies guarded `empirical-v1` recalibration only after enough outcomes exist, and evaluates it with rolling-origin held-out validation.
+Immutable pre-exam forecasts can later receive real outcomes. StudyOS measures prediction error, interval coverage, Brier score, and log loss; guarded empirical recalibration is evaluated using rolling-origin held-out validation.
 
 ## API summary
 
 | Method | Endpoint | Purpose |
 |---|---|---|
 | `GET` | `/api/v1/health` | Service health |
-| `POST` | `/api/v1/courses` | Create a course |
-| `POST` | `/api/v1/courses/{course_id}/documents` | Upload material |
-| `POST` | `/api/v1/courses/{course_id}/documents/{document_id}/process` | Extract/classify material |
+| `POST` | `/api/v1/courses` | Create course |
+| `POST` | `/api/v1/courses/{course_id}/documents` | Upload course material |
+| `POST` | `/api/v1/courses/{course_id}/documents/{document_id}/process` | Extract/classify/chunk material |
 | `POST` | `/api/v1/courses/{course_id}/analyze` | Build course intelligence |
 | `POST` | `/api/v1/courses/{course_id}/exam-intelligence/analyze` | Analyze past papers |
 | `POST` | `/api/v1/courses/{course_id}/diagnostics` | Start adaptive diagnostic |
-| `POST` | `/api/v1/courses/{course_id}/diagnostics/{session_id}/responses` | Score/store response |
-| `POST` | `/api/v1/courses/{course_id}/diagnostics/{session_id}/grade` | Auto-grade from extracted solution |
 | `GET` | `/api/v1/courses/{course_id}/mastery` | Read mastery |
 | `GET` | `/api/v1/courses/{course_id}/mastery/history` | Read mastery history/trends |
 | `GET` | `/api/v1/courses/{course_id}/calibration` | Read learning/retention calibration |
@@ -282,20 +243,18 @@ Forecast snapshots can later receive real exam outcomes. StudyOS measures MAE, R
 | `POST` | `/api/v1/courses/{course_id}/study-plan` | Build study plan |
 | `POST` | `/api/v1/courses/{course_id}/grade-forecast` | Raw probabilistic forecast |
 | `POST` | `/api/v1/courses/{course_id}/grade-forecast/calibrated` | Raw + empirical forecast |
-| `POST` | `/api/v1/courses/{course_id}/forecast-snapshots` | Save pre-exam forecast |
 | `GET` | `/api/v1/courses/{course_id}/forecast-calibration` | Historical forecast metrics |
 | `GET` | `/api/v1/courses/{course_id}/forecast-validation` | Held-out model validation |
 | `POST` | `/api/v1/courses/{course_id}/tutor/search` | Search grounded course evidence |
 | `POST` | `/api/v1/courses/{course_id}/tutor/ask` | Produce validated grounded answer |
-| `POST` | `/api/v1/courses/{course_id}/tutor/practice` | Create standalone grounded practice |
-| `POST` | `/api/v1/courses/{course_id}/tutor/practice-sessions` | Start adaptive multi-question session |
-| `GET` | `/api/v1/courses/{course_id}/tutor/practice-sessions/{session_id}` | Read session history/remediation state |
-| `POST` | `/api/v1/courses/{course_id}/tutor/practice-sessions/{session_id}/complete` | Complete session manually |
-| `GET` | `/api/v1/courses/{course_id}/tutor/practice-sessions/{session_id}/teaching` | Read/materialize current teaching plan |
-| `POST` | `/api/v1/courses/{course_id}/tutor/practice-sessions/{session_id}/practice/{practice_id}/hint` | Reveal remediation-aware hint |
-| `POST` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/hint` | Reveal standard next hint |
-| `POST` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/evaluate` | Grade response and adapt next practice |
-| `GET` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/solution` | Reveal solution + sources |
+| `GET` | `/api/v1/courses/{course_id}/tutor/embedding-index` | Inspect embedding-index health |
+| `POST` | `/api/v1/courses/{course_id}/tutor/embedding-index/sync` | Incrementally sync course vectors |
+| `POST` | `/api/v1/courses/{course_id}/tutor/practice` | Create grounded practice |
+| `POST` | `/api/v1/courses/{course_id}/tutor/practice-sessions` | Start adaptive practice session |
+| `GET` | `/api/v1/courses/{course_id}/tutor/practice-sessions/{session_id}` | Read session state |
+| `GET` | `/api/v1/courses/{course_id}/tutor/practice-sessions/{session_id}/teaching` | Read/materialize teaching plan |
+| `POST` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/evaluate` | Grade and adapt practice |
+| `GET` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/solution` | Reveal grounded solution |
 
 FastAPI exposes interactive API docs at `/docs` while the server is running.
 
@@ -308,34 +267,29 @@ FastAPI exposes interactive API docs at `/docs` while the server is running.
 
 ### Phase 2 — Diagnostics and mastery
 - [x] adaptive diagnostics and persistent mastery
-- [x] mistakes and answer evidence
+- [x] mistake intelligence and answer evidence
 - [x] forgetting-aware reviews
 - [x] mastery history and personalized learning/retention calibration
-- [x] deterministic solution-grounded grading
-- [x] rubric-aware LLM grading adapter
+- [x] deterministic and rubric-aware grading
 
 ### Phase 3 — Grade modelling
 - [x] probabilistic score distributions and target probabilities
 - [x] immutable forecasts and real outcomes
-- [x] empirical calibration/recalibration
+- [x] guarded empirical recalibration
 - [x] reliability curves and rolling held-out validation
 
 ### Phase 4 — Course-aware tutor
-- [x] deterministic course-isolated BM25 retrieval
+- [x] course-isolated BM25/topic retrieval
 - [x] exact page/slide/document citations
-- [x] course topic/evidence retrieval signal
-- [x] external grounded synthesis provider
-- [x] local claim-to-citation validation
-- [x] optional embedding/vector retrieval adapter
-- [x] persisted exam-style practice items
-- [x] progressive hint and solution reveal
-- [x] adaptive practice evaluation
-- [x] rubric-aware free-response grading
-- [x] multi-question practice-session memory
-- [x] recurring mistake and hint-dependence remediation
-- [x] session-aware remediation explanations and hints
-- [ ] persistent embedding index / vector database
-- [ ] stronger entailment verifier
+- [x] grounded synthesis provider + local citation validation
+- [x] optional embedding semantic reranking
+- [x] persisted exam-style practice and progressive hints
+- [x] adaptive practice evaluation and rubric grading
+- [x] multi-question session memory and remediation teaching
+- [x] persistent SQLite embedding cache
+- [x] incremental/lazy chunk indexing and index-health API
+- [ ] stronger entailment verifier / claim decomposition
+- [ ] external vector/ANN backend
 
 ### Phase 5 — Optimization
 - [ ] expected marks per study hour
@@ -345,7 +299,7 @@ FastAPI exposes interactive API docs at `/docs` while the server is running.
 
 ### Phase 6 — Study operating system
 - [ ] semester dashboard
-- [ ] spaced repetition workflow
+- [ ] spaced-repetition workflow
 - [ ] cheat-sheet generation
 - [ ] calendar/focus integration
 - [ ] analytics UI
@@ -355,7 +309,7 @@ FastAPI exposes interactive API docs at `/docs` while the server is running.
 
 Python 3.12+, FastAPI, Pydantic, SQLAlchemy 2, SQLite, pypdf, python-docx, python-pptx, OpenAI SDK, Pytest, Ruff, and GitHub Actions.
 
-Planned infrastructure includes PostgreSQL, Redis/background workers, a persistent vector index, Docker, and a Next.js/TypeScript client.
+Planned infrastructure includes PostgreSQL, Redis/background workers, an external ANN/vector backend when scale justifies it, Docker, and a Next.js/TypeScript client.
 
 ## Local development
 
@@ -373,4 +327,4 @@ ruff check .
 pytest
 ```
 
-The next Phase 4 milestone is **persistent embedding storage and incremental vector indexing**: stop recomputing semantic embeddings on every retrieval request, store course chunk vectors with deterministic invalidation, and compare persistent semantic retrieval against the current reranking baseline.
+The next Phase 4 quality milestone is **stronger entailment verification and claim decomposition**: move beyond lexical claim/source overlap so a fluent answer cannot pass validation merely because it shares several words with the cited excerpt.

@@ -18,8 +18,10 @@ from app.schemas.tutor import (
     TutorSearchRead,
     TutorSearchRequest,
 )
+from app.services.tutor_embedding_index import ensure_chunk_embeddings
 from app.services.tutor_embeddings import (
     TutorEmbeddingConfig,
+    TutorEmbeddingFailure,
     TutorEmbeddingProvider,
     TutorEmbeddingUnavailable,
     build_embedding_provider,
@@ -225,12 +227,33 @@ def _lexical_signals(
     return signals
 
 
+def _query_vector(provider: TutorEmbeddingProvider, query: str) -> list[float]:
+    vectors = provider.embed([query])
+    if len(vectors) != 1 or not vectors[0]:
+        raise TutorEmbeddingFailure("Embedding provider returned an invalid query vector")
+    normalized: list[float] = []
+    for value in vectors[0]:
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise TutorEmbeddingFailure(
+                "Embedding provider returned a non-numeric query vector"
+            ) from exc
+        if not math.isfinite(number):
+            raise TutorEmbeddingFailure("Embedding provider returned a non-finite query vector")
+        normalized.append(number)
+    return normalized
+
+
 def _semantic_scores(
+    db: Session,
+    course_id: str,
     candidates: list[_Candidate],
     query: str,
     signals: dict[str, _CandidateSignal],
     provider: TutorEmbeddingProvider,
     max_candidates: int,
+    batch_size: int,
 ) -> dict[str, float]:
     ordered = sorted(
         candidates,
@@ -241,10 +264,17 @@ def _semantic_scores(
         reverse=True,
     )
     selected = ordered[:max_candidates]
-    vectors = provider.embed([query, *[candidate.chunk.text for candidate in selected]])
-    query_vector = vectors[0]
+    query_vector = _query_vector(provider, query)
+    cache = ensure_chunk_embeddings(
+        db,
+        course_id,
+        [candidate.chunk for candidate in selected],
+        provider,
+        batch_size=batch_size,
+    )
     scores: dict[str, float] = {}
-    for candidate, vector in zip(selected, vectors[1:], strict=True):
+    for candidate in selected:
+        vector = cache.vectors[candidate.chunk.id]
         scores[candidate.chunk.id] = max(0.0, cosine_similarity(query_vector, vector))
     return scores
 
@@ -284,11 +314,14 @@ def _rank(
         resolved_mode = "hybrid" if provider is not None else "lexical"
     if resolved_mode in {"semantic", "hybrid"} and provider is not None:
         semantic_scores = _semantic_scores(
+            db,
+            course_id,
             candidates,
             query,
             signals,
             provider,
             embedding_config.max_candidates,
+            embedding_config.batch_size,
         )
 
     scored: list[tuple[float, float, float, float, _CandidateSignal, _Candidate]] = []
@@ -355,10 +388,15 @@ def _rank(
     semantic_applied = bool(provider is not None and semantic_scores)
     if resolved_mode == "semantic" and semantic_applied:
         model = _SEMANTIC_MODEL
-        components = ["embedding_cosine", "course_topic_evidence"]
+        components = ["embedding_cosine", "persistent_embedding_cache", "course_topic_evidence"]
     elif resolved_mode == "hybrid" and semantic_applied:
         model = _HYBRID_VECTOR_MODEL
-        components = ["bm25", "embedding_cosine", "course_topic_evidence"]
+        components = [
+            "bm25",
+            "embedding_cosine",
+            "persistent_embedding_cache",
+            "course_topic_evidence",
+        ]
     elif topic_applied:
         model = _TOPIC_MODEL
         components = ["bm25", "course_topic_evidence"]

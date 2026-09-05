@@ -88,6 +88,7 @@ def _embedding_config(request: Request) -> TutorEmbeddingConfig:
         openai_api_key=api_key,
         openai_model=settings.openai_embedding_model,
         max_candidates=settings.tutor_embedding_max_candidates,
+        batch_size=settings.tutor_embedding_batch_size,
     )
 
 
