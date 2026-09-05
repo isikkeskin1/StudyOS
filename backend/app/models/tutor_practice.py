@@ -3,7 +3,17 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -66,3 +76,55 @@ class TutorPracticeEvidence(Base):
     source_reference: Mapped[str] = mapped_column(String(300), nullable=False)
     excerpt: Mapped[str] = mapped_column(Text, nullable=False)
     rank: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class TutorPracticeAttempt(Base):
+    __tablename__ = "tutor_practice_attempts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    practice_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tutor_practice_items.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    course_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("courses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    student_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    grader_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    grader_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    evidence_coverage: Mapped[float] = mapped_column(Float, nullable=False)
+    mastery_weight: Mapped[float] = mapped_column(Float, nullable=False)
+    hints_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    feedback: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+    )
+
+
+class TutorPracticeMistake(Base):
+    __tablename__ = "tutor_practice_mistakes"
+    __table_args__ = (
+        UniqueConstraint("attempt_id", "category", name="uq_practice_attempt_mistake_category"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    attempt_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tutor_practice_attempts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    category: Mapped[str] = mapped_column(String(40), nullable=False)
+    severity: Mapped[float] = mapped_column(Float, nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
