@@ -8,6 +8,7 @@ from app import models  # noqa: F401
 from app.api.calibration import router as calibration_router
 from app.api.courses import router as courses_router
 from app.api.diagnostics import router as diagnostics_router
+from app.api.forecast_tracking import router as forecast_tracking_router
 from app.api.grade_modeling import router as grade_modeling_router
 from app.api.health import router as health_router
 from app.api.mastery_history import router as mastery_history_router
@@ -38,7 +39,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application = FastAPI(
         title=resolved_settings.app_name,
-        version="0.12.0",
+        version="0.13.0",
         description="Backend API for StudyOS.",
         lifespan=lifespan,
     )
@@ -55,6 +56,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(mastery_history_router, prefix=resolved_settings.api_prefix)
     application.include_router(calibration_router, prefix=resolved_settings.api_prefix)
     application.include_router(grade_modeling_router, prefix=resolved_settings.api_prefix)
+    application.include_router(forecast_tracking_router, prefix=resolved_settings.api_prefix)
 
     @application.get("/")
     def root() -> dict[str, str]:
