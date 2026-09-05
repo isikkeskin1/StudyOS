@@ -1,3 +1,4 @@
+from app.models.cheat_sheet import CheatSheet
 from app.models.course import Course
 from app.models.course_intelligence import (
     CourseAnalysis,
@@ -54,6 +55,7 @@ from app.models.tutor_practice import (
 )
 
 __all__ = [
+    "CheatSheet",
     "ReviewSession",
     "Course",
     "CourseAnalysis",
