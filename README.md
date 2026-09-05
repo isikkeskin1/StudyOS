@@ -4,175 +4,190 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
-## Current milestone — persistent Emergency Mode + automatic rescheduling
+## Current milestone — multi-course optimization
 
-The backend is now at **v0.29.0**.
+The backend is now at **v0.30.0**.
 
-Emergency Mode is no longer limited to a one-shot calculation. StudyOS can persist an optimized study schedule, record what actually happened, and rebuild only the unfinished portion when time or mastery changes.
+StudyOS can now allocate one scarce study-time budget across multiple courses with different grading scales, targets, deadlines, and evidence quality.
 
 ```text
-expected-marks emergency plan
+Physics          25 / 30 target
+Programming      80 / 100 target
+Linear Algebra   27 / 30 target
+
+7 hours available
         ↓
-persist schedule revision 1
+normalized target-gap utility
++ deadline pressure
++ evidence confidence
         ↓
-start / complete / skip blocks
+block-by-block global competition
         ↓
-actual minutes + new mastery evidence
-        ↓
-recompute remaining budget
-        ↓
-expected-marks optimizer
-        ↓
-persist revision 2, 3, ...
+ordered cross-course study schedule
 ```
 
-### Stateless calculation and persistent execution
+### Multi-course endpoint
 
-The original endpoint remains available as a stateless calculator:
+```text
+POST /api/v1/multi-course-plan
+```
+
+Example request:
+
+```json
+{
+  "available_hours": 7,
+  "block_minutes": 30,
+  "courses": [
+    {
+      "course_id": "physics-id",
+      "hours_until_exam": 18
+    },
+    {
+      "course_id": "linear-id",
+      "hours_until_exam": 48
+    },
+    {
+      "course_id": "programming-id",
+      "hours_until_exam": 96
+    }
+  ]
+}
+```
+
+Each course can also override its target grade, baseline mastery, per-topic mastery, and whether stored measured mastery should be used.
+
+### Raw marks are never compared across unrelated grade scales
+
+A gain of `+2` marks in a 30-point course is not treated as equivalent to `+2` marks in a 100-point course.
+
+For every candidate block, StudyOS first calculates the expected mark gain using the existing calibrated course model, then converts only the useful part of that gain into normalized target-gap reduction:
+
+```text
+raw expected mark gain
+        ↓
+min(raw gain, remaining target gap)
+        ↓
+divide by course maximum grade
+        ↓
+normalized target-gap reduction
+```
+
+The global utility used for allocation is:
+
+```text
+normalized target-gap reduction
+× deadline multiplier
+× confidence multiplier
+```
+
+This means two otherwise identical courses on 30-point and 100-point scales produce comparable normalized utility even though their raw expected mark gains differ substantially.
+
+### Sequential global allocation
+
+The optimizer is `normalized-target-utility-greedy-v1`.
+
+It does not rank courses once and assign fixed chunks. After every study block it:
+
+```text
+updates projected topic mastery
+        ↓
+recalculates projected course grade
+        ↓
+recalculates remaining target gap
+        ↓
+reduces exact deadline horizon by elapsed global study time
+        ↓
+re-evaluates every eligible course
+        ↓
+selects the highest current utility block
+```
+
+Diminishing returns inside one course can therefore cause the next block to move to another course.
+
+### Deadline pressure
+
+A course request may provide exact `hours_until_exam`.
+
+Exact deadline horizons are hard cutoffs. If only 30 minutes remain before that exam, StudyOS cannot allocate a later block to the course after those 30 minutes have elapsed in the global schedule.
+
+Deadline pressure also increases when the estimated study hours required to reach the target consume a large share of the exact time remaining.
+
+Course-level `exam_date` is still supported when exact hours are not provided. Because `exam_date` contains only a calendar date, it contributes **coarse urgency weighting only**. StudyOS does not invent an exam clock time.
+
+### Evidence uncertainty
+
+Expected study gains with weaker evidence are conservatively shrunk before courses compete globally.
+
+Current confidence multipliers are:
+
+```text
+low      0.80
+medium   0.90
+high     1.00
+```
+
+This does not change stored mastery. It only prevents a poorly measured course from winning scarce global time purely because a noisy point estimate looks large.
+
+### Targets are real stopping conditions
+
+Once a course reaches its stated target under the planning projection, it stops receiving scarce time.
+
+If every selected course has already reached its target, StudyOS returns the remaining time as `unallocated_hours` rather than generating fake productivity work just to fill the schedule.
+
+The response exposes both per-course and global results:
+
+```text
+ordered cross-course blocks
+next action
+raw expected mark gain per block
+normalized target-gap reduction
+utility score
+course allocation totals
+current and projected grades
+target gaps before / after
+deadline source and multiplier
+plan confidence and confidence multiplier
+unallocated time
+```
+
+Expected gains and utility remain planning heuristics, not guaranteed exam results.
+
+## Persistent Emergency Mode
+
+Single-course Emergency Mode can persist an optimized schedule, record what actually happened, and rebuild only the unfinished portion when time or mastery changes.
 
 ```text
 POST /api/v1/courses/{course_id}/emergency-plan
-```
-
-For a schedule that survives reloads and changes over time, use:
-
-```text
 POST /api/v1/courses/{course_id}/emergency-schedules
 GET  /api/v1/courses/{course_id}/emergency-schedules
 GET  /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}
 ```
 
-Creating a persisted schedule snapshots the current Emergency Mode result as revision 1. The collection endpoint lets a client rediscover schedules after an app reload rather than depending on an in-memory ID.
-
-### Block lifecycle
-
-Current-revision blocks can be acted on through:
+Current-revision blocks support:
 
 ```text
 POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/blocks/{block_id}/start
 POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/blocks/{block_id}/complete
 POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/blocks/{block_id}/skip
-```
-
-Block states are:
-
-```text
-planned
-in_progress
-completed
-skipped
-superseded
-```
-
-Only current-revision unfinished blocks can be mutated. Once a replan occurs, old unfinished blocks become `superseded`; completed and skipped blocks remain as historical evidence of what actually happened.
-
-Only one current block can be `in_progress` at a time.
-
-### Actual time changes the remaining budget
-
-Completing a block records `actual_minutes` instead of assuming the planned duration was exact.
-
-```text
-planned 30 min, completed in 15
-→ only 15 minutes consumed
-→ 15 minutes remain available elsewhere
-
-planned 30 min, took 45
-→ 45 minutes consumed
-→ remaining plan shrinks by the extra 15
-```
-
-Skipping a block defaults to treating that planned block duration as lost time. A caller may provide an explicit `lost_minutes` value when reality differs.
-
-Manual refresh is available through:
-
-```text
 POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/reschedule
 ```
 
-A manual refresh may reduce the remaining study budget, but it cannot invent more time than the schedule currently has available.
+Every replan creates an immutable revision. Old unfinished blocks become `superseded`, while completed and skipped blocks remain historical evidence of what happened.
 
-### Revision history is immutable
+Actual minutes affect the remaining budget: finishing early preserves time, finishing late consumes extra time, and skipped blocks can explicitly record lost minutes.
 
-Every successful replan with remaining time creates a new revision rather than rewriting the old plan.
-
-```text
-revision 1  initial
-revision 2  completed_early
-revision 3  missed_block
-revision 4  manual_refresh
-```
-
-Each revision snapshots:
-
-```text
-remaining minutes
-current estimated grade
-projected grade
-expected mark gain
-target gap after the remaining plan
-mastery basis
-ordered study blocks
-```
-
-This makes the schedule auditable: StudyOS can show what it originally recommended, what changed, and why the later plan is different.
-
-### Study projections do not become fake mastery evidence
-
-Completing a study block does **not** write directly to `TopicMastery`.
-
-Instead, the schedule can apply the existing learning curve as a local planning projection when rebuilding the unfinished plan:
-
-```text
-measured mastery
-+ completed study after that measurement
-        ↓
-schedule-local projected mastery
-```
-
-That projection only affects the schedule. Real diagnostic or practice responses remain the source of measured mastery evidence.
-
-If a newer `TopicMastery` measurement exists, StudyOS starts from that newer evidence and only projects completed study that happened after it. This prevents older schedule projections from being double-counted on top of a fresh diagnostic result.
-
-A manual refresh therefore can change the next topic immediately when new measured mastery changes the expected marks/hour ranking.
-
-### Wall-clock deadline still wins
-
-When the schedule was created with `hours_until_exam`, StudyOS persists the resulting exam deadline. Every reschedule caps the remaining study budget by both:
-
-```text
-remaining declared study budget
-and
-actual wall-clock time until the exam
-```
-
-The schedule cannot continue allocating study blocks past the exam simply because the original plan had unused minutes left.
-
-### Expected-marks optimizer
-
-The underlying optimizer remains `expected-marks-greedy-v1`.
-
-A topic's numeric expected gain is derived from:
-
-```text
-normalized exam/topic weight
-×
-change in mastery from the calibrated learning curve
-×
-course maximum grade
-```
-
-Mistake categories can influence teaching context but do not inflate a number labelled `expected marks`. Expected marks remain planning heuristics rather than guaranteed exam points.
+Study completion never writes fake mastery evidence. Schedule-local learning projections are replaced by newer diagnostic or practice evidence whenever it exists.
 
 ## Planning and grade modelling
 
 The normal `heuristic-v5` planner combines course importance, exam weight, effective mastery, mistake burden, personalized learning scale, and calibrated retention.
 
+The single-course Emergency Mode optimizer `expected-marks-greedy-v1` assigns each study block to the topic with the highest current expected marginal mark gain.
+
 The `probabilistic-v1` layer adds score distributions, likely ranges, target probabilities, study-hour scenarios, and evidence-quality-driven uncertainty.
 
 Immutable pre-exam forecasts can later receive real outcomes. StudyOS measures prediction error, interval coverage, Brier score, and log loss; guarded empirical recalibration is evaluated with rolling-origin held-out validation.
-
-Emergency Mode is intentionally a separate marginal-value optimizer. Its numeric mark gains do not reuse the planner's mistake-priority multiplier.
 
 ## Tutor grounding and retrieval
 
@@ -246,6 +261,9 @@ POST /api/v1/courses/{course_id}/emergency-schedules
 GET  /api/v1/courses/{course_id}/emergency-schedules
 GET  /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}
 POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/reschedule
+
+POST /api/v1/multi-course-plan
+
 POST /api/v1/courses/{course_id}/grade-forecast
 POST /api/v1/courses/{course_id}/grade-forecast/calibrated
 GET  /api/v1/courses/{course_id}/forecast-calibration
@@ -300,10 +318,11 @@ FastAPI exposes interactive docs at `/docs` while the server is running.
 - [x] expected marks per study hour
 - [x] Emergency Mode
 - [x] persistent schedules and automatic rescheduling
-- [ ] multi-course optimization
+- [x] normalized multi-course optimization
 
 ### Phase 6 — Study operating system
-- [ ] semester dashboard
+- [ ] persistent semester-wide study queue
+- [ ] semester command-center API
 - [ ] spaced-repetition workflow
 - [ ] cheat-sheet generation
 - [ ] calendar/focus integration
@@ -328,4 +347,4 @@ ruff check .
 pytest
 ```
 
-The next optimization milestone is **multi-course optimization**: let courses compete for scarce study time using a normalized objective that respects different grade scales, targets, deadlines, and evidence uncertainty rather than naively comparing raw marks/hour across unrelated exams.
+The next milestone is **the semester control loop**: persist a multi-course plan as one executable study queue, let blocks inherit the start/complete/skip behavior from Emergency Mode, and automatically rebuild the remaining semester queue when time, deadlines, or measured mastery change.
