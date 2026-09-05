@@ -20,6 +20,7 @@ from app.models.exam_intelligence import (
     ExamTopicStat,
 )
 from app.models.grading import DiagnosticGradeArtifact, ExamQuestionReference
+from app.models.mastery_history import MasterySnapshot
 from app.models.mistakes import DiagnosticAnswerArtifact, DiagnosticMistake
 
 __all__ = [
@@ -41,6 +42,7 @@ __all__ = [
     "ExamQuestionReference",
     "ExamQuestionTopic",
     "ExamTopicStat",
+    "MasterySnapshot",
     "TopicEvidence",
     "TopicMastery",
     "TopicRelationship",
