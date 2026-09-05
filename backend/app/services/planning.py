@@ -16,10 +16,12 @@ from app.schemas.planning import (
     StudyPlanRequest,
     TopicStudyAllocationRead,
 )
+from app.services.mistake_intelligence import topic_mistake_signals
 
 _STEP_HOURS = 0.25
 _LEARNING_SCALE_HOURS = 2.8
 _MAX_ESTIMATE_HOURS = 300.0
+_MISTAKE_PRIORITY_BOOST = 0.35
 
 
 class StudyPlanUnavailableError(RuntimeError):
@@ -33,6 +35,8 @@ class PlanningTopic:
     weight: float
     mastery: float
     mastery_source: str
+    mistake_burden: float
+    mistake_focus: list[str]
 
 
 def _next_mastery(current: float, hours: float) -> float:
@@ -43,6 +47,16 @@ def _next_mastery(current: float, hours: float) -> float:
 
 def _weighted_mastery(topics: list[PlanningTopic], mastery: dict[str, float]) -> float:
     return sum(topic.weight * mastery[topic.id] for topic in topics)
+
+
+def _marginal_priority(topic: PlanningTopic, mastery_value: float) -> float:
+    mistake_factor = 1.0 + _MISTAKE_PRIORITY_BOOST * topic.mistake_burden
+    return (
+        topic.weight
+        * (1.0 - mastery_value)
+        * mistake_factor
+        / _LEARNING_SCALE_HOURS
+    )
 
 
 def _allocate(
@@ -56,9 +70,7 @@ def _allocate(
     while remaining >= _STEP_HOURS - 1e-9:
         best = max(
             topics,
-            key=lambda topic: topic.weight
-            * (1.0 - mastery[topic.id])
-            / _LEARNING_SCALE_HOURS,
+            key=lambda topic: _marginal_priority(topic, mastery[topic.id]),
         )
         allocations[best.id] += _STEP_HOURS
         mastery[best.id] = _next_mastery(mastery[best.id], _STEP_HOURS)
@@ -67,9 +79,7 @@ def _allocate(
     if remaining > 1e-6:
         best = max(
             topics,
-            key=lambda topic: topic.weight
-            * (1.0 - mastery[topic.id])
-            / _LEARNING_SCALE_HOURS,
+            key=lambda topic: _marginal_priority(topic, mastery[topic.id]),
         )
         allocations[best.id] += remaining
         mastery[best.id] = _next_mastery(mastery[best.id], remaining)
@@ -86,9 +96,7 @@ def _hours_to_target(topics: list[PlanningTopic], target_ratio: float) -> float 
     while elapsed < _MAX_ESTIMATE_HOURS:
         best = max(
             topics,
-            key=lambda topic: topic.weight
-            * (1.0 - mastery[topic.id])
-            / _LEARNING_SCALE_HOURS,
+            key=lambda topic: _marginal_priority(topic, mastery[topic.id]),
         )
         mastery[best.id] = _next_mastery(mastery[best.id], _STEP_HOURS)
         elapsed += _STEP_HOURS
@@ -161,6 +169,7 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
             select(TopicMastery).where(TopicMastery.course_id == course.id)
         ).all()
     }
+    mistake_signals = topic_mistake_signals(db, course.id)
 
     raw_weights: dict[str, float] = {}
     for topic in topics:
@@ -175,6 +184,7 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
     planning_topics: list[PlanningTopic] = []
     for topic in topics:
         mastery_value, mastery_source = _resolve_mastery(topic, request, stored_mastery)
+        mistake_burden, mistake_focus = mistake_signals.get(topic.id, (0.0, []))
         planning_topics.append(
             PlanningTopic(
                 id=topic.id,
@@ -182,6 +192,8 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
                 weight=raw_weights[topic.id] / total_weight,
                 mastery=mastery_value,
                 mastery_source=mastery_source,
+                mistake_burden=mistake_burden,
+                mistake_focus=mistake_focus,
             )
         )
 
@@ -209,7 +221,12 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
             mastery_source=topic.mastery_source,
             projected_mastery=round(projected_mastery[topic.id], 4),
             recommended_hours=round(allocations[topic.id], 2),
-            priority_score=round(topic.weight * (1.0 - topic.mastery), 4),
+            priority_score=round(
+                _marginal_priority(topic, topic.mastery) * _LEARNING_SCALE_HOURS,
+                4,
+            ),
+            mistake_burden=round(topic.mistake_burden, 4),
+            mistake_focus=topic.mistake_focus,
         )
         for topic in planning_topics
         if allocations[topic.id] > 0 or topic.weight >= 0.05
@@ -245,6 +262,7 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
     )
     reachable = projected_grade >= target_grade if projected_grade is not None else None
     used_diagnostics = any(topic.mastery_source == "diagnostic" for topic in planning_topics)
+    used_mistakes = any(topic.mistake_burden > 0 for topic in planning_topics)
 
     assumptions = [
         (
@@ -267,10 +285,14 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
             0,
             "No diagnostic evidence is available yet, so baseline mastery is used.",
         )
+    if used_mistakes:
+        assumptions.append(
+            "Classified mistake patterns adjust study priority but do not directly change grades."
+        )
 
     return StudyPlanRead(
         course_id=course.id,
-        planning_model="heuristic-v2",
+        planning_model="heuristic-v3",
         confidence=_plan_confidence(planning_topics, stored_mastery),
         target_grade=round(target_grade, 2),
         max_grade=round(course.max_grade, 2),

@@ -19,11 +19,14 @@ from app.models.exam_intelligence import (
     ExamQuestionTopic,
     ExamTopicStat,
 )
+from app.models.mistakes import DiagnosticAnswerArtifact, DiagnosticMistake
 
 __all__ = [
     "Course",
     "CourseAnalysis",
     "CourseTopic",
+    "DiagnosticAnswerArtifact",
+    "DiagnosticMistake",
     "DiagnosticQuestion",
     "DiagnosticResponse",
     "DiagnosticSession",

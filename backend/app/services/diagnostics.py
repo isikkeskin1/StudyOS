@@ -16,6 +16,7 @@ from app.models.diagnostics import (
     TopicMastery,
 )
 from app.models.exam_intelligence import ExamQuestion, ExamQuestionTopic, ExamTopicStat
+from app.services.mistake_intelligence import MistakeInput, store_response_details
 
 
 class DiagnosticUnavailableError(RuntimeError):
@@ -310,6 +311,11 @@ def record_response(
     confidence: float,
     grading_source: str,
     duration_seconds: int | None,
+    *,
+    student_answer: str | None = None,
+    reference_answer: str | None = None,
+    feedback: str | None = None,
+    mistakes: list[MistakeInput] | None = None,
 ) -> tuple[DiagnosticResponse, list[TopicMastery]]:
     if session.status != "active":
         raise DiagnosticStateError("Diagnostic session is already completed")
@@ -336,6 +342,15 @@ def record_response(
         duration_seconds=duration_seconds,
     )
     db.add(response)
+    db.flush()
+    store_response_details(
+        db,
+        response.id,
+        student_answer=student_answer,
+        reference_answer=reference_answer,
+        feedback=feedback,
+        mistakes=mistakes or [],
+    )
     db.commit()
     db.refresh(response)
 

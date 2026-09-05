@@ -65,6 +65,8 @@ class TopicStudyAllocationRead(BaseModel):
     projected_mastery: float
     recommended_hours: float
     priority_score: float
+    mistake_burden: float
+    mistake_focus: list[str]
 
 
 class GradeScenarioRead(BaseModel):
