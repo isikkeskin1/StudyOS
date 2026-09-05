@@ -32,6 +32,7 @@ from app.models.forecast_tracking import (
 from app.models.grading import DiagnosticGradeArtifact, ExamQuestionReference
 from app.models.mastery_history import MasterySnapshot
 from app.models.mistakes import DiagnosticAnswerArtifact, DiagnosticMistake
+from app.models.review_session import ReviewSession
 from app.models.semester_queue import (
     SemesterStudyQueue,
     SemesterStudyQueueBlock,
@@ -53,6 +54,7 @@ from app.models.tutor_practice import (
 )
 
 __all__ = [
+    "ReviewSession",
     "Course",
     "CourseAnalysis",
     "CourseTopic",

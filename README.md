@@ -4,9 +4,42 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
-## Current milestone — semester command center
+## Current milestone — spaced-repetition workflow
 
-The backend is now at **v0.32.0**.
+The backend is now at **v0.33.0**.
+
+Due reviews now launch persistent, single-question review sessions. Selection uses the
+existing calibrated retention queue and its topic priority. An optional `topic_id`
+selects a specific due topic. Repeated starts resume unfinished work; skipped or
+solution-revealed reviews can be restarted without recording mastery evidence.
+
+```text
+POST /api/v1/courses/{course_id}/review-sessions
+GET  /api/v1/courses/{course_id}/review-sessions
+GET  /api/v1/courses/{course_id}/review-sessions/{review_id}
+POST /api/v1/courses/{course_id}/review-sessions/{review_id}/answer
+POST /api/v1/courses/{course_id}/review-sessions/{review_id}/skip
+```
+
+Start with `{ "provider": "local" }` or the configured tutor provider. Answer with
+`{ "student_answer": "...", "grading_provider": "local", "duration_seconds": 90 }`.
+The returned practice ID also supports the existing tutor hint and solution endpoints.
+Local generation requires a mapped question with a reference solution for the selected
+topic; unavailable material or no due topic returns 409 without creating a partial session.
+
+Grading uses the existing evidence-weighted practice pipeline, including hint penalties,
+mastery recomputation, and history. The response includes the graded attempt and the
+refreshed review priority and due state. Completion means an answer was graded, not
+that the answer was correct. Revealed solutions cannot be submitted as mastery evidence.
+Duplicate answers are rejected. Skipping is idempotent and never marks a topic reviewed.
+
+Creation persists the question and review link in one transaction. A unique active
+reservation prevents duplicate unfinished reviews for a topic. Each session preserves
+its original selection reason and evidence timestamp for inspection later.
+
+## Semester command center
+
+
 
 `GET /api/v1/semester/dashboard` returns course estimates, normalized target gaps,
 calendar-day deadline pressure, due review counts, queue summaries, and the next
@@ -382,7 +415,7 @@ FastAPI exposes interactive docs at `/docs` while the server is running.
 ### Phase 6 — Study operating system
 - [x] persistent semester-wide study queue
 - [x] semester command-center API
-- [ ] spaced-repetition workflow
+- [x] spaced-repetition workflow
 - [ ] cheat-sheet generation
 - [ ] calendar/focus integration
 - [ ] analytics UI
@@ -406,6 +439,5 @@ ruff check .
 pytest
 ```
 
-The next milestone is **the spaced-repetition workflow**: turn due reviews into
-executable practice sessions and use the resulting evidence to update mastery and
-future review priorities.
+The next milestone is **source-grounded cheat-sheet generation**: compile course
+formulas, methods, and recurring mistakes into a compact exam reference with citations.

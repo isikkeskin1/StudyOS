@@ -440,6 +440,8 @@ def create_practice_item(
     provider_config: TutorProviderConfig | None = None,
     embedding_config: TutorEmbeddingConfig | None = None,
     embedding_provider: TutorEmbeddingProvider | None = None,
+    *,
+    commit: bool = True,
 ) -> TutorPracticeRead:
     resolved_provider_config = provider_config or TutorProviderConfig()
     resolved_provider = (
@@ -500,7 +502,10 @@ def create_practice_item(
                 rank=source.rank,
             )
         )
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(item)
     return _practice_read(db, item)
 
