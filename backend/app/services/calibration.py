@@ -110,6 +110,17 @@ def _learning_confidence(
     return "low", 0.0
 
 
+def _learning_multiplier(observed_gain: float | None, confidence_weight: float) -> float:
+    if observed_gain is None or confidence_weight <= 0:
+        return 1.0
+    trend_signal = max(
+        -1.0,
+        min(1.0, observed_gain / _NOMINAL_GAIN_PER_EVIDENCE),
+    )
+    raw_multiplier = 1.0 + 0.35 * trend_signal
+    return 1.0 + confidence_weight * (raw_multiplier - 1.0)
+
+
 def _retention_observations(points: list[MasterySnapshot]) -> list[float]:
     estimates: list[float] = []
     for previous, current in zip(points, points[1:], strict=False):
@@ -172,13 +183,6 @@ def get_course_calibration(db: Session, course_id: str) -> CourseCalibration:
     for snapshot in snapshots:
         grouped[snapshot.topic_id].append(snapshot)
 
-    gains = [
-        gain
-        for points in grouped.values()
-        if (gain := _gain_per_evidence(points)) is not None and gain > 0.005
-    ]
-    reference_gain = median(gains) if len(gains) >= 2 else _NOMINAL_GAIN_PER_EVIDENCE
-
     rows: list[TopicCalibration] = []
     for topic in topics:
         points = grouped.get(topic.id, [])
@@ -198,13 +202,7 @@ def get_course_calibration(db: Session, course_id: str) -> CourseCalibration:
             evidence_delta,
             span_days,
         )
-        if observed_gain is None:
-            raw_multiplier = 1.0
-        elif observed_gain <= 0:
-            raw_multiplier = 0.60
-        else:
-            raw_multiplier = max(0.60, min(1.60, observed_gain / reference_gain))
-        learning_multiplier = 1.0 + learning_weight * (raw_multiplier - 1.0)
+        learning_multiplier = _learning_multiplier(observed_gain, learning_weight)
         learning_scale = _GENERIC_LEARNING_SCALE_HOURS / learning_multiplier
 
         mastery = mastery_by_topic.get(topic.id)
@@ -271,8 +269,8 @@ def get_course_calibration(db: Session, course_id: str) -> CourseCalibration:
         topics=rows,
         notes=[
             (
-                "Learning multipliers are relative adjustments to the generic study-gain "
-                "curve; diagnostic response time is not treated as study time."
+                "Learning multipliers are confidence-shrunk adjustments to the generic "
+                "study-gain curve; diagnostic response time is not treated as study time."
             ),
             (
                 "Retention calibration uses only time-separated performance drops and is "
