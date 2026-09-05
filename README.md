@@ -2,7 +2,7 @@
 
 StudyOS is an AI-powered study planning platform that turns course materials and student performance into adaptive, evidence-driven study plans.
 
-Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solutions. StudyOS builds a structured model of the course, measures what matters most for the exam, tracks topic mastery over time, learns recurring mistake patterns, grades supported diagnostic answers against extracted solutions, models forgetting, calibrates learning behavior from longitudinal evidence, and recommends how to spend limited study time around a target grade.
+Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solutions. StudyOS builds a structured model of the course, measures what matters most for the exam, tracks topic mastery over time, learns recurring mistake patterns, models forgetting, calibrates learning behavior from longitudinal evidence, and estimates how study time changes the probability of reaching a target grade.
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
@@ -12,15 +12,16 @@ Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solution
 - How many focused hours should I invest?
 - Which topics matter most for the exam?
 - What grade is realistic with the time I have?
-- How much time is likely required to reach my target?
+- What score range is plausible rather than just one point estimate?
+- What is the current probability of reaching my target grade?
+- How many hours are needed for a chosen probability of reaching that target?
 - Which weak topics offer the highest expected improvement per hour?
 - Why am I repeatedly losing marks?
-- Am I actually improving on a topic, or just seeing noisy results?
 - Which topics are becoming stale and need review?
 - Does this student appear to learn or forget this topic faster than the generic model assumes?
 - What should I deprioritize when time is running out?
 
-## Current milestone — personalized learning and retention calibration
+## Current milestone — probabilistic grade forecasting
 
 The backend can now:
 
@@ -35,19 +36,18 @@ The backend can now:
 - maintain Bayesian topic-mastery estimates and confidence
 - store submitted answers, reference answers, feedback, and recurring mistake evidence
 - automatically grade supported answers against extracted reference solutions
-- keep extracted solutions hidden until an answer is submitted
-- preserve response-level mastery history for every affected topic
-- calculate trend direction, recent accuracy, and evidence span
-- estimate observed mastery gain per unit of diagnostic evidence
-- derive confidence-shrunk per-topic learning-rate multipliers
-- convert those multipliers into personalized diminishing-return study curves
-- estimate retention half-life from time-separated performance drops when evidence exists
-- blend sparse retention observations back toward the generic retention heuristic
-- expose calibration confidence and whether a topic is heuristic, blended, or personalized
-- feed personalized learning scales into the study-time optimizer
-- feed calibrated retention half-lives into effective mastery and review scheduling
+- preserve response-level mastery history and trend analytics
+- calibrate per-topic learning responsiveness and retention conservatively
+- feed calibrated learning/retention signals into planning and review scheduling
+- convert the planner point estimate into a provisional score distribution
+- expose expected score, standard deviation, and a configurable likely-score interval
+- estimate `P(score >= threshold)` for the target and arbitrary requested thresholds
+- generate probability-aware study-hour scenarios
+- estimate hours required for a requested probability of reaching a target
+- expose evidence quality so clients can distinguish weak from stronger forecasts
+- widen uncertainty slightly for longer future study horizons
 
-The calibration layer is deliberately conservative. Diagnostic response duration is **not** treated as study time. Learning-rate multipliers only adjust the generic study-gain curve relative to observed mastery movement, and low-confidence estimates are strongly shrunk toward the default model. Retention calibration only uses time-separated performance drops and remains heuristic until enough repeated evidence exists.
+The probability layer is intentionally labelled **provisional**. It is useful for planning and comparing scenarios, but it is not yet statistically calibrated against held-out real exam outcomes. StudyOS therefore never presents the probability as a guarantee.
 
 ## API
 
@@ -77,87 +77,85 @@ The calibration layer is deliberately conservative. Diagnostic response duration
 | `GET` | `/api/v1/courses/{course_id}/mistakes` | Read course-level mistake intelligence |
 | `GET` | `/api/v1/courses/{course_id}/reviews` | Read forgetting-aware review recommendations |
 | `POST` | `/api/v1/courses/{course_id}/study-plan` | Generate a target-grade study plan |
+| `POST` | `/api/v1/courses/{course_id}/grade-forecast` | Generate a provisional probability-aware grade forecast |
 
 FastAPI exposes interactive API documentation at `/docs` while the server is running.
 
+## Probabilistic grade model
+
+A forecast request can specify study hours, a target grade, arbitrary score thresholds, the desired probability for target planning, and an interval probability:
+
+```json
+{
+  "study_hours": 18,
+  "target_grade": 25,
+  "desired_probability": 0.8,
+  "interval_probability": 0.8,
+  "thresholds": [18, 21, 24, 25, 27]
+}
+```
+
+The response exposes:
+
+```text
+forecast_model: probabilistic-v1
+probability_status: provisional
+evidence_quality
+evidence_confidence
+expected_grade
+standard_deviation
+likely_range_low
+likely_range_high
+target_probability
+threshold probabilities
+required-hours sensitivity band
+study-hour scenarios
+```
+
+The expected score still comes from the inspectable `heuristic-v5` planner. The probability layer adds uncertainty around that estimate rather than pretending the planner itself has become ground truth.
+
+### Evidence quality
+
+Forecast uncertainty contracts as StudyOS gains stronger evidence from:
+
+1. measured topic coverage
+2. effective mastery confidence
+3. past-paper question/mark evidence
+4. longitudinal learning and retention history
+
+Longer future study horizons add a small uncertainty penalty because projected learning becomes less certain farther from observed evidence.
+
+### Required hours for a target probability
+
+StudyOS can answer a planning question such as:
+
+```text
+Target: 25 / 30
+Desired probability: 80%
+Estimated required study: 24.5h
+Optimistic sensitivity: 21.0h
+Conservative sensitivity: 29.0h
+```
+
+The optimistic/conservative values are **sensitivity bounds produced by changing the uncertainty width by ±15%**. They are not a formal statistical confidence interval for study time.
+
+### Probability limitations
+
+`probabilistic-v1` currently uses a normal approximation around the planner mean and a transparent evidence-quality uncertainty heuristic. The score interval is bounded to the valid course grade range, while threshold probabilities remain provisional approximations.
+
+The next calibration step is to record real exam outcomes, preserve the forecast that existed before each exam, and measure whether statements such as “80% chance” actually occur roughly 80% of the time.
+
 ## Calibration model
 
-Each topic exposes:
+The learning/retention calibration endpoint exposes each topic's history count, evidence span, learning-rate multiplier, learning scale, learning confidence, observed gain per evidence, heuristic/calibrated retention half-life, retention confidence, observation count, and calibration source.
 
-```text
-history_point_count
-evidence_span_days
-learning_rate_multiplier
-learning_scale_hours
-learning_confidence
-observed_gain_per_evidence
-heuristic_half_life_days
-retention_half_life_days
-retention_confidence
-retention_observation_count
-calibration_source
-```
+Diagnostic response duration is **not** treated as study time. Learning-rate adjustments are confidence-shrunk toward the generic curve, while retention estimates only use meaningful time-separated performance drops.
 
-### Learning calibration
+## Mastery, retention, and mistakes
 
-The generic planner starts with a `2.8h` diminishing-return learning scale. StudyOS measures how mastery moved per unit of diagnostic evidence, converts the signed trend into a bounded learning-rate adjustment, and shrinks that adjustment according to the amount of evidence available.
+Each scored diagnostic response records one mastery-history point for every affected topic. StudyOS derives recent accuracy, trend direction/confidence, evidence span, and observed mastery gain while preserving raw mastery separately from forgetting-adjusted effective mastery.
 
-A positive longitudinal signal can therefore produce a slightly smaller learning scale, while repeated negative movement can produce a larger one. The model does **not** claim that diagnostic answering time is equivalent to focused study time.
-
-### Retention calibration
-
-The generic retention half-life is still derived from raw mastery, confidence, and accumulated evidence. When StudyOS observes repeated performance drops separated by meaningful time gaps, it estimates an empirical half-life from those drops and blends that estimate with the generic half-life.
-
-Sparse observations remain low confidence and stay close to the generic model. Medium/high-confidence calibrated half-lives are used by the review queue and by forgetting-adjusted mastery in the planner.
-
-## Mastery history model
-
-Each scored diagnostic response records one history point for every mapped topic affected by the response:
-
-```text
-response_id
-recorded_at
-mastery
-confidence
-evidence_weight
-response_count
-source_score
-topic_relevance
-evidence_increment
-```
-
-The history endpoint derives raw/effective mastery, mastery change, weekly change when enough time has elapsed, recent accuracy, trend direction, trend confidence, and observed gain per unit of evidence.
-
-## Retention and review model
-
-StudyOS preserves raw measured mastery and derives effective mastery at read/planning time. The review queue combines evidence age, effective mastery, exam weight, exam proximity, and the active retention half-life to decide what is due and how many review minutes to recommend.
-
-Review items report whether retention is still using the generic heuristic or a calibrated longitudinal estimate.
-
-## Automatic grading model
-
-For a processed document classified as `past_exam_solution`, StudyOS separates inline `Solution:` / `Answer:` content from the visible question prompt. Diagnostic clients never receive the extracted solution before submission.
-
-The current deterministic grader checks answer-specific concept/token coverage, numerical-result agreement, sign mismatches, and common unit agreement. Grader confidence and evidence coverage are reported separately from student confidence. If no reference solution was safely extracted, automatic grading returns `409` instead of inventing a mark.
-
-## Mistake model
-
-Supported mistake categories:
-
-```text
-concept
-formula_selection
-algebra
-arithmetic
-sign
-units
-interpretation
-incomplete_reasoning
-careless
-other
-```
-
-Each label has a severity and source (`self`, `manual`, or `automatic`). StudyOS aggregates category occurrence counts, weighted lost-score contribution, classification coverage, per-topic mistake burden, and dominant mistake categories.
+The review queue combines evidence age, effective mastery, exam weight, exam proximity, and the active retention half-life. Mistake intelligence separately tracks recurring concept, formula-selection, algebra, arithmetic, sign, unit, interpretation, incomplete-reasoning, careless, and other errors.
 
 ## Study-plan model
 
@@ -170,7 +168,7 @@ The current `heuristic-v5` planner combines:
 5. **Personalized learning scale** from longitudinal mastery movement when available.
 6. **Calibrated retention half-life** from time-separated performance evidence when available.
 
-The output exposes per-topic calibration source/confidence so downstream clients can distinguish generic estimates from evidence-backed adjustments. Grade projections remain planning heuristics rather than calibrated probabilities or guarantees.
+The planner remains inspectable, and the probability layer is kept separate so confidence/uncertainty assumptions can evolve without hiding the underlying study-allocation logic.
 
 ## Roadmap
 
@@ -204,7 +202,15 @@ The output exposes per-topic calibration source/confidence so downstream clients
 - [ ] richer grading adapters / rubric-aware grading
 
 ### Phase 3 — Grade modelling
-Expected-score distributions, target-grade probabilities, study-time simulations, calibration against observed exam outcomes, and uncertainty tracking.
+- [x] expected-score distributions around planner projections
+- [x] configurable likely-score intervals
+- [x] target and arbitrary threshold probabilities
+- [x] probability-aware study-time scenarios
+- [x] required-hours estimates for a chosen target probability
+- [x] evidence-quality-driven uncertainty width
+- [ ] persist pre-exam forecasts and real exam outcomes
+- [ ] backtesting, calibration curves, Brier/log scoring, and interval coverage
+- [ ] empirically recalibrate probability/uncertainty parameters
 
 ### Phase 4 — Course-aware tutor
 Retrieval over uploaded material, cited explanations, exam-style questions, and guided problem solving.
@@ -263,12 +269,11 @@ pytest
 
 1. Create a course with a target grade and optional exam date.
 2. Upload and process lectures and past papers/solutions.
-3. Build the course topic graph with `/analyze`.
-4. Build question-level exam intelligence.
-5. Start diagnostics and accumulate scored topic evidence.
-6. Read `/mastery/history` for longitudinal learning curves.
-7. Read `/calibration` to see which learning/retention parameters are still generic and which have evidence behind them.
-8. Read `/mistakes` for recurring errors and `/reviews` for stale topics.
-9. Generate a study plan; StudyOS now uses personalized learning scales and calibrated retention where evidence is sufficient.
+3. Build the course topic graph and exam intelligence.
+4. Accumulate diagnostic evidence and inspect mastery/mistake trends.
+5. Use `/calibration` and `/reviews` to understand learning speed and staleness.
+6. Generate `/study-plan` for topic-level allocation.
+7. Call `/grade-forecast` with candidate study-hour budgets and target thresholds.
+8. Compare the expected score, likely range, target probability, and required-hours band.
 
-The next milestone is **Phase 3 probabilistic grade modelling**: turn mastery, exam weights, calibration confidence, and study-time scenarios into score ranges and target-grade probabilities rather than single heuristic point estimates.
+The next Phase 3 milestone is **forecast/outcome tracking and empirical calibration** so StudyOS can learn whether its probability statements are actually reliable over real exams.
