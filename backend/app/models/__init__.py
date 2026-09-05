@@ -27,6 +27,7 @@ from app.models.forecast_tracking import (
 from app.models.grading import DiagnosticGradeArtifact, ExamQuestionReference
 from app.models.mastery_history import MasterySnapshot
 from app.models.mistakes import DiagnosticAnswerArtifact, DiagnosticMistake
+from app.models.tutor_practice import TutorPracticeEvidence, TutorPracticeItem
 
 __all__ = [
     "Course",
@@ -54,4 +55,6 @@ __all__ = [
     "TopicEvidence",
     "TopicMastery",
     "TopicRelationship",
+    "TutorPracticeEvidence",
+    "TutorPracticeItem",
 ]
