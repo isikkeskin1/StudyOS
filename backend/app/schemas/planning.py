@@ -73,6 +73,11 @@ class TopicStudyAllocationRead(BaseModel):
     priority_score: float
     mistake_burden: float = 0.0
     mistake_focus: list[str] = Field(default_factory=list)
+    learning_rate_multiplier: float = 1.0
+    learning_scale_hours: float = 2.8
+    learning_calibration_confidence: str = "low"
+    retention_calibration_confidence: str = "low"
+    calibration_source: str = "heuristic"
 
 
 class GradeScenarioRead(BaseModel):
@@ -92,6 +97,8 @@ class StudyPlanRead(BaseModel):
     available_hours: float | None
     projected_grade_with_available_hours: float | None
     target_reachable_with_available_time: bool | None
+    calibrated_learning_topic_count: int = 0
+    calibrated_retention_topic_count: int = 0
     allocations: list[TopicStudyAllocationRead]
     scenarios: list[GradeScenarioRead]
     assumptions: list[str]

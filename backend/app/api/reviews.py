@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.course import Course
 from app.schemas.reviews import ReviewQueueRead, ReviewTopicRead
+from app.services.calibration import get_course_calibration
 from app.services.retention import build_review_queue
 
 router = APIRouter(prefix="/courses", tags=["review scheduling"])
@@ -22,7 +23,21 @@ def get_review_queue(
     if course is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
 
-    queue = build_review_queue(db, course)
+    calibration = get_course_calibration(db, course_id)
+    half_lives = {
+        item.topic_id: item.retention_half_life_days
+        for item in calibration.topics
+        if item.retention_half_life_days is not None
+    }
+    retention_confidences = {
+        item.topic_id: item.retention_confidence for item in calibration.topics
+    }
+    queue = build_review_queue(
+        db,
+        course,
+        retention_half_lives=half_lives,
+        retention_confidences=retention_confidences,
+    )
     return ReviewQueueRead(
         course_id=course_id,
         generated_at=queue.generated_at,
@@ -48,6 +63,8 @@ def get_review_queue(
                 review_priority=item.review_priority,
                 due_for_review=item.due_for_review,
                 recommended_minutes=item.recommended_minutes,
+                retention_calibration_confidence=item.retention_calibration_confidence,
+                retention_model=item.retention_model,
                 reason=item.reason,
             )
             for item in queue.items
