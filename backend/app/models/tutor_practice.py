@@ -128,3 +128,26 @@ class TutorPracticeMistake(Base):
     severity: Mapped[float] = mapped_column(Float, nullable=False)
     source: Mapped[str] = mapped_column(String(20), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class TutorPracticeGradeArtifact(Base):
+    __tablename__ = "tutor_practice_grade_artifacts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    attempt_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tutor_practice_attempts.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    grading_mode: Mapped[str] = mapped_column(String(48), nullable=False)
+    grading_provider: Mapped[str] = mapped_column(String(100), nullable=False)
+    criteria: Mapped[list[dict]] = mapped_column(JSON, nullable=False)
+    total_awarded: Mapped[float] = mapped_column(Float, nullable=False)
+    total_possible: Mapped[float] = mapped_column(Float, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+    )

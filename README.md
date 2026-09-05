@@ -14,24 +14,116 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 - Why am I repeatedly losing marks?
 - Which topics are becoming stale and need review?
 - Are StudyOS forecasts accurate against real outcomes?
-- Can the tutor explain from my actual lectures, notes, exams, and solutions with exact citations?
-- Can StudyOS generate grounded practice and reveal help progressively instead of dumping the solution?
+- Can the tutor explain from my actual course files with exact citations?
+- Can StudyOS create, grade, and adapt practice without revealing solutions too early?
 - What should I deprioritize when time is running out?
 
-## Current milestone — semantic retrieval and guided practice
+## Current milestone — rubric-aware free-response grading
 
-The backend is now at **v0.19.0**.
+The backend is now at **v0.21.0**.
 
-The course-aware tutor now supports four retrieval modes:
+Practice evaluation can use:
 
 ```text
-auto
-lexical
-semantic
-hybrid
+grading_provider: auto | local | openai
 ```
 
-The default deployment remains offline-safe. With no embedding provider configured, `auto` preserves the existing BM25 + course-topic retrieval path. When embeddings are enabled, `auto` can add vector similarity as a reranking signal.
+`auto` prefers the rubric-aware OpenAI grader when `OPENAI_API_KEY` is configured and otherwise uses the deterministic local grader. Explicit `openai` requests fail with `503` when the provider is not configured.
+
+### Rubric-aware grading
+
+The OpenAI grading adapter receives only:
+
+```text
+question
+reference solution
+student answer
+mark total
+```
+
+It is instructed to accept mathematically or scientifically equivalent methods, award method credit where justified, and classify concrete mistake types instead of requiring lexical overlap with the reference solution.
+
+The grader returns a structured rubric such as:
+
+```text
+Criterion                         Awarded
+------------------------------------------------
+Correct governing principle       2.0 / 2.0
+Equation setup                     2.0 / 2.0
+Algebra / substitution             1.5 / 2.0
+Final value and units              1.0 / 2.0
+
+Total                              6.5 / 8.0
+```
+
+StudyOS does **not** trust those totals blindly. It locally verifies that:
+
+- criterion maximums sum exactly to the item's mark total,
+- awarded marks are inside each criterion's allowed range,
+- confidence is in `[0, 1]`,
+- mistake categories use the StudyOS taxonomy,
+- duplicate mistake categories are collapsed to the strongest evidence,
+- the final normalized score is recomputed locally from criterion marks.
+
+Malformed rubric output is rejected rather than normalized into a plausible-looking score.
+
+Every evaluated practice attempt persists an auditable grading artifact with the grading mode, provider, criteria, awarded marks, and total marks.
+
+### Local fallback
+
+Offline/CI evaluation remains available as:
+
+```text
+deterministic-reference-v1
+```
+
+It preserves the existing lexical, numerical, and unit-based grader. This is intentionally provisional for explanation-heavy or derivation-heavy answers but gives StudyOS a deterministic fallback and regression baseline.
+
+## Adaptive practice loop
+
+Practice now forms one continuous learning loop:
+
+```text
+weakness / requested topic
+        ↓
+grounded practice question
+        ↓
+progressive hints
+        ↓
+student answer
+        ↓
+rubric-aware or deterministic grading
+        ↓
+score + feedback + mistake categories
+        ↓
+hint-aware mastery evidence
+        ↓
+mastery/history/mistake update
+        ↓
+adaptive next question
+```
+
+Correctness and mastery evidence are deliberately separate. Hints do not make a correct answer "wrong"; instead they reduce how strongly the attempt updates mastery. Once the full solution is revealed, that item is no longer accepted as mastery evidence.
+
+The adaptive follow-up policy can return:
+
+```text
+reinforce
+maintain
+increase_difficulty
+reoptimize
+```
+
+Strong unassisted performance can raise difficulty or move to the next weakness. Weak or heavily hinted performance keeps the student on the same topic and may lower difficulty.
+
+## Grounded tutor retrieval and synthesis
+
+Tutor requests support:
+
+```text
+retrieval_mode: auto | lexical | semantic | hybrid
+provider: auto | local | openai
+```
 
 Current retrieval models include:
 
@@ -42,97 +134,15 @@ semantic-vector-rerank-v1
 hybrid-vector-bm25-v1
 ```
 
-Each citation can expose lexical, semantic, and course-topic scores independently so retrieval remains inspectable.
+The OpenAI synthesis provider receives only selected course-source excerpts. Every substantive answer claim must include source markers, and a local `citation-overlap-v2` validator checks that cited evidence actually overlaps the claim before an answer is returned.
 
-### Optional embedding provider
-
-The first external embedding adapter uses the OpenAI embeddings API and defaults to:
-
-```text
-text-embedding-3-small
-```
-
-Configuration:
+Optional embedding configuration:
 
 ```text
 STUDYOS_TUTOR_EMBEDDING_PROVIDER=none
 STUDYOS_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 STUDYOS_TUTOR_EMBEDDING_MAX_CANDIDATES=128
 ```
-
-Explicit `semantic` or `hybrid` requests fail with `503` when no embedding provider is configured instead of silently pretending lexical retrieval is semantic retrieval.
-
-## Grounded tutor synthesis
-
-`POST /api/v1/courses/{course_id}/tutor/ask` still supports:
-
-```text
-provider: auto | local | openai
-```
-
-The synthesis flow remains:
-
-```text
-question
-   ↓
-course-isolated retrieval
-   ↓
-ranked citation packet
-   ↓
-local provider OR OpenAI provider
-   ↓
-local citation-overlap-v2 validation
-   ↓
-supported answer OR refusal
-```
-
-The OpenAI provider receives only the selected citation packet, has no web tools enabled, treats source excerpts as untrusted data, and uses `store=False`. Every substantive answer sentence must contain valid source markers such as `[1]`.
-
-## Guided practice
-
-StudyOS now has persisted practice items with hidden solutions and progressive hints.
-
-### Create practice
-
-```text
-POST /api/v1/courses/{course_id}/tutor/practice
-```
-
-Example:
-
-```json
-{
-  "difficulty": "medium",
-  "provider": "local"
-}
-```
-
-When no topic is specified, StudyOS chooses a topic using exam importance, measured mastery, and mastery confidence. The local provider does **not** invent synthetic questions: it reuses a mapped past-paper question only when an extracted reference solution exists.
-
-Local generation is labelled:
-
-```text
-generation_provider: local-past-exam-v1
-generation_mode: past-exam-reuse-v1
-```
-
-When `provider: openai` is configured, StudyOS can create a novel exam-style item from retrieved course evidence. The generated solution must pass the same local claim-to-citation validator before the item is saved.
-
-### Progressive hints
-
-```text
-POST /api/v1/courses/{course_id}/tutor/practice/{practice_id}/hint
-```
-
-Each request reveals exactly the next hint. The initial create response contains no hints and no solution text. After all three hints are exhausted, the endpoint returns `409` rather than looping or skipping state.
-
-### Reveal solution
-
-```text
-GET /api/v1/courses/{course_id}/tutor/practice/{practice_id}/solution
-```
-
-The solution is stored separately from the initial question response and is returned with its source references only when requested.
 
 ## Existing intelligence stack
 
@@ -149,12 +159,13 @@ The solution is stored separately from the initial question response and is retu
 
 - adaptive diagnostics from real past-paper questions
 - persistent Bayesian topic mastery and confidence
-- answer capture and solution-grounded deterministic grading
+- answer capture and solution-grounded grading
 - mistake taxonomy and recurring mistake analytics
 - response-level mastery history and trends
 - forgetting-aware effective mastery
 - personalized learning responsiveness and retention calibration
 - exam-aware review queue
+- practice attempts integrated into the same mastery and mistake model
 
 ### Planning and grade modelling
 
@@ -192,6 +203,7 @@ Forecast snapshots can later receive real exam outcomes. StudyOS measures MAE, R
 | `POST` | `/api/v1/courses/{course_id}/tutor/ask` | Produce validated grounded answer |
 | `POST` | `/api/v1/courses/{course_id}/tutor/practice` | Create grounded practice |
 | `POST` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/hint` | Reveal next hint |
+| `POST` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/evaluate` | Grade response and adapt next practice |
 | `GET` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/solution` | Reveal solution + sources |
 
 FastAPI exposes interactive API docs at `/docs` while the server is running.
@@ -208,7 +220,8 @@ FastAPI exposes interactive API docs at `/docs` while the server is running.
 - [x] mistakes and answer evidence
 - [x] forgetting-aware reviews
 - [x] mastery history and personalized learning/retention calibration
-- [ ] richer rubric/LLM grading adapter
+- [x] deterministic solution-grounded grading
+- [x] rubric-aware LLM grading adapter
 
 ### Phase 3 — Grade modelling
 - [x] probabilistic score distributions and target probabilities
@@ -225,9 +238,10 @@ FastAPI exposes interactive API docs at `/docs` while the server is running.
 - [x] optional embedding/vector retrieval adapter
 - [x] persisted exam-style practice items
 - [x] progressive hint and solution reveal
+- [x] adaptive practice evaluation
+- [x] rubric-aware free-response grading
 - [ ] persistent embedding index / vector database
-- [ ] stronger sentence-level entailment verifier
-- [ ] adaptive difficulty from response history
+- [ ] stronger entailment verifier
 - [ ] tutor conversation/session memory
 - [ ] richer personalization from mistake state
 
@@ -267,4 +281,4 @@ ruff check .
 pytest
 ```
 
-The next Phase 4 milestone is **adaptive practice evaluation**: grade a practice response, update mastery/mistakes from it, and automatically choose the next question difficulty and topic from the student's performance.
+The next Phase 4 milestone is **practice-session memory and personalized remediation**: carry recent attempts, recurring mistake patterns, and unresolved concepts across a multi-question tutor session so the next question and explanation respond to more than a single score.
