@@ -16,13 +16,85 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 - Are StudyOS forecasts accurate against real outcomes?
 - Can the tutor explain from my actual course files with exact citations?
 - Can StudyOS create, grade, and adapt practice without revealing solutions too early?
+- Can the tutor remember recurring mistakes across several questions instead of reacting to one score?
 - What should I deprioritize when time is running out?
 
-## Current milestone — rubric-aware free-response grading
+## Current milestone — practice-session memory and personalized remediation
 
-The backend is now at **v0.21.0**.
+The backend is now at **v0.22.0**.
 
-Practice evaluation can use:
+StudyOS can now run persisted multi-question practice sessions. The next-question policy uses the recent sequence rather than only the immediately previous answer:
+
+```text
+recent scores
++ hint usage
++ repeated mistake categories
++ topic-level performance
+        ↓
+session remediation policy
+        ↓
+next topic + difficulty
+```
+
+A session keeps the last five completed attempts as its active adaptation window while retaining the full session history for reporting.
+
+### Recurring mistake remediation
+
+Repeated mistake evidence takes priority over a one-off score. If the same mistake category occurs at least twice in the recent window, StudyOS identifies which topic contributed the greatest severity and can return:
+
+```text
+remediate_pattern
+```
+
+For example:
+
+```text
+Recent mechanics attempts
+1. sign error
+2. sign error
+3. correct answer
+
+→ dominant mistake: sign
+→ focus topic: topic carrying the largest sign-error burden
+→ keep or lower difficulty before moving on
+```
+
+This state is derived from stored practice attempts and mistake rows; StudyOS does not maintain a second hidden mastery score for the session.
+
+### Hint dependence and strong streaks
+
+Session adaptation can return:
+
+```text
+remediate_pattern
+reduce_scaffolding
+reinforce
+maintain
+increase_difficulty
+session_reoptimize
+session_complete
+```
+
+High recent hint usage can trigger `reduce_scaffolding`, keeping the student on the same topic with less difficulty pressure. Two strong unassisted answers in a row can trigger `session_reoptimize`, returning control to the course-wide weakness selector.
+
+Sessions also have a hard `max_items` limit. Reaching it marks the session completed and prevents another automatic item from being created.
+
+### Session integrity
+
+Practice-to-session membership is validated **before grading**. A practice item from another session is rejected before score, mastery, or mistake evidence can be persisted.
+
+Session state uses two new tables rather than altering existing practice rows:
+
+```text
+TutorPracticeSession
+TutorPracticeSessionItem
+```
+
+That keeps this milestone compatible with the current create-only SQLAlchemy schema strategy.
+
+## Rubric-aware free-response grading
+
+Practice evaluation supports:
 
 ```text
 grading_provider: auto | local | openai
@@ -30,54 +102,20 @@ grading_provider: auto | local | openai
 
 `auto` prefers the rubric-aware OpenAI grader when `OPENAI_API_KEY` is configured and otherwise uses the deterministic local grader. Explicit `openai` requests fail with `503` when the provider is not configured.
 
-### Rubric-aware grading
+The OpenAI grader can accept mathematically or scientifically equivalent methods and award method credit rather than requiring lexical overlap with the reference solution.
 
-The OpenAI grading adapter receives only:
+StudyOS locally verifies the returned rubric before it can affect mastery:
 
-```text
-question
-reference solution
-student answer
-mark total
-```
-
-It is instructed to accept mathematically or scientifically equivalent methods, award method credit where justified, and classify concrete mistake types instead of requiring lexical overlap with the reference solution.
-
-The grader returns a structured rubric such as:
-
-```text
-Criterion                         Awarded
-------------------------------------------------
-Correct governing principle       2.0 / 2.0
-Equation setup                     2.0 / 2.0
-Algebra / substitution             1.5 / 2.0
-Final value and units              1.0 / 2.0
-
-Total                              6.5 / 8.0
-```
-
-StudyOS does **not** trust those totals blindly. It locally verifies that:
-
-- criterion maximums sum exactly to the item's mark total,
-- awarded marks are inside each criterion's allowed range,
-- confidence is in `[0, 1]`,
-- mistake categories use the StudyOS taxonomy,
+- criterion maximums must sum to the item's mark total,
+- awarded marks must stay inside each criterion range,
+- confidence must be in `[0, 1]`,
+- mistake categories must use the StudyOS taxonomy,
 - duplicate mistake categories are collapsed to the strongest evidence,
-- the final normalized score is recomputed locally from criterion marks.
+- the final normalized score is recomputed locally.
 
-Malformed rubric output is rejected rather than normalized into a plausible-looking score.
+Every evaluated practice attempt stores an auditable grading artifact with the grading mode, provider, criteria, awarded marks, and total marks.
 
-Every evaluated practice attempt persists an auditable grading artifact with the grading mode, provider, criteria, awarded marks, and total marks.
-
-### Local fallback
-
-Offline/CI evaluation remains available as:
-
-```text
-deterministic-reference-v1
-```
-
-It preserves the existing lexical, numerical, and unit-based grader. This is intentionally provisional for explanation-heavy or derivation-heavy answers but gives StudyOS a deterministic fallback and regression baseline.
+Offline/CI evaluation remains available as `deterministic-reference-v1`.
 
 ## Adaptive practice loop
 
@@ -100,21 +138,12 @@ hint-aware mastery evidence
         ↓
 mastery/history/mistake update
         ↓
-adaptive next question
+session-aware or one-shot adaptation
 ```
 
-Correctness and mastery evidence are deliberately separate. Hints do not make a correct answer "wrong"; instead they reduce how strongly the attempt updates mastery. Once the full solution is revealed, that item is no longer accepted as mastery evidence.
+Correctness and mastery evidence remain separate. Hints do not turn a correct answer into a wrong one; instead they reduce how strongly that attempt updates mastery. Once the full solution is revealed, that item is no longer accepted as mastery evidence.
 
-The adaptive follow-up policy can return:
-
-```text
-reinforce
-maintain
-increase_difficulty
-reoptimize
-```
-
-Strong unassisted performance can raise difficulty or move to the next weakness. Weak or heavily hinted performance keeps the student on the same topic and may lower difficulty.
+Standalone practice still uses the original one-attempt policy. Session-aware behavior activates only when `session_id` is supplied to the evaluation request.
 
 ## Grounded tutor retrieval and synthesis
 
@@ -166,6 +195,7 @@ STUDYOS_TUTOR_EMBEDDING_MAX_CANDIDATES=128
 - personalized learning responsiveness and retention calibration
 - exam-aware review queue
 - practice attempts integrated into the same mastery and mistake model
+- multi-question practice-session memory derived from immutable attempts
 
 ### Planning and grade modelling
 
@@ -201,7 +231,10 @@ Forecast snapshots can later receive real exam outcomes. StudyOS measures MAE, R
 | `GET` | `/api/v1/courses/{course_id}/forecast-validation` | Held-out model validation |
 | `POST` | `/api/v1/courses/{course_id}/tutor/search` | Search grounded course evidence |
 | `POST` | `/api/v1/courses/{course_id}/tutor/ask` | Produce validated grounded answer |
-| `POST` | `/api/v1/courses/{course_id}/tutor/practice` | Create grounded practice |
+| `POST` | `/api/v1/courses/{course_id}/tutor/practice` | Create standalone grounded practice |
+| `POST` | `/api/v1/courses/{course_id}/tutor/practice-sessions` | Start adaptive multi-question session |
+| `GET` | `/api/v1/courses/{course_id}/tutor/practice-sessions/{session_id}` | Read session history/remediation state |
+| `POST` | `/api/v1/courses/{course_id}/tutor/practice-sessions/{session_id}/complete` | Complete session manually |
 | `POST` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/hint` | Reveal next hint |
 | `POST` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/evaluate` | Grade response and adapt next practice |
 | `GET` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/solution` | Reveal solution + sources |
@@ -240,10 +273,11 @@ FastAPI exposes interactive API docs at `/docs` while the server is running.
 - [x] progressive hint and solution reveal
 - [x] adaptive practice evaluation
 - [x] rubric-aware free-response grading
+- [x] multi-question practice-session memory
+- [x] recurring mistake and hint-dependence remediation
 - [ ] persistent embedding index / vector database
 - [ ] stronger entailment verifier
-- [ ] tutor conversation/session memory
-- [ ] richer personalization from mistake state
+- [ ] session-aware remediation explanations and hints
 
 ### Phase 5 — Optimization
 - [ ] expected marks per study hour
@@ -281,4 +315,4 @@ ruff check .
 pytest
 ```
 
-The next Phase 4 milestone is **practice-session memory and personalized remediation**: carry recent attempts, recurring mistake patterns, and unresolved concepts across a multi-question tutor session so the next question and explanation respond to more than a single score.
+The next Phase 4 milestone is **session-aware remediation explanations and hints**: use the session's dominant mistake pattern and unresolved topic context to tailor explanations and hint wording without revealing the answer or creating a second hidden mastery state.

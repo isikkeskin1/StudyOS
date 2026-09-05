@@ -33,6 +33,8 @@ from app.models.tutor_practice import (
     TutorPracticeGradeArtifact,
     TutorPracticeItem,
     TutorPracticeMistake,
+    TutorPracticeSession,
+    TutorPracticeSessionItem,
 )
 
 __all__ = [
@@ -66,4 +68,6 @@ __all__ = [
     "TutorPracticeGradeArtifact",
     "TutorPracticeItem",
     "TutorPracticeMistake",
+    "TutorPracticeSession",
+    "TutorPracticeSessionItem",
 ]
