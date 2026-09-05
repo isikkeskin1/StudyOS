@@ -32,6 +32,11 @@ from app.models.forecast_tracking import (
 from app.models.grading import DiagnosticGradeArtifact, ExamQuestionReference
 from app.models.mastery_history import MasterySnapshot
 from app.models.mistakes import DiagnosticAnswerArtifact, DiagnosticMistake
+from app.models.semester_queue import (
+    SemesterStudyQueue,
+    SemesterStudyQueueBlock,
+    SemesterStudyQueueRevision,
+)
 from app.models.tutor_benchmark_history import (
     TutorRetrievalBenchmarkRun,
     TutorRetrievalBenchmarkSuite,
@@ -73,6 +78,9 @@ __all__ = [
     "GradeForecastRecalibrationArtifact",
     "GradeForecastSnapshot",
     "MasterySnapshot",
+    "SemesterStudyQueue",
+    "SemesterStudyQueueBlock",
+    "SemesterStudyQueueRevision",
     "TopicEvidence",
     "TopicMastery",
     "TopicRelationship",
