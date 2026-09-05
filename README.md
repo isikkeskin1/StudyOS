@@ -17,13 +17,116 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 - Can the tutor explain from my actual course files with exact citations?
 - Can StudyOS create, grade, and adapt practice without revealing solutions too early?
 - Can the tutor remember recurring mistakes across several questions instead of reacting to one score?
+- Can the tutor change how it teaches when the same error pattern keeps appearing?
 - What should I deprioritize when time is running out?
 
-## Current milestone — practice-session memory and personalized remediation
+## Current milestone — session-aware remediation teaching
 
-The backend is now at **v0.22.0**.
+The backend is now at **v0.23.0**.
 
-StudyOS can now run persisted multi-question practice sessions. The next-question policy uses the recent sequence rather than only the immediately previous answer:
+Practice sessions can now change **how** StudyOS teaches, not only which question it chooses next. For the current unanswered session item, StudyOS snapshots the recent learning context and produces a deterministic teaching plan:
+
+```text
+last five completed attempts
++ scores
++ hint usage
++ recurring mistake categories
++ topic carrying the mistake burden
+        ↓
+deterministic-session-remediation-v1
+        ↓
+teaching intro
++ three coaching steps
+        ↓
+normal hidden course hint
+```
+
+The course hint and solution remain unchanged and hidden until explicitly revealed. Remediation changes the student's solving process rather than leaking the answer.
+
+### Mistake-specific coaching
+
+If a mistake category repeats at least twice in the recent session window, StudyOS switches to `remediate_pattern` and uses category-specific process coaching. Current patterns include:
+
+```text
+concept
+formula_selection
+algebra
+arithmetic
+sign
+units
+interpretation
+incomplete_reasoning
+careless
+other
+```
+
+For example, repeated `sign` mistakes produce guidance such as:
+
+```text
+1. Choose and write the positive axis.
+2. Mark each relevant direction relative to that axis.
+3. Substitute signed quantities only after the symbolic relationship is correct.
+```
+
+Repeated `units` mistakes instead make the student annotate every quantity with units, convert to a consistent system, and check final dimensions. Formula-selection errors make the student identify the target variable and governing relation before substituting numbers.
+
+The remediation category is not hard-coded by topic. StudyOS uses whichever mistake evidence actually dominates the recent attempts.
+
+### Teaching plans are persisted and auditable
+
+Each session/practice pair can receive one `TutorPracticeTeachingArtifact`. It stores:
+
+```text
+strategy
+focus topic
+dominant mistake + count
+recent attempt count
+recent average score
+recent average hint use
+teaching intro
+three coaching steps
+teaching model name
+```
+
+Once materialized, repeated reads return the same teaching snapshot even if later session evidence changes. The table is new rather than an added column on existing practice rows, preserving the current create-only SQLAlchemy schema strategy.
+
+### Session-aware hints
+
+A new session-specific hint endpoint first resolves the persisted teaching plan, then reveals the existing hidden course hint and prepends the appropriate coaching step.
+
+For example:
+
+```text
+Teaching plan:
+Recurring sign-convention issue
+
+Hint 1:
+Choose and write the positive axis before doing any algebra.
+
+[original grounded Hint 1 follows]
+```
+
+The underlying hint counter is shared with the existing standalone hint endpoint, so there is still only one sequence of three hints and no duplicate reveal path.
+
+### Baseline, scaffolding, and challenge modes
+
+When no recurring mistake dominates, StudyOS can use:
+
+```text
+baseline
+reduce_scaffolding
+reinforce
+challenge
+maintain
+```
+
+The first session question establishes a clean baseline. High recent hint dependence tells the student to complete the setup independently before opening support. Weak recent accuracy emphasizes slower explicit setup. Two strong unassisted answers switch the next item to `challenge`, asking for a fully independent attempt before any help is opened.
+
+Cross-session practice IDs are validated before a teaching artifact or hint can be created.
+
+## Practice-session memory and personalized remediation
+
+StudyOS runs persisted multi-question practice sessions. The next-question policy uses the recent sequence rather than only the immediately previous answer:
 
 ```text
 recent scores
@@ -36,61 +139,11 @@ session remediation policy
 next topic + difficulty
 ```
 
-A session keeps the last five completed attempts as its active adaptation window while retaining the full session history for reporting.
+The active adaptation window is the latest five completed attempts, while the full session history remains available for reporting.
 
-### Recurring mistake remediation
+Repeated mistake evidence takes priority over a one-off score. High recent hint usage can trigger `reduce_scaffolding`; weak accuracy can reinforce the lowest-scoring recent topic; two strong unassisted answers can return control to the course-wide weakness optimizer. Sessions also enforce a hard `max_items` limit.
 
-Repeated mistake evidence takes priority over a one-off score. If the same mistake category occurs at least twice in the recent window, StudyOS identifies which topic contributed the greatest severity and can return:
-
-```text
-remediate_pattern
-```
-
-For example:
-
-```text
-Recent mechanics attempts
-1. sign error
-2. sign error
-3. correct answer
-
-→ dominant mistake: sign
-→ focus topic: topic carrying the largest sign-error burden
-→ keep or lower difficulty before moving on
-```
-
-This state is derived from stored practice attempts and mistake rows; StudyOS does not maintain a second hidden mastery score for the session.
-
-### Hint dependence and strong streaks
-
-Session adaptation can return:
-
-```text
-remediate_pattern
-reduce_scaffolding
-reinforce
-maintain
-increase_difficulty
-session_reoptimize
-session_complete
-```
-
-High recent hint usage can trigger `reduce_scaffolding`, keeping the student on the same topic with less difficulty pressure. Two strong unassisted answers in a row can trigger `session_reoptimize`, returning control to the course-wide weakness selector.
-
-Sessions also have a hard `max_items` limit. Reaching it marks the session completed and prevents another automatic item from being created.
-
-### Session integrity
-
-Practice-to-session membership is validated **before grading**. A practice item from another session is rejected before score, mastery, or mistake evidence can be persisted.
-
-Session state uses two new tables rather than altering existing practice rows:
-
-```text
-TutorPracticeSession
-TutorPracticeSessionItem
-```
-
-That keeps this milestone compatible with the current create-only SQLAlchemy schema strategy.
+Practice-to-session membership is validated **before grading**, so another session's item cannot accidentally create score, mastery, or mistake evidence.
 
 ## Rubric-aware free-response grading
 
@@ -126,6 +179,8 @@ weakness / requested topic
         ↓
 grounded practice question
         ↓
+session teaching plan
+        ↓
 progressive hints
         ↓
 student answer
@@ -143,7 +198,7 @@ session-aware or one-shot adaptation
 
 Correctness and mastery evidence remain separate. Hints do not turn a correct answer into a wrong one; instead they reduce how strongly that attempt updates mastery. Once the full solution is revealed, that item is no longer accepted as mastery evidence.
 
-Standalone practice still uses the original one-attempt policy. Session-aware behavior activates only when `session_id` is supplied to the evaluation request.
+Standalone practice still uses the original one-attempt policy. Session memory and remediation activate only when a practice session is used.
 
 ## Grounded tutor retrieval and synthesis
 
@@ -196,6 +251,7 @@ STUDYOS_TUTOR_EMBEDDING_MAX_CANDIDATES=128
 - exam-aware review queue
 - practice attempts integrated into the same mastery and mistake model
 - multi-question practice-session memory derived from immutable attempts
+- persisted remediation teaching snapshots derived from recent attempt evidence
 
 ### Planning and grade modelling
 
@@ -235,7 +291,9 @@ Forecast snapshots can later receive real exam outcomes. StudyOS measures MAE, R
 | `POST` | `/api/v1/courses/{course_id}/tutor/practice-sessions` | Start adaptive multi-question session |
 | `GET` | `/api/v1/courses/{course_id}/tutor/practice-sessions/{session_id}` | Read session history/remediation state |
 | `POST` | `/api/v1/courses/{course_id}/tutor/practice-sessions/{session_id}/complete` | Complete session manually |
-| `POST` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/hint` | Reveal next hint |
+| `GET` | `/api/v1/courses/{course_id}/tutor/practice-sessions/{session_id}/teaching` | Read/materialize current teaching plan |
+| `POST` | `/api/v1/courses/{course_id}/tutor/practice-sessions/{session_id}/practice/{practice_id}/hint` | Reveal remediation-aware hint |
+| `POST` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/hint` | Reveal standard next hint |
 | `POST` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/evaluate` | Grade response and adapt next practice |
 | `GET` | `/api/v1/courses/{course_id}/tutor/practice/{practice_id}/solution` | Reveal solution + sources |
 
@@ -275,9 +333,9 @@ FastAPI exposes interactive API docs at `/docs` while the server is running.
 - [x] rubric-aware free-response grading
 - [x] multi-question practice-session memory
 - [x] recurring mistake and hint-dependence remediation
+- [x] session-aware remediation explanations and hints
 - [ ] persistent embedding index / vector database
 - [ ] stronger entailment verifier
-- [ ] session-aware remediation explanations and hints
 
 ### Phase 5 — Optimization
 - [ ] expected marks per study hour
@@ -315,4 +373,4 @@ ruff check .
 pytest
 ```
 
-The next Phase 4 milestone is **session-aware remediation explanations and hints**: use the session's dominant mistake pattern and unresolved topic context to tailor explanations and hint wording without revealing the answer or creating a second hidden mastery state.
+The next Phase 4 milestone is **persistent embedding storage and incremental vector indexing**: stop recomputing semantic embeddings on every retrieval request, store course chunk vectors with deterministic invalidation, and compare persistent semantic retrieval against the current reranking baseline.
