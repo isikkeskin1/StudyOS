@@ -4,9 +4,29 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
-## Current milestone — semester control loop
+## Current milestone — semester command center
 
-The backend is now at **v0.31.0**.
+The backend is now at **v0.32.0**.
+
+`GET /api/v1/semester/dashboard` returns course estimates, normalized target gaps,
+calendar-day deadline pressure, due review counts, queue summaries, and the next
+executable study block. Supply `?queue_id=...` to select a specific queue; otherwise
+it selects the newest active queue. Separate queue budgets are never added together.
+
+Courses with no measured topics return a null grade and an `unmeasured` target status.
+Partially measured courses use the existing retention-aware model and baseline for
+unmeasured topics; the response includes evidence coverage and confidence. Target
+status indicates an estimated gap, not a predicted probability of passing or failing.
+
+The dashboard is read-only. Changed evidence or course settings, a new calendar day,
+missing topics, or exact deadlines that no longer fit flag the queue for refresh.
+Stale planned work is withheld from `next_action`; in-progress work remains visible.
+Use the queue refresh endpoint to rebuild it. Saved forecasts remain available in
+queue revisions, separate from the dashboard's current course estimates.
+
+## Persistent semester control loop
+
+
 
 StudyOS can now persist a multi-course optimization as one executable semester study
 queue. The queue preserves immutable planning revisions while the current revision
@@ -361,7 +381,7 @@ FastAPI exposes interactive docs at `/docs` while the server is running.
 
 ### Phase 6 — Study operating system
 - [x] persistent semester-wide study queue
-- [ ] semester command-center API
+- [x] semester command-center API
 - [ ] spaced-repetition workflow
 - [ ] cheat-sheet generation
 - [ ] calendar/focus integration
@@ -386,6 +406,6 @@ ruff check .
 pytest
 ```
 
-The next milestone is **the semester command center**: summarize every active course,
-surface the next executable block, show target risk and deadline pressure, and expose
-one concise semester status response for future clients and notifications.
+The next milestone is **the spaced-repetition workflow**: turn due reviews into
+executable practice sessions and use the resulting evidence to update mastery and
+future review priorities.
