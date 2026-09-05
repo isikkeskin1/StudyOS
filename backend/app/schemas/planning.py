@@ -63,6 +63,11 @@ class TopicStudyAllocationRead(BaseModel):
     exam_weight: float
     current_mastery: float
     mastery_source: str
+    raw_mastery: float | None = None
+    forgetting_loss: float = 0.0
+    forgetting_risk: str | None = None
+    days_since_evidence: float | None = None
+    retention_half_life_days: float | None = None
     projected_mastery: float
     recommended_hours: float
     priority_score: float

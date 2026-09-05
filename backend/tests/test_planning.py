@@ -96,7 +96,7 @@ def test_study_plan_uses_target_available_hours_and_diminishing_returns(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["planning_model"] == "heuristic-v3"
+    assert payload["planning_model"] == "heuristic-v4"
     assert payload["confidence"] == "low"
     assert payload["target_grade"] == 25
     assert payload["current_estimated_grade"] == 15

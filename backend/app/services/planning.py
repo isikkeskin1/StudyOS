@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from app.schemas.planning import (
     TopicStudyAllocationRead,
 )
 from app.services.mistake_intelligence import topic_mistake_signals
+from app.services.retention import RetentionSnapshot, retention_snapshot
 
 _STEP_HOURS = 0.25
 _LEARNING_SCALE_HOURS = 2.8
@@ -29,12 +31,22 @@ class StudyPlanUnavailableError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class MasteryResolution:
+    value: float
+    source: str
+    raw_value: float | None
+    retention: RetentionSnapshot | None
+
+
+@dataclass(frozen=True)
 class PlanningTopic:
     id: str
     name: str
     weight: float
     mastery: float
     mastery_source: str
+    raw_mastery: float | None
+    retention: RetentionSnapshot | None
     mistake_burden: float
     mistake_focus: list[str]
 
@@ -114,27 +126,43 @@ def _resolve_mastery(
     topic: CourseTopic,
     request: StudyPlanRequest,
     stored: dict[str, TopicMastery],
-) -> tuple[float, str]:
+    as_of: datetime,
+) -> MasteryResolution:
     if topic.id in request.topic_mastery:
-        return request.topic_mastery[topic.id], "override"
+        return MasteryResolution(request.topic_mastery[topic.id], "override", None, None)
     if topic.normalized_name in request.topic_mastery:
-        return request.topic_mastery[topic.normalized_name], "override"
+        return MasteryResolution(
+            request.topic_mastery[topic.normalized_name],
+            "override",
+            None,
+            None,
+        )
     if request.use_stored_mastery and topic.id in stored:
-        return stored[topic.id].mastery, "diagnostic"
-    return request.baseline_mastery, "baseline"
+        snapshot = retention_snapshot(stored[topic.id], as_of=as_of)
+        return MasteryResolution(
+            snapshot.effective_mastery,
+            "diagnostic",
+            snapshot.raw_mastery,
+            snapshot,
+        )
+    return MasteryResolution(request.baseline_mastery, "baseline", None, None)
 
 
 def _plan_confidence(
     topics: list[PlanningTopic],
     stored: dict[str, TopicMastery],
+    as_of: datetime,
 ) -> str:
     diagnostic_topics = [topic for topic in topics if topic.mastery_source == "diagnostic"]
     if not diagnostic_topics:
         return "low"
 
     coverage = len(diagnostic_topics) / len(topics)
-    average_confidence = sum(stored[topic.id].confidence for topic in diagnostic_topics)
-    average_confidence /= len(diagnostic_topics)
+    effective_confidence = [
+        retention_snapshot(stored[topic.id], as_of=as_of).effective_confidence
+        for topic in diagnostic_topics
+    ]
+    average_confidence = sum(effective_confidence) / len(effective_confidence)
     if coverage >= 0.5 and average_confidence >= 0.35:
         return "medium"
     return "low"
@@ -170,6 +198,7 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
         ).all()
     }
     mistake_signals = topic_mistake_signals(db, course.id)
+    as_of = datetime.now(UTC)
 
     raw_weights: dict[str, float] = {}
     for topic in topics:
@@ -183,15 +212,17 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
 
     planning_topics: list[PlanningTopic] = []
     for topic in topics:
-        mastery_value, mastery_source = _resolve_mastery(topic, request, stored_mastery)
+        mastery = _resolve_mastery(topic, request, stored_mastery, as_of)
         mistake_burden, mistake_focus = mistake_signals.get(topic.id, (0.0, []))
         planning_topics.append(
             PlanningTopic(
                 id=topic.id,
                 name=topic.name,
                 weight=raw_weights[topic.id] / total_weight,
-                mastery=mastery_value,
-                mastery_source=mastery_source,
+                mastery=mastery.value,
+                mastery_source=mastery.source,
+                raw_mastery=mastery.raw_value,
+                retention=mastery.retention,
                 mistake_burden=mistake_burden,
                 mistake_focus=mistake_focus,
             )
@@ -219,6 +250,19 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
             exam_weight=round(topic.weight, 4),
             current_mastery=round(topic.mastery, 4),
             mastery_source=topic.mastery_source,
+            raw_mastery=topic.raw_mastery,
+            forgetting_loss=(
+                topic.retention.forgetting_loss if topic.retention is not None else 0.0
+            ),
+            forgetting_risk=(
+                topic.retention.forgetting_risk if topic.retention is not None else None
+            ),
+            days_since_evidence=(
+                topic.retention.days_since_evidence if topic.retention is not None else None
+            ),
+            retention_half_life_days=(
+                topic.retention.half_life_days if topic.retention is not None else None
+            ),
             projected_mastery=round(projected_mastery[topic.id], 4),
             recommended_hours=round(allocations[topic.id], 2),
             priority_score=round(
@@ -278,7 +322,10 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
     if used_diagnostics:
         assumptions.insert(
             0,
-            "Measured topic mastery is taken from scored diagnostic evidence where available.",
+            (
+                "Measured diagnostic mastery is discounted by a transparent forgetting "
+                "curve based on evidence age and confidence."
+            ),
         )
     else:
         assumptions.insert(
@@ -292,8 +339,8 @@ def build_study_plan(db: Session, course: Course, request: StudyPlanRequest) -> 
 
     return StudyPlanRead(
         course_id=course.id,
-        planning_model="heuristic-v3",
-        confidence=_plan_confidence(planning_topics, stored_mastery),
+        planning_model="heuristic-v4",
+        confidence=_plan_confidence(planning_topics, stored_mastery, as_of),
         target_grade=round(target_grade, 2),
         max_grade=round(course.max_grade, 2),
         current_estimated_grade=current_grade,
