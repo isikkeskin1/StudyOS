@@ -28,6 +28,12 @@ _MAX_BIAS_RATIO = 0.05
 _MIN_WIDTH_MULTIPLIER = 0.75
 _MAX_WIDTH_MULTIPLIER = 1.35
 
+ForecastOutcomeRow = tuple[
+    GradeForecastSnapshot,
+    GradeForecastOutcome,
+    GradeForecastRecalibrationArtifact | None,
+]
+
 
 @dataclass(frozen=True)
 class EmpiricalAdjustment:
@@ -42,23 +48,23 @@ class EmpiricalAdjustment:
     applied_width_multiplier: float
 
 
-def _normal_cdf(value: float) -> float:
+def normal_cdf(value: float) -> float:
     return 0.5 * (1.0 + math.erf(value / math.sqrt(2.0)))
 
 
-def _inverse_normal_cdf(probability: float) -> float:
+def inverse_normal_cdf(probability: float) -> float:
     low = -8.0
     high = 8.0
     for _ in range(80):
         midpoint = (low + high) / 2.0
-        if _normal_cdf(midpoint) < probability:
+        if normal_cdf(midpoint) < probability:
             low = midpoint
         else:
             high = midpoint
     return (low + high) / 2.0
 
 
-def _probability_at_or_above(
+def probability_at_or_above(
     threshold: float,
     mean: float,
     standard_deviation: float,
@@ -72,17 +78,17 @@ def _probability_at_or_above(
         return 1.0 if mean >= threshold else 0.0
     return max(
         0.0,
-        min(1.0, 1.0 - _normal_cdf((threshold - mean) / standard_deviation)),
+        min(1.0, 1.0 - normal_cdf((threshold - mean) / standard_deviation)),
     )
 
 
-def _score_interval(
+def score_interval(
     mean: float,
     standard_deviation: float,
     probability: float,
     max_grade: float,
 ) -> tuple[float, float]:
-    z_score = _inverse_normal_cdf(0.5 + probability / 2.0)
+    z_score = inverse_normal_cdf(0.5 + probability / 2.0)
     return (
         round(max(0.0, mean - z_score * standard_deviation), 2),
         round(min(max_grade, mean + z_score * standard_deviation), 2),
@@ -99,7 +105,7 @@ def _status(count: int) -> str:
     return "measured"
 
 
-def _raw_values(
+def raw_values(
     snapshot: GradeForecastSnapshot,
     artifact: GradeForecastRecalibrationArtifact | None,
 ) -> tuple[float, float]:
@@ -108,30 +114,10 @@ def _raw_values(
     return artifact.raw_expected_grade, max(1e-6, artifact.raw_standard_deviation)
 
 
-def empirical_adjustment(
-    db: Session,
-    course_id: str,
+def adjustment_from_rows(
+    rows: list[ForecastOutcomeRow],
     max_grade: float,
 ) -> EmpiricalAdjustment:
-    rows = list(
-        db.execute(
-            select(
-                GradeForecastSnapshot,
-                GradeForecastOutcome,
-                GradeForecastRecalibrationArtifact,
-            )
-            .join(
-                GradeForecastOutcome,
-                GradeForecastOutcome.forecast_snapshot_id == GradeForecastSnapshot.id,
-            )
-            .outerjoin(
-                GradeForecastRecalibrationArtifact,
-                GradeForecastRecalibrationArtifact.forecast_snapshot_id
-                == GradeForecastSnapshot.id,
-            )
-            .where(GradeForecastSnapshot.course_id == course_id)
-        ).all()
-    )
     count = len(rows)
     if count == 0:
         return EmpiricalAdjustment(
@@ -149,7 +135,7 @@ def empirical_adjustment(
     residuals: list[float] = []
     raw_sds: list[float] = []
     for snapshot, outcome, artifact in rows:
-        raw_mean, raw_sd = _raw_values(snapshot, artifact)
+        raw_mean, raw_sd = raw_values(snapshot, artifact)
         residuals.append(outcome.actual_grade - raw_mean)
         raw_sds.append(raw_sd)
 
@@ -184,6 +170,33 @@ def empirical_adjustment(
     )
 
 
+def empirical_adjustment(
+    db: Session,
+    course_id: str,
+    max_grade: float,
+) -> EmpiricalAdjustment:
+    rows = list(
+        db.execute(
+            select(
+                GradeForecastSnapshot,
+                GradeForecastOutcome,
+                GradeForecastRecalibrationArtifact,
+            )
+            .join(
+                GradeForecastOutcome,
+                GradeForecastOutcome.forecast_snapshot_id == GradeForecastSnapshot.id,
+            )
+            .outerjoin(
+                GradeForecastRecalibrationArtifact,
+                GradeForecastRecalibrationArtifact.forecast_snapshot_id
+                == GradeForecastSnapshot.id,
+            )
+            .where(GradeForecastSnapshot.course_id == course_id)
+        ).all()
+    )
+    return adjustment_from_rows(rows, max_grade)
+
+
 def adjustment_to_read(adjustment: EmpiricalAdjustment) -> EmpiricalRecalibrationRead:
     return EmpiricalRecalibrationRead(
         active=adjustment.active,
@@ -213,11 +226,11 @@ def _adjust_scenario(
     raw_sd = max(
         0.01,
         (scenario.likely_range_high - scenario.likely_range_low)
-        / (2.0 * _inverse_normal_cdf(0.5 + interval_probability / 2.0)),
+        / (2.0 * inverse_normal_cdf(0.5 + interval_probability / 2.0)),
     )
     mean = max(0.0, min(max_grade, raw_mean + adjustment.applied_bias_marks))
     standard_deviation = raw_sd * adjustment.applied_width_multiplier
-    low, high = _score_interval(
+    low, high = score_interval(
         mean,
         standard_deviation,
         interval_probability,
@@ -229,7 +242,7 @@ def _adjust_scenario(
         likely_range_low=low,
         likely_range_high=high,
         target_probability=round(
-            _probability_at_or_above(
+            probability_at_or_above(
                 target_grade,
                 mean,
                 standard_deviation,
@@ -281,7 +294,7 @@ def build_calibrated_grade_forecast(
         min(course.max_grade, raw.expected_grade + adjustment.applied_bias_marks),
     )
     standard_deviation = raw.standard_deviation * adjustment.applied_width_multiplier
-    low, high = _score_interval(
+    low, high = score_interval(
         expected_grade,
         standard_deviation,
         raw.interval_probability,
@@ -291,7 +304,7 @@ def build_calibrated_grade_forecast(
         GradeThresholdProbabilityRead(
             grade=item.grade,
             probability_at_or_above=round(
-                _probability_at_or_above(
+                probability_at_or_above(
                     item.grade,
                     expected_grade,
                     standard_deviation,
@@ -302,7 +315,7 @@ def build_calibrated_grade_forecast(
         )
         for item in raw.thresholds
     ]
-    target_probability = _probability_at_or_above(
+    target_probability = probability_at_or_above(
         raw.target_grade,
         expected_grade,
         standard_deviation,

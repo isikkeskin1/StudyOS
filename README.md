@@ -2,7 +2,7 @@
 
 StudyOS is an AI-powered study planning platform that turns course materials and student performance into adaptive, evidence-driven study plans.
 
-Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solutions. StudyOS builds a structured model of the course, measures what matters most for the exam, tracks topic mastery over time, learns recurring mistake patterns, models forgetting, calibrates learning behavior from longitudinal evidence, estimates how study time changes the probability of reaching a target grade, and measures those forecasts against real exam outcomes.
+Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solutions. StudyOS builds a structured model of the course, measures what matters most for the exam, tracks topic mastery over time, learns recurring mistake patterns, models forgetting, calibrates learning behavior from longitudinal evidence, estimates how study time changes the probability of reaching a target grade, measures those forecasts against real exam outcomes, and now tests whether empirical recalibration improves forecasts it did not train on.
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
@@ -21,9 +21,10 @@ Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solution
 - Does this student appear to learn or forget this topic faster than the generic model assumes?
 - Are StudyOS's historical forecasts actually accurate and well-calibrated?
 - How should future forecasts change when real outcomes show systematic bias or bad uncertainty width?
+- Does empirical recalibration improve predictions on forecasts it had not seen when fitting?
 - What should I deprioritize when time is running out?
 
-## Current milestone — guarded empirical forecast recalibration
+## Current milestone — reliability curves and rolling held-out validation
 
 The backend can now:
 
@@ -44,17 +45,18 @@ The backend can now:
 - produce provisional expected-score distributions and target probabilities
 - persist immutable pre-exam forecast snapshots and attach real exam outcomes
 - calculate MAE, RMSE, signed bias, interval coverage, Brier score, and log loss
-- derive a guarded empirical score-bias correction from historical raw forecasts
-- derive a guarded uncertainty-width multiplier from normalized historical residuals
-- activate empirical corrections only after at least five completed forecast/outcome pairs
-- shrink corrections toward no adjustment until more evidence accumulates
-- cap score-bias corrections to ±5% of the course grade scale
-- cap raw uncertainty-width estimates to `0.75x–1.35x` before shrinkage
-- expose raw and empirically adjusted forecasts side-by-side
-- persist adjusted forecast snapshots with a one-to-one raw forecast artifact for auditability
-- train empirical corrections from raw predictions even when historical snapshots were adjusted, preventing feedback loops
+- derive guarded empirical score-bias and uncertainty-width corrections
+- preserve raw forecasts underneath adjusted snapshots to prevent calibration feedback loops
+- bucket target probabilities into fixed `0–20%`, `20–40%`, `40–60%`, `60–80%`, and `80–100%` reliability bands
+- run chronological rolling-origin validation instead of random train/test splitting
+- evaluate a forecast only when at least five earlier outcomes were already recorded before that forecast was created
+- fit each held-out empirical correction using only those earlier known outcomes
+- compare raw and recalibrated forecasts on exactly the same held-out exams
+- compare held-out MAE, RMSE, signed bias, interval coverage, Brier score, and log loss
+- report metric deltas where negative means the recalibrated model improved the corresponding error metric
+- expose a cautious `improving`, `stable`, `mixed`, or `degrading` held-out verdict only after enough held-out forecasts exist
 
-The raw `probabilistic-v1` forecast is never silently overwritten. Empirical recalibration is an explicit wrapper (`probabilistic-v1+empirical-v1`) and remains labelled provisional. With fewer than five completed outcomes, the calibrated endpoint returns the raw forecast values exactly unchanged.
+The raw `probabilistic-v1` forecast remains the reproducible baseline. `empirical-v1` stays an explicit wrapper, and rolling validation never lets the outcome of the forecast being evaluated participate in its own correction.
 
 ## API
 
@@ -90,8 +92,114 @@ The raw `probabilistic-v1` forecast is never silently overwritten. Empirical rec
 | `GET` | `/api/v1/courses/{course_id}/forecast-snapshots` | Read saved forecasts, raw artifacts, and attached outcomes |
 | `POST` | `/api/v1/courses/{course_id}/forecast-snapshots/{snapshot_id}/outcome` | Attach the actual exam grade to a saved forecast |
 | `GET` | `/api/v1/courses/{course_id}/forecast-calibration` | Read empirical accuracy metrics and active recalibration state |
+| `GET` | `/api/v1/courses/{course_id}/forecast-validation` | Read reliability buckets and rolling held-out raw-vs-recalibrated validation |
 
 FastAPI exposes interactive API documentation at `/docs` while the server is running.
+
+## Rolling held-out forecast validation
+
+`GET /api/v1/courses/{course_id}/forecast-validation` evaluates whether `empirical-v1` improves predictions beyond the outcomes used to fit it.
+
+### Why rolling-origin instead of a random split
+
+Exam forecasts arrive through time. A random split can accidentally let later outcomes influence a correction that is then evaluated on an earlier forecast. StudyOS therefore uses chronological rolling-origin validation.
+
+For each completed forecast/outcome pair, StudyOS checks how many earlier outcomes had already been recorded when that forecast snapshot was created. A forecast is eligible for held-out evaluation only when at least five such outcomes exist.
+
+Conceptually:
+
+```text
+Exams 1–5 outcomes known
+        ↓ fit empirical-v1
+Exam 6 forecast
+        ↓ evaluate after Exam 6 outcome arrives
+
+Exams 1–6 outcomes known
+        ↓ refit empirical-v1
+Exam 7 forecast
+        ↓ evaluate after Exam 7 outcome arrives
+```
+
+The outcome of Exam 6 is never used to recalibrate the forecast for Exam 6 itself.
+
+### Reliability curves
+
+StudyOS exposes five fixed target-probability buckets:
+
+```text
+0–20%
+20–40%
+40–60%
+60–80%
+80–100%
+```
+
+Each non-empty bucket reports:
+
+```text
+count
+mean_predicted_probability
+observed_success_rate
+calibration_gap
+```
+
+`raw_reliability` uses all completed raw forecasts as a descriptive historical curve. `held_out_raw_reliability` and `held_out_recalibrated_reliability` use the exact same held-out forecast set so the two model versions can be compared fairly.
+
+A bucket such as:
+
+```text
+60–80%
+mean prediction: 71%
+observed success: 68%
+```
+
+is encouraging, but a bucket with only one or two forecasts is not statistically meaningful. StudyOS therefore returns bucket counts rather than hiding sample size.
+
+### Held-out model comparison
+
+For the common held-out set, both raw and recalibrated models are evaluated on:
+
+```text
+mean_absolute_error
+root_mean_squared_error
+mean_signed_error
+interval_coverage
+nominal_interval_probability
+coverage_gap
+average_interval_width
+mean_target_probability
+observed_target_rate
+brier_score
+log_loss
+```
+
+The `deltas` object is always:
+
+```text
+recalibrated metric - raw metric
+```
+
+For MAE, RMSE, absolute coverage gap, Brier score, and log loss, a **negative delta is better**.
+
+Validation maturity is intentionally based on held-out forecasts rather than total historical forecasts:
+
+```text
+0 held-out       insufficient_data
+1–4 held-out     preliminary
+5–14 held-out    developing
+15+ held-out     measured
+```
+
+A qualitative model verdict is withheld until at least three held-out forecasts exist. After that, it considers improvement/degradation across the main error and calibration metrics and returns one of:
+
+```text
+improving
+stable
+mixed
+degrading
+```
+
+This is still a descriptive engineering gate, not proof of statistical superiority.
 
 ## Guarded empirical recalibration
 
@@ -109,20 +217,6 @@ likely_range_high
 target_probability
 threshold probabilities
 adjusted study-hour scenarios
-```
-
-The recalibration object exposes:
-
-```text
-active
-calibration_model
-calibration_status
-paired_outcome_count
-shrinkage_weight
-raw_bias_marks
-applied_bias_marks
-raw_width_multiplier
-applied_width_multiplier
 ```
 
 ### Activation and shrinkage
@@ -175,9 +269,9 @@ Adjusted forecast snapshots can be persisted with:
 
 The visible snapshot stores the adjusted prediction. A one-to-one recalibration artifact separately stores the raw expected score, raw uncertainty, raw interval, raw target probability, raw threshold probabilities, and the exact correction used.
 
-When StudyOS later estimates a new empirical correction, it trains from those preserved **raw** values rather than from its own previously adjusted output. This avoids a recursive self-calibration loop.
+When StudyOS later estimates a new empirical correction or performs held-out validation, it uses those preserved **raw** values rather than its own previously adjusted output. This avoids a recursive self-calibration loop.
 
-## Forecast snapshots and outcomes
+## Forecast snapshots and empirical diagnostics
 
 A raw forecast snapshot can still be saved with the existing request format; `apply_recalibration` defaults to `false` for backwards-compatible baseline tracking.
 
@@ -192,32 +286,9 @@ After the exam, attach the observed grade:
 
 A snapshot accepts only one outcome. The actual grade cannot exceed the score maximum stored with that historical forecast.
 
-## Empirical forecast diagnostics
+`GET /api/v1/courses/{course_id}/forecast-calibration` evaluates all completed forecast/outcome pairs and reports historical MAE, RMSE, signed bias, interval coverage, target calibration gap, Brier score, log loss, uncertainty direction, and the currently active empirical recalibration state.
 
-`GET /api/v1/courses/{course_id}/forecast-calibration` evaluates completed forecast/outcome pairs and now also exposes the currently active empirical recalibration state.
-
-StudyOS reports:
-
-```text
-mean_absolute_error
-root_mean_squared_error
-mean_signed_error
-interval_coverage
-average_nominal_interval_probability
-coverage_gap
-average_interval_width
-mean_target_probability
-observed_target_rate
-target_calibration_gap
-brier_score
-log_loss
-uncertainty_direction
-empirical_recalibration
-```
-
-Signed error is `forecast - actual`, so positive values indicate overprediction. Brier score and log loss evaluate target-threshold probabilities; lower values are better. Interval coverage should be compared with the nominal interval probability.
-
-These diagnostics evaluate the forecast that was actually shown and saved. The recalibration estimator separately uses preserved raw predictions where adjusted artifacts exist.
+These all-history diagnostics answer “what has the model done historically?” The rolling validation endpoint separately answers “did recalibration improve forecasts using only information that was available before those forecasts?”
 
 ## Probabilistic grade model
 
@@ -225,7 +296,7 @@ The raw `probabilistic-v1` layer uses the inspectable `heuristic-v5` planner as 
 
 Forecast uncertainty contracts with stronger measured topic coverage, effective mastery confidence, past-paper evidence, and longitudinal learning/retention evidence. Longer future study horizons add a small uncertainty penalty.
 
-Empirical recalibration does not turn these values into guaranteed probabilities. The model still needs substantially more independent real exam outcomes, reliability-curve analysis, and held-out evaluation before its probabilities should be described as statistically calibrated.
+Empirical recalibration and held-out validation do not turn these values into guaranteed probabilities. Large, diverse, independent outcome samples are still needed before StudyOS should describe the model as statistically calibrated.
 
 ## Learning, retention, and planning calibration
 
@@ -281,8 +352,10 @@ The current `heuristic-v5` planner combines course importance, past-paper exam w
 - [x] guarded empirical score-bias recalibration
 - [x] guarded empirical uncertainty-width recalibration
 - [x] raw-vs-adjusted forecast audit trail
-- [ ] calibration buckets and reliability curves across larger samples
-- [ ] held-out evaluation and model-version comparison
+- [x] fixed reliability buckets with observed target-hit rates
+- [x] chronological rolling held-out evaluation
+- [x] raw-vs-recalibrated held-out metric comparison
+- [x] guarded model-improvement verdict
 
 ### Phase 4 — Course-aware tutor
 Retrieval over uploaded material, cited explanations, exam-style questions, and guided problem solving.
@@ -349,6 +422,7 @@ pytest
 8. Record raw pre-exam snapshots and real outcomes as evidence accumulates.
 9. Use `/forecast-calibration` to inspect historical error and calibration maturity.
 10. Call `/grade-forecast/calibrated` to compare the raw prediction with the guarded empirical adjustment.
-11. If desired, persist an adjusted forecast with `apply_recalibration=true`; StudyOS stores the raw prediction alongside it for auditability.
+11. Use `/forecast-validation` to inspect reliability buckets and rolling held-out raw-vs-recalibrated performance.
+12. Only promote greater trust in empirical recalibration when held-out evidence improves, not merely because in-sample fit looks better.
 
-The next Phase 3 milestone is **reliability curves and model-version evaluation**: bucket historical probability forecasts, compare predicted vs observed frequencies, and evaluate raw versus empirically adjusted model versions on held-out outcomes instead of relying only on aggregate metrics.
+Phase 3's core probability/validation infrastructure is now complete. The next major milestone is **Phase 4 — course-aware tutoring with exact source citations, exam-style question generation, and guided problem solving grounded in uploaded course material**.
