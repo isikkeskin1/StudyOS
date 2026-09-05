@@ -1,3 +1,4 @@
+from app.models.calendar_focus import FocusSession, SemesterCalendarPlan
 from app.models.cheat_sheet import CheatSheet
 from app.models.course import Course
 from app.models.course_intelligence import (
@@ -55,6 +56,8 @@ from app.models.tutor_practice import (
 )
 
 __all__ = [
+    "FocusSession",
+    "SemesterCalendarPlan",
     "CheatSheet",
     "ReviewSession",
     "Course",
