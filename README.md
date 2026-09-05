@@ -16,123 +16,169 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 - Can the tutor explain from my actual course files with exact citations?
 - Can StudyOS create, grade, and adapt practice without revealing solutions too early?
 - Can the tutor remember recurring mistakes and change how it teaches?
+- Can a cited tutor answer be rejected when the citation does not actually support the claim?
 - What should I deprioritize when time is running out?
 
-## Current milestone — persistent incremental embedding index
+## Current milestone — atomic claim entailment validation
 
-The backend is now at **v0.24.0**.
+The backend is now at **v0.25.0**.
 
-Semantic retrieval no longer needs to recompute unchanged course-chunk embeddings on every tutor request. StudyOS now persists chunk vectors and reuses them across search, tutor, and grounded practice retrieval.
-
-```text
-processed course chunks
-        ↓
-provider + model + exact content hash
-        ↓
-TutorChunkEmbedding
-        ↓
-reusable chunk vectors
-        ↓
-semantic / hybrid reranking
-```
-
-The query itself is still embedded for each request. Only the comparatively expensive repeated source-chunk work is cached.
-
-### Strict cache identity and invalidation
-
-An embedding is reusable only when all of the following still match:
+Tutor grounding no longer treats a whole sentence as one lexical-overlap blob. StudyOS first decomposes generated prose into atomic factual claims, inherits the sentence citations for each independent clause, and validates every atomic claim before the answer can be returned.
 
 ```text
-chunk ID
-+ SHA-256 of exact chunk text
-+ embedding provider
-+ embedding model
+generated tutor answer
+        ↓
+sentence boundaries
+        ↓
+atomic-claims-v1
+        ↓
+independent factual claims
+        ↓
+citation validity
++ contradiction checks
++ numerical consistency
++ strict content coverage
+        ↓
+atomic-entailment-v1
+        ↓
+all claims pass → answer
+any claim fails → reject entire draft
 ```
 
-Changing the chunk text makes that row stale. Reprocessing a document creates new chunks, which appear as missing while old rows become orphaned. Switching embedding model or provider uses a separate cache namespace instead of silently reusing incompatible vectors.
+This is intentionally a deterministic, fail-closed validator. StudyOS does **not** label it as a learned NLI model or pretend lexical heuristics provide perfect semantic entailment.
 
-This keeps invalidation deterministic rather than relying on timestamps or fuzzy content comparisons.
+### Atomic claim decomposition
 
-### Lazy indexing and explicit full-course sync
-
-StudyOS supports both paths:
+A sentence such as:
 
 ```text
-normal semantic request
-        ↓
-select candidate chunks
-        ↓
-reuse current cached vectors
-        ↓
-embed only missing/stale candidates
+Net force equals mass times acceleration and acceleration points
+in the same direction as the net force [1].
 ```
 
-and:
+is evaluated as two claims:
 
 ```text
-explicit index sync
-        ↓
-scan all processed course chunks
-        ↓
-embed only missing/stale chunks
-        ↓
-remove orphan rows
-        ↓
-ready index
+1. Net force equals mass times acceleration.          citation [1]
+2. Acceleration points in the same direction...      citation [1]
 ```
 
-A fully synced course therefore typically needs only the query-vector provider call during later semantic searches.
+Independent clauses joined by `and`, `but`, `whereas`, `however`, or semicolons can therefore fail separately instead of one supported half masking an unsupported half.
 
-### Index observability
+The OpenAI synthesis prompt also asks the model to keep substantive sentences atomic where possible and forbids adding scientific facts, qualifiers, numbers, causal relationships, or exceptions that are absent from the supplied excerpts.
 
-New endpoints:
+### Contradiction-aware checks
+
+High word overlap is no longer sufficient.
+
+For example, this source:
 
 ```text
-GET  /api/v1/courses/{course_id}/tutor/embedding-index
-POST /api/v1/courses/{course_id}/tutor/embedding-index/sync
+Acceleration points in the same direction as the net force.
 ```
 
-The status endpoint reports:
+does not support:
 
 ```text
-status: disabled | empty | stale | ready
-provider_name
-model_name
-total_chunks
-indexed_chunks
-missing_chunks
-stale_chunks
-orphaned_embeddings
-coverage
-dimensions
+Acceleration points in the opposite direction as the net force [1].
 ```
 
-A sync response additionally reports:
+even though almost every word overlaps.
+
+The local contradiction gate currently recognizes explicit polarity reversals including:
 
 ```text
-embedded_now
-reused_chunks
-deleted_orphans
+same direction ↔ opposite direction
+positive ↔ negative
+greater than ↔ less than
+increase ↔ decrease
+directly proportional ↔ inversely proportional
+clockwise ↔ counterclockwise
+upward ↔ downward
 ```
 
-`force=true` can rebuild every current course chunk. Sync also accepts an optional batch-size override.
-
-### Storage boundary
-
-Vectors are currently stored as JSON in SQLite. That is intentional.
-
-This milestone provides **persistent embedding storage, deterministic invalidation, incremental indexing, and a stable service boundary**. It does not claim that SQLite JSON scanning is an approximate-nearest-neighbor index or a production vector database.
-
-A later ANN/vector backend can replace the storage/search implementation behind the same retrieval interface without changing tutor behavior.
-
-Semantic retrieval keeps the existing model names:
+It separately checks negation polarity, so:
 
 ```text
-semantic-vector-rerank-v1
-hybrid-vector-bm25-v1
+Momentum is conserved in an isolated system.
 ```
 
-and adds `persistent_embedding_cache` to the reported retrieval components when the cache-backed semantic path is used.
+cannot support:
+
+```text
+Momentum is not conserved in an isolated system [1].
+```
+
+### Unsupported additions
+
+The validator canonicalizes a conservative set of grammatical/paraphrase variants such as:
+
+```text
+equals ↔ equal
+times ↔ multiplied
+resultant ↔ net
+fixed ↔ constant
+points ↔ directed
+```
+
+but substantive new content still fails closed.
+
+For example:
+
+```text
+Source:
+Net force equals mass times acceleration.
+
+Draft:
+Net force equals mass times quantum acceleration [1].
+```
+
+is rejected even though its lexical overlap is very high.
+
+This intentionally favors source-faithful answers over fluent extrapolation.
+
+### Numerical consistency
+
+Numerical assertions must also occur in the cited evidence.
+
+A small relative tolerance allows ordinary rounding:
+
+```text
+source: 9.81
+claim:  9.8      → accepted
+```
+
+while a materially different value is rejected:
+
+```text
+source: 9.81
+claim:  10       → rejected
+```
+
+### Tutor response contract
+
+The public `/tutor/ask` shape remains backward-compatible.
+
+`validated_claim_count` and `unsupported_claim_count` now count **atomic claims**, `validation_model` reports:
+
+```text
+atomic-entailment-v1
+```
+
+and the default minimum local support threshold is now `0.35`.
+
+Internally the validator additionally tracks:
+
+```text
+atomic claim count
+contradicted claims
+unsupported additions
+numeric mismatches
+invalid citations
+claim decomposition model
+```
+
+The full generated answer is still discarded if any substantive atomic claim fails.
 
 ## Adaptive tutor stack
 
@@ -147,7 +193,9 @@ provider: auto | local | openai
 
 Current retrieval signals include BM25, course-topic evidence, embedding cosine similarity, and the persistent embedding cache.
 
-The OpenAI synthesis provider receives only selected course-source excerpts. Every substantive answer claim must include source markers, and a local `citation-overlap-v2` validator checks that cited evidence actually supports the claim before the answer is returned.
+The OpenAI synthesis provider receives only selected course-source excerpts. Source contents are treated as untrusted data and are never allowed to become tutor instructions.
+
+After synthesis, `atomic-claims-v1` + `atomic-entailment-v1` locally validate every substantive claim before the answer is returned.
 
 Optional embedding configuration:
 
@@ -159,6 +207,30 @@ STUDYOS_TUTOR_EMBEDDING_BATCH_SIZE=64
 ```
 
 With the embedding provider set to `none`, offline BM25/topic retrieval remains fully available and explicit semantic requests fail clearly rather than pretending lexical search is semantic search.
+
+### Persistent incremental embedding index
+
+Semantic retrieval persists course-chunk vectors instead of recomputing unchanged source embeddings on every request.
+
+A cache row is reusable only when these all match:
+
+```text
+chunk ID
++ SHA-256 of exact chunk text
++ embedding provider
++ embedding model
+```
+
+Normal semantic requests lazily embed only missing/stale candidate chunks. Full-course maintenance is available through:
+
+```text
+GET  /api/v1/courses/{course_id}/tutor/embedding-index
+POST /api/v1/courses/{course_id}/tutor/embedding-index/sync
+```
+
+Index health reports `disabled | empty | stale | ready`, coverage, missing/stale chunks, dimensions, and orphaned rows.
+
+Vectors are currently JSON in SQLite. This provides persistence, deterministic invalidation, incremental reuse, and a stable storage boundary; it is not presented as an ANN/vector database.
 
 ### Guided practice and grading
 
@@ -246,7 +318,7 @@ Immutable pre-exam forecasts can later receive real outcomes. StudyOS measures p
 | `GET` | `/api/v1/courses/{course_id}/forecast-calibration` | Historical forecast metrics |
 | `GET` | `/api/v1/courses/{course_id}/forecast-validation` | Held-out model validation |
 | `POST` | `/api/v1/courses/{course_id}/tutor/search` | Search grounded course evidence |
-| `POST` | `/api/v1/courses/{course_id}/tutor/ask` | Produce validated grounded answer |
+| `POST` | `/api/v1/courses/{course_id}/tutor/ask` | Produce atomic-claim validated answer |
 | `GET` | `/api/v1/courses/{course_id}/tutor/embedding-index` | Inspect embedding-index health |
 | `POST` | `/api/v1/courses/{course_id}/tutor/embedding-index/sync` | Incrementally sync course vectors |
 | `POST` | `/api/v1/courses/{course_id}/tutor/practice` | Create grounded practice |
@@ -288,8 +360,9 @@ FastAPI exposes interactive API docs at `/docs` while the server is running.
 - [x] multi-question session memory and remediation teaching
 - [x] persistent SQLite embedding cache
 - [x] incremental/lazy chunk indexing and index-health API
-- [ ] stronger entailment verifier / claim decomposition
-- [ ] external vector/ANN backend
+- [x] atomic claim decomposition and contradiction-aware entailment gate
+- [ ] retrieval-quality benchmark / hard-negative evaluation
+- [ ] external vector/ANN backend when scale justifies it
 
 ### Phase 5 — Optimization
 - [ ] expected marks per study hour
@@ -327,4 +400,4 @@ ruff check .
 pytest
 ```
 
-The next Phase 4 quality milestone is **stronger entailment verification and claim decomposition**: move beyond lexical claim/source overlap so a fluent answer cannot pass validation merely because it shares several words with the cited excerpt.
+The next tutor-quality milestone is a **retrieval hard-negative benchmark**: measure whether BM25/topic/semantic ranking actually selects the correct course evidence under paraphrases, distractor chunks, near-duplicate formulas, and misleading high-overlap material before choosing any external vector backend.

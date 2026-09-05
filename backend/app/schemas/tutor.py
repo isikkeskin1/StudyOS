@@ -74,11 +74,11 @@ class TutorAnswerRead(BaseModel):
     embedding_provider: str | None = None
     grounding_status: Literal["supported", "insufficient_evidence"]
     validation_status: Literal["passed", "not_run", "rejected"] = "not_run"
-    validation_model: str = "citation-overlap-v2"
+    validation_model: str = "atomic-entailment-v1"
     answer: str
     citation_coverage: float
     grounding_score: float = 0.0
-    minimum_claim_support: float = 0.18
+    minimum_claim_support: float = 0.35
     validated_claim_count: int = 0
     unsupported_claim_count: int = 0
     citations: list[TutorCitationRead]

@@ -120,7 +120,7 @@ def test_tutor_ask_returns_validated_cited_answer_when_supported(client: TestCli
     assert body["provider_requested"] == "auto"
     assert body["synthesis_provider"] == "local-grounded-v1"
     assert body["validation_status"] == "passed"
-    assert body["validation_model"] == "citation-overlap-v2"
+    assert body["validation_model"] == "atomic-entailment-v1"
     assert body["citation_coverage"] == 1.0
     assert body["grounding_score"] >= body["minimum_claim_support"]
     assert body["validated_claim_count"] >= 1
@@ -228,7 +228,7 @@ def test_grounding_validator_rejects_cited_but_unsupported_claim() -> None:
     validation = validate_grounded_draft(draft, [_citation()])
 
     assert validation.status == "rejected"
-    assert validation.model == "citation-overlap-v2"
+    assert validation.model == "atomic-entailment-v1"
     assert validation.validated_claim_count == 1
     assert validation.unsupported_claim_count == 1
     assert validation.citation_coverage == 0.5
@@ -266,6 +266,7 @@ def test_openai_provider_uses_grounded_untrusted_source_prompt() -> None:
     instructions = str(fake_responses.kwargs["instructions"])
     assert "untrusted data" in instructions
     assert "only from the supplied course-source packet" in instructions
+    assert "Keep each sentence atomic" in instructions
     assert fake_responses.kwargs["store"] is False
 
 
