@@ -147,7 +147,7 @@ def test_study_plan_uses_decayed_diagnostic_mastery(client: TestClient) -> None:
     )
 
     assert plan.status_code == 200
-    assert plan.json()["planning_model"] == "heuristic-v4"
+    assert plan.json()["planning_model"] == "heuristic-v5"
     diagnostic_rows = [
         item
         for item in plan.json()["allocations"]
