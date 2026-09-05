@@ -2,7 +2,7 @@
 
 StudyOS is an AI-powered study planning platform that turns course materials and student performance into adaptive, evidence-driven study plans.
 
-Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solutions. StudyOS builds a structured model of the course, measures what matters most for the exam, tracks topic mastery, learns recurring mistake patterns, and recommends how to spend limited study time around a target grade.
+Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solutions. StudyOS builds a structured model of the course, measures what matters most for the exam, tracks topic mastery, learns recurring mistake patterns, grades supported diagnostic answers against extracted solutions, and recommends how to spend limited study time around a target grade.
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
@@ -17,7 +17,7 @@ Upload lecture slides, notes, syllabi, exercise sheets, past exams, and solution
 - Why am I repeatedly losing marks?
 - What should I deprioritize when time is running out?
 
-## Current milestone — mistake intelligence and answer evidence
+## Current milestone — solution-grounded automatic grading
 
 The backend can now:
 
@@ -31,15 +31,18 @@ The backend can now:
 - generate target-grade study-time plans with diminishing returns
 - create adaptive diagnostic sessions from real past-paper questions
 - maintain Bayesian topic-mastery estimates and confidence
-- store the student's submitted answer, reference answer, and feedback
-- classify mistakes as concept, formula selection, algebra, arithmetic, sign, units, interpretation, incomplete reasoning, careless, or other
-- record mistake severity and classification source
-- aggregate lost-score patterns across the course
-- calculate per-topic mistake burden and dominant mistake categories
-- report how much lost-score evidence has actually been classified
-- feed classified mistake patterns back into study priority without double-counting them in the grade estimate
+- store submitted answers, reference answers, and feedback
+- classify and aggregate recurring mistake patterns
+- separate question prompts from inline `Solution:` / `Answer:` sections in past-exam solution documents
+- keep extracted reference solutions hidden while the student is answering
+- report whether each diagnostic question supports automatic grading
+- automatically score supported answers against extracted reference solutions
+- compare solution concepts, numerical values, signs, and common units
+- generate provisional feedback and automatic mistake evidence
+- record grader confidence and source-evidence coverage separately from student confidence
+- feed automatically graded responses through the same mastery and mistake-intelligence pipeline as manually scored responses
 
-The planning engine remains a transparent heuristic rather than a calibrated grade predictor. Diagnostic scores affect mastery; mistake labels affect *what to focus on while studying*, not the grade estimate a second time.
+The automatic grader is intentionally conservative. The current `deterministic-solution-v1` adapter is a lexical/numeric baseline, not an LLM examiner and not a replacement for a human rubric. Its grades are marked provisional and its confidence is exposed in the API.
 
 ## API
 
@@ -55,12 +58,13 @@ The planning engine remains a transparent heuristic rather than a calibrated gra
 | `GET` | `/api/v1/courses/{course_id}/documents/{document_id}/content` | Read source units and chunks |
 | `POST` | `/api/v1/courses/{course_id}/analyze` | Build or rebuild course intelligence |
 | `GET` | `/api/v1/courses/{course_id}/intelligence` | Read topics, evidence, and relationships |
-| `POST` | `/api/v1/courses/{course_id}/exam-intelligence/analyze` | Analyze questions, marks, and topic weights |
-| `GET` | `/api/v1/courses/{course_id}/exam-intelligence` | Read past-paper intelligence |
+| `POST` | `/api/v1/courses/{course_id}/exam-intelligence/analyze` | Analyze questions, marks, topic weights, and inline solution references |
+| `GET` | `/api/v1/courses/{course_id}/exam-intelligence` | Read past-paper intelligence and grading availability |
 | `POST` | `/api/v1/courses/{course_id}/diagnostics` | Start an adaptive diagnostic |
 | `GET` | `/api/v1/courses/{course_id}/diagnostics/{session_id}` | Read diagnostic progress |
 | `GET` | `/api/v1/courses/{course_id}/diagnostics/{session_id}/next` | Get the next adaptive question |
-| `POST` | `/api/v1/courses/{course_id}/diagnostics/{session_id}/responses` | Score a response and optionally store answer/mistake evidence |
+| `POST` | `/api/v1/courses/{course_id}/diagnostics/{session_id}/responses` | Manually/self score a response and optionally store answer/mistake evidence |
+| `POST` | `/api/v1/courses/{course_id}/diagnostics/{session_id}/grade` | Automatically grade an answer against an extracted reference solution |
 | `POST` | `/api/v1/courses/{course_id}/diagnostics/{session_id}/complete` | End a diagnostic early |
 | `GET` | `/api/v1/courses/{course_id}/mastery` | Read measured topic mastery |
 | `GET` | `/api/v1/courses/{course_id}/mistakes` | Read course-level mistake intelligence |
@@ -68,11 +72,55 @@ The planning engine remains a transparent heuristic rather than a calibrated gra
 
 FastAPI exposes interactive API documentation at `/docs` while the server is running.
 
+## Automatic grading model
+
+For a processed document classified as `past_exam_solution`, StudyOS looks for inline solution markers such as:
+
+```text
+Question 1 (8 marks)
+Calculate the force.
+Solution: F = ma, so the force is 10 N.
+```
+
+Exam analysis stores the prompt and reference solution separately. Diagnostic clients receive only the prompt before submission.
+
+A supported answer can be submitted to `/grade`:
+
+```json
+{
+  "diagnostic_question_id": "<question-id>",
+  "student_answer": "Using F = ma, the force is 10 N.",
+  "confidence": 0.8,
+  "duration_seconds": 120
+}
+```
+
+The deterministic grader currently checks:
+
+1. answer-specific concept/token coverage relative to the extracted solution
+2. numerical-result agreement where reference numbers exist
+3. sign mismatches for numerical answers
+4. common unit agreement where units exist
+
+The response records:
+
+```text
+score
+grading_source = automatic
+grading.grader_name
+grading.grader_confidence
+grading.evidence_coverage
+answer.reference_answer
+automatic feedback
+automatic mistake labels
+updated mastery
+```
+
+Reference solutions are only exposed in the response after grading. If no reference solution was safely extracted, automatic grading returns `409` rather than inventing a mark.
+
 ## Mistake model
 
-A scored diagnostic response may include answer evidence and zero or more mistake labels.
-
-Supported categories:
+Supported mistake categories:
 
 ```text
 concept
@@ -87,16 +135,7 @@ careless
 other
 ```
 
-Each label has a severity and source (`self`, `manual`, or `automatic`). StudyOS aggregates the lost-score evidence behind those labels and reports:
-
-- category occurrence counts
-- weighted lost-score contribution
-- share of classified loss
-- classification coverage
-- per-topic mistake burden
-- dominant mistake categories per topic
-
-This keeps mistake analysis inspectable and makes it possible to add automatic graders later without changing the public data model.
+Each label has a severity and source (`self`, `manual`, or `automatic`). StudyOS aggregates category occurrence counts, weighted lost-score contribution, classification coverage, per-topic mistake burden, and dominant mistake categories.
 
 ## Mastery model
 
@@ -113,17 +152,7 @@ The current `heuristic-v3` planner combines:
 3. **Mastery gap** from measured diagnostic evidence, explicit overrides, or the fallback baseline.
 4. **Mistake focus** from classified error patterns.
 
-Mastery precedence is:
-
-```text
-explicit topic override
-        ↓
-measured diagnostic mastery
-        ↓
-fallback baseline mastery
-```
-
-Mistake burden slightly increases study priority and exposes `mistake_focus` on each topic allocation. It does not directly lower the projected grade because the underlying low-scoring response already affected mastery.
+Mistake burden slightly increases study priority but does not directly lower projected grades; the underlying diagnostic score already affects mastery.
 
 ## Roadmap
 
@@ -146,7 +175,9 @@ Mistake burden slightly increases study priority and exposes `mistake_focus` on 
 - [x] answer capture and feedback evidence
 - [x] mistake classification infrastructure
 - [x] mistake-pattern analytics and planner feedback
-- [ ] automatic grading adapters
+- [x] deterministic automatic grading adapter
+- [x] inline solution extraction with prompt/reference separation
+- [ ] richer grading adapters / rubric-aware grading
 - [ ] spaced review / forgetting model
 - [ ] mastery history and trend analytics
 
@@ -209,12 +240,12 @@ pytest
 ## Example flow
 
 1. Create a course with a target grade.
-2. Upload and process lectures and past papers.
+2. Upload and process lectures and past papers/solutions.
 3. Build the course topic graph with `/analyze`.
-4. Build question-level exam intelligence.
-5. Start a diagnostic and work through adaptive questions.
-6. Score each response and optionally attach the student's answer, reference answer, feedback, and mistake labels.
+4. Build question-level exam intelligence; supported inline solutions are separated from prompts.
+5. Start a diagnostic and work through adaptive questions without seeing reference solutions.
+6. Automatically grade supported answers through `/grade`, or use the manual response endpoint when needed.
 7. Read measured mastery through `/mastery` and recurring error patterns through `/mistakes`.
-8. Generate a study plan; StudyOS uses both mastery evidence and mistake focus when allocating time.
+8. Generate a study plan; StudyOS uses mastery evidence and mistake focus when allocating time.
 
-The next Phase 2 milestone is **automatic grading adapters + solution-grounded feedback**, followed by forgetting-aware review scheduling.
+The next Phase 2 milestone is **forgetting-aware review scheduling + mastery history**, followed by richer rubric/LLM grading adapters.
