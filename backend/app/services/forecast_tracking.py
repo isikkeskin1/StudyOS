@@ -9,16 +9,27 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.course import Course
-from app.models.forecast_tracking import GradeForecastOutcome, GradeForecastSnapshot
+from app.models.forecast_tracking import (
+    GradeForecastOutcome,
+    GradeForecastRecalibrationArtifact,
+    GradeForecastSnapshot,
+)
 from app.schemas.forecast_tracking import (
     ForecastCalibrationRead,
     ForecastEvaluationRead,
     ForecastOutcomeCreate,
     ForecastOutcomeRead,
+    ForecastRecalibrationArtifactRead,
     ForecastSnapshotCreate,
     ForecastSnapshotRead,
 )
 from app.schemas.grade_modeling import GradeThresholdProbabilityRead
+from app.services.forecast_recalibration import (
+    adjustment_to_read,
+    artifact_raw_thresholds,
+    build_calibrated_grade_forecast,
+    empirical_adjustment,
+)
 from app.services.grade_modeling import build_grade_forecast
 
 
@@ -50,9 +61,54 @@ def _decode_assumptions(snapshot: GradeForecastSnapshot) -> list[str]:
     return list(json.loads(snapshot.assumptions_payload))
 
 
+def _artifact_read(
+    artifact: GradeForecastRecalibrationArtifact | None,
+) -> ForecastRecalibrationArtifactRead | None:
+    if artifact is None:
+        return None
+    return ForecastRecalibrationArtifactRead(
+        raw_forecast_model=artifact.raw_forecast_model,
+        raw_probability_status=artifact.raw_probability_status,
+        raw_expected_grade=artifact.raw_expected_grade,
+        raw_standard_deviation=artifact.raw_standard_deviation,
+        raw_likely_range_low=artifact.raw_likely_range_low,
+        raw_likely_range_high=artifact.raw_likely_range_high,
+        raw_target_probability=artifact.raw_target_probability,
+        raw_thresholds=artifact_raw_thresholds(artifact),
+        recalibration=adjustment_to_read(
+            empirical_adjustment_from_artifact(artifact)
+        ),
+    )
+
+
+def empirical_adjustment_from_artifact(artifact: GradeForecastRecalibrationArtifact):
+    from app.services.forecast_recalibration import EmpiricalAdjustment
+
+    status = "inactive"
+    if artifact.calibration_active:
+        if artifact.paired_outcome_count < 10:
+            status = "guarded"
+        elif artifact.paired_outcome_count < 30:
+            status = "developing"
+        else:
+            status = "measured"
+    return EmpiricalAdjustment(
+        active=artifact.calibration_active,
+        calibration_model=artifact.calibration_model,
+        calibration_status=status,
+        paired_outcome_count=artifact.paired_outcome_count,
+        shrinkage_weight=artifact.shrinkage_weight,
+        raw_bias_marks=artifact.raw_bias_marks,
+        applied_bias_marks=artifact.applied_bias_marks,
+        raw_width_multiplier=artifact.raw_width_multiplier,
+        applied_width_multiplier=artifact.applied_width_multiplier,
+    )
+
+
 def snapshot_to_read(
     snapshot: GradeForecastSnapshot,
     outcome: GradeForecastOutcome | None,
+    artifact: GradeForecastRecalibrationArtifact | None = None,
 ) -> ForecastSnapshotRead:
     outcome_read = None
     if outcome is not None:
@@ -83,6 +139,7 @@ def snapshot_to_read(
         thresholds=_decode_thresholds(snapshot),
         assumptions=_decode_assumptions(snapshot),
         created_at=snapshot.created_at,
+        recalibration_artifact=_artifact_read(artifact),
         outcome=outcome_read,
     )
 
@@ -92,35 +149,91 @@ def create_forecast_snapshot(
     course: Course,
     payload: ForecastSnapshotCreate,
 ) -> ForecastSnapshotRead:
-    forecast = build_grade_forecast(db, course, payload.forecast)
-    snapshot = GradeForecastSnapshot(
-        course_id=course.id,
-        label=payload.label,
-        exam_date=payload.exam_date,
-        forecast_model=forecast.forecast_model,
-        probability_status=forecast.probability_status,
-        max_grade=course.max_grade,
-        study_hours=forecast.study_hours,
-        target_grade=forecast.target_grade,
-        expected_grade=forecast.expected_grade,
-        standard_deviation=forecast.standard_deviation,
-        interval_probability=forecast.interval_probability,
-        likely_range_low=forecast.likely_range_low,
-        likely_range_high=forecast.likely_range_high,
-        target_probability=forecast.target_probability,
-        evidence_quality=forecast.evidence_quality,
-        evidence_confidence=forecast.evidence_confidence,
-        request_payload=json.dumps(payload.forecast.model_dump(mode="json"), sort_keys=True),
-        thresholds_payload=json.dumps(
-            [item.model_dump(mode="json") for item in forecast.thresholds],
-            sort_keys=True,
-        ),
-        assumptions_payload=json.dumps(forecast.assumptions),
-    )
-    db.add(snapshot)
+    artifact: GradeForecastRecalibrationArtifact | None = None
+    if payload.apply_recalibration:
+        calibrated = build_calibrated_grade_forecast(db, course, payload.forecast)
+        raw = calibrated.raw_forecast
+        snapshot = GradeForecastSnapshot(
+            course_id=course.id,
+            label=payload.label,
+            exam_date=payload.exam_date,
+            forecast_model=calibrated.forecast_model,
+            probability_status=calibrated.probability_status,
+            max_grade=course.max_grade,
+            study_hours=raw.study_hours,
+            target_grade=calibrated.target_grade,
+            expected_grade=calibrated.expected_grade,
+            standard_deviation=calibrated.standard_deviation,
+            interval_probability=calibrated.interval_probability,
+            likely_range_low=calibrated.likely_range_low,
+            likely_range_high=calibrated.likely_range_high,
+            target_probability=calibrated.target_probability,
+            evidence_quality=raw.evidence_quality,
+            evidence_confidence=raw.evidence_confidence,
+            request_payload=json.dumps(payload.forecast.model_dump(mode="json"), sort_keys=True),
+            thresholds_payload=json.dumps(
+                [item.model_dump(mode="json") for item in calibrated.thresholds],
+                sort_keys=True,
+            ),
+            assumptions_payload=json.dumps(calibrated.assumptions),
+        )
+        db.add(snapshot)
+        db.flush()
+        recalibration = calibrated.recalibration
+        artifact = GradeForecastRecalibrationArtifact(
+            forecast_snapshot_id=snapshot.id,
+            raw_forecast_model=raw.forecast_model,
+            raw_probability_status=raw.probability_status,
+            raw_expected_grade=raw.expected_grade,
+            raw_standard_deviation=raw.standard_deviation,
+            raw_likely_range_low=raw.likely_range_low,
+            raw_likely_range_high=raw.likely_range_high,
+            raw_target_probability=raw.target_probability,
+            raw_thresholds_payload=json.dumps(
+                [item.model_dump(mode="json") for item in raw.thresholds],
+                sort_keys=True,
+            ),
+            calibration_model=recalibration.calibration_model,
+            calibration_active=recalibration.active,
+            paired_outcome_count=recalibration.paired_outcome_count,
+            shrinkage_weight=recalibration.shrinkage_weight,
+            raw_bias_marks=recalibration.raw_bias_marks,
+            applied_bias_marks=recalibration.applied_bias_marks,
+            raw_width_multiplier=recalibration.raw_width_multiplier,
+            applied_width_multiplier=recalibration.applied_width_multiplier,
+        )
+        db.add(artifact)
+    else:
+        forecast = build_grade_forecast(db, course, payload.forecast)
+        snapshot = GradeForecastSnapshot(
+            course_id=course.id,
+            label=payload.label,
+            exam_date=payload.exam_date,
+            forecast_model=forecast.forecast_model,
+            probability_status=forecast.probability_status,
+            max_grade=course.max_grade,
+            study_hours=forecast.study_hours,
+            target_grade=forecast.target_grade,
+            expected_grade=forecast.expected_grade,
+            standard_deviation=forecast.standard_deviation,
+            interval_probability=forecast.interval_probability,
+            likely_range_low=forecast.likely_range_low,
+            likely_range_high=forecast.likely_range_high,
+            target_probability=forecast.target_probability,
+            evidence_quality=forecast.evidence_quality,
+            evidence_confidence=forecast.evidence_confidence,
+            request_payload=json.dumps(payload.forecast.model_dump(mode="json"), sort_keys=True),
+            thresholds_payload=json.dumps(
+                [item.model_dump(mode="json") for item in forecast.thresholds],
+                sort_keys=True,
+            ),
+            assumptions_payload=json.dumps(forecast.assumptions),
+        )
+        db.add(snapshot)
+
     db.commit()
     db.refresh(snapshot)
-    return snapshot_to_read(snapshot, None)
+    return snapshot_to_read(snapshot, None, artifact)
 
 
 def list_forecast_snapshots(db: Session, course_id: str) -> list[ForecastSnapshotRead]:
@@ -133,6 +246,7 @@ def list_forecast_snapshots(db: Session, course_id: str) -> list[ForecastSnapsho
     )
     snapshot_ids = [item.id for item in snapshots]
     outcomes_by_snapshot: dict[str, GradeForecastOutcome] = {}
+    artifacts_by_snapshot: dict[str, GradeForecastRecalibrationArtifact] = {}
     if snapshot_ids:
         outcomes_by_snapshot = {
             item.forecast_snapshot_id: item
@@ -142,8 +256,20 @@ def list_forecast_snapshots(db: Session, course_id: str) -> list[ForecastSnapsho
                 )
             ).all()
         }
+        artifacts_by_snapshot = {
+            item.forecast_snapshot_id: item
+            for item in db.scalars(
+                select(GradeForecastRecalibrationArtifact).where(
+                    GradeForecastRecalibrationArtifact.forecast_snapshot_id.in_(snapshot_ids)
+                )
+            ).all()
+        }
     return [
-        snapshot_to_read(snapshot, outcomes_by_snapshot.get(snapshot.id))
+        snapshot_to_read(
+            snapshot,
+            outcomes_by_snapshot.get(snapshot.id),
+            artifacts_by_snapshot.get(snapshot.id),
+        )
         for snapshot in snapshots
     ]
 
@@ -175,7 +301,8 @@ def record_forecast_outcome(
     db.add(outcome)
     db.commit()
     db.refresh(outcome)
-    return snapshot_to_read(snapshot, outcome)
+    artifact = db.get(GradeForecastRecalibrationArtifact, snapshot.id)
+    return snapshot_to_read(snapshot, outcome, artifact)
 
 
 def _evaluation(
@@ -230,6 +357,11 @@ def build_forecast_calibration(db: Session, course_id: str) -> ForecastCalibrati
     )
     evaluations = [_evaluation(snapshot, outcome) for snapshot, outcome in pairs]
     count = len(evaluations)
+    adjustment = adjustment_to_read(empirical_adjustment(db, course_id, 30.0))
+    if pairs:
+        adjustment = adjustment_to_read(
+            empirical_adjustment(db, course_id, pairs[0][0].max_grade)
+        )
     if count == 0:
         return ForecastCalibrationRead(
             course_id=course_id,
@@ -249,6 +381,7 @@ def build_forecast_calibration(db: Session, course_id: str) -> ForecastCalibrati
             brier_score=None,
             log_loss=None,
             uncertainty_direction="insufficient_data",
+            empirical_recalibration=adjustment,
             evaluations=[],
             notes=[
                 "Record outcomes against saved pre-exam forecasts before interpreting calibration.",
@@ -301,6 +434,7 @@ def build_forecast_calibration(db: Session, course_id: str) -> ForecastCalibrati
         brier_score=round(mean_brier, 4),
         log_loss=round(mean_log_loss, 4),
         uncertainty_direction=direction,
+        empirical_recalibration=adjustment,
         evaluations=[
             ForecastEvaluationRead(
                 forecast_snapshot_id=item.snapshot.id,
@@ -326,8 +460,10 @@ def build_forecast_calibration(db: Session, course_id: str) -> ForecastCalibrati
                 "Interval coverage should be compared with the average nominal interval level; "
                 "coverage below nominal suggests uncertainty may be too narrow."
             ),
+            "Brier score and log loss evaluate target-threshold probabilities; lower is better.",
             (
-                "Brier score and log loss evaluate target-threshold probabilities; lower is better."
+                "Empirical recalibration uses raw predictions when an adjusted snapshot artifact "
+                "exists, preventing the correction from training on its own output."
             ),
             "Do not treat preliminary calibration from a few exams as statistically stable.",
         ],

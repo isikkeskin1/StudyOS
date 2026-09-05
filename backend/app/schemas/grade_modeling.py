@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -64,5 +66,36 @@ class GradeForecastRead(BaseModel):
     target_probability: float
     thresholds: list[GradeThresholdProbabilityRead]
     required_hours: RequiredHoursRead
+    scenarios: list[GradeForecastScenarioRead]
+    assumptions: list[str]
+
+
+class EmpiricalRecalibrationRead(BaseModel):
+    active: bool
+    calibration_model: str
+    calibration_status: Literal["inactive", "guarded", "developing", "measured"]
+    paired_outcome_count: int
+    shrinkage_weight: float
+    raw_bias_marks: float
+    applied_bias_marks: float
+    raw_width_multiplier: float
+    applied_width_multiplier: float
+    note: str
+
+
+class CalibratedGradeForecastRead(BaseModel):
+    course_id: str
+    forecast_model: str
+    probability_status: str
+    raw_forecast: GradeForecastRead
+    recalibration: EmpiricalRecalibrationRead
+    expected_grade: float
+    standard_deviation: float
+    interval_probability: float
+    likely_range_low: float
+    likely_range_high: float
+    target_grade: float
+    target_probability: float
+    thresholds: list[GradeThresholdProbabilityRead]
     scenarios: list[GradeForecastScenarioRead]
     assumptions: list[str]

@@ -5,12 +5,17 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.schemas.grade_modeling import GradeForecastRequest, GradeThresholdProbabilityRead
+from app.schemas.grade_modeling import (
+    EmpiricalRecalibrationRead,
+    GradeForecastRequest,
+    GradeThresholdProbabilityRead,
+)
 
 
 class ForecastSnapshotCreate(BaseModel):
     label: str | None = Field(default=None, max_length=120)
     exam_date: date | None = None
+    apply_recalibration: bool = False
     forecast: GradeForecastRequest = Field(default_factory=GradeForecastRequest)
 
 
@@ -24,6 +29,18 @@ class ForecastOutcomeRead(BaseModel):
     actual_grade: float
     occurred_at: date | None
     created_at: datetime
+
+
+class ForecastRecalibrationArtifactRead(BaseModel):
+    raw_forecast_model: str
+    raw_probability_status: str
+    raw_expected_grade: float
+    raw_standard_deviation: float
+    raw_likely_range_low: float
+    raw_likely_range_high: float
+    raw_target_probability: float
+    raw_thresholds: list[GradeThresholdProbabilityRead]
+    recalibration: EmpiricalRecalibrationRead
 
 
 class ForecastSnapshotRead(BaseModel):
@@ -47,6 +64,7 @@ class ForecastSnapshotRead(BaseModel):
     thresholds: list[GradeThresholdProbabilityRead]
     assumptions: list[str]
     created_at: datetime
+    recalibration_artifact: ForecastRecalibrationArtifactRead | None = None
     outcome: ForecastOutcomeRead | None
 
 
@@ -95,5 +113,6 @@ class ForecastCalibrationRead(BaseModel):
         "stable",
         "narrow",
     ]
+    empirical_recalibration: EmpiricalRecalibrationRead
     evaluations: list[ForecastEvaluationRead]
     notes: list[str]
