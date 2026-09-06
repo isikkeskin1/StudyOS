@@ -30,12 +30,40 @@
     ],
     "extraResources": [
       {
-        "from": "build/web",
-        "to": "web"
+        "from": "build/web/server.js",
+        "to": "web/server.js"
+      },
+      {
+        "from": "build/web/.next",
+        "to": "web/.next",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "build/web/public",
+        "to": "web/public",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "build/web/node_modules",
+        "to": "web/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "build/web/package.json",
+        "to": "web/package.json"
       },
       {
         "from": "build/backend",
-        "to": "backend"
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
