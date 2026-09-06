@@ -48,6 +48,40 @@ jobs:
             throw "Missing bundled StudyOS backend executable"
           }
 
+      - name: Smoke bundled backend
+        shell: pwsh
+        run: |
+          $dbPath = (Join-Path $env:RUNNER_TEMP "studyos-desktop-smoke.db").Replace("\\", "/")
+          $uploadPath = Join-Path $env:RUNNER_TEMP "studyos-desktop-uploads"
+          $env:STUDYOS_ENV = "desktop"
+          $env:STUDYOS_DESKTOP_PORT = "8765"
+          $env:STUDYOS_DATABASE_URL = "sqlite:///$dbPath"
+          $env:STUDYOS_DATA_DIR = $uploadPath
+          $env:STUDYOS_TUTOR_PROVIDER = "local"
+          $env:STUDYOS_TUTOR_EMBEDDING_PROVIDER = "none"
+          $process = Start-Process "desktop/build/backend/StudyOSBackend.exe" -PassThru -WindowStyle Hidden
+          try {
+            $ready = $false
+            for ($attempt = 0; $attempt -lt 60; $attempt++) {
+              try {
+                $response = Invoke-WebRequest "http://127.0.0.1:8765/api/v1/health/ready" -UseBasicParsing -TimeoutSec 2
+                if ($response.StatusCode -eq 200) {
+                  $ready = $true
+                  break
+                }
+              } catch {
+                Start-Sleep -Milliseconds 500
+              }
+            }
+            if (-not $ready) {
+              throw "Bundled StudyOS backend did not become ready"
+            }
+          } finally {
+            if (!$process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
+
       - name: Install web dependencies
         working-directory: web
         run: npm install --no-audit --no-fund
