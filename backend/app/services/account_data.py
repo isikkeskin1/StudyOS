@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import Base
 from app.models.auth import User
+from app.models.course import Course
 
 _REDACTED_COLUMN_FRAGMENTS = ("password", "secret", "token")
 _REDACTED_COLUMNS = {"auth", "p256dh", "storage_path"}
@@ -30,7 +31,12 @@ def _is_exportable_column(name: str) -> bool:
     return not any(fragment in lowered for fragment in _REDACTED_COLUMN_FRAGMENTS)
 
 
-def _collect_owned_rows(db: Session, user_id: str) -> dict[str, list[dict[str, Any]]]:
+def _collect_rows(
+    db: Session,
+    seeds: dict[tuple[str, str], set[Any]],
+    *,
+    direct_user_id: str | None = None,
+) -> dict[str, list[dict[str, Any]]]:
     tables = list(Base.metadata.sorted_tables)
     owned: dict[str, list[dict[str, Any]]] = defaultdict(list)
     seen: dict[str, set[tuple[Any, ...]]] = defaultdict(set)
@@ -42,18 +48,21 @@ def _collect_owned_rows(db: Session, user_id: str) -> dict[str, list[dict[str, A
         for foreign_key in column.foreign_keys
     }
     values: dict[tuple[str, str], set[Any]] = defaultdict(set)
-    values[("users", "id")].add(user_id)
+    for key, seed_values in seeds.items():
+        values[key].update(seed_values)
 
     changed = True
     while changed:
         changed = False
         for table in tables:
-            if table.name == "users":
-                continue
-
             predicates = []
-            if "user_id" in table.c:
-                predicates.append(table.c.user_id == user_id)
+            for column in table.columns:
+                seeded = seeds.get((table.name, column.name))
+                if seeded:
+                    predicates.append(column.in_(seeded))
+
+            if direct_user_id is not None and "user_id" in table.c:
+                predicates.append(table.c.user_id == direct_user_id)
 
             for column in table.columns:
                 for foreign_key in column.foreign_keys:
@@ -90,12 +99,20 @@ def _collect_owned_rows(db: Session, user_id: str) -> dict[str, list[dict[str, A
     return dict(owned)
 
 
+def _collect_owned_rows(db: Session, user_id: str) -> dict[str, list[dict[str, Any]]]:
+    return _collect_rows(
+        db,
+        {("users", "id"): {user_id}},
+        direct_user_id=user_id,
+    )
+
+
 def export_user_data(db: Session, user: User) -> dict[str, Any]:
     owned = _collect_owned_rows(db, user.id)
     exported_tables: dict[str, list[dict[str, Any]]] = {}
 
     for table_name, rows in sorted(owned.items()):
-        if table_name == "auth_sessions":
+        if table_name in {"users", "auth_sessions"}:
             continue
         exported_rows = []
         for row in rows:
@@ -123,33 +140,55 @@ def export_user_data(db: Session, user: User) -> dict[str, Any]:
 
 def delete_user_data(db: Session, user: User) -> list[Path]:
     owned = _collect_owned_rows(db, user.id)
-    storage_paths = [
+    storage_paths = _storage_paths(owned)
+    _delete_collected_rows(db, owned, include_users=True)
+    db.commit()
+    _unlink_storage(storage_paths)
+    return storage_paths
+
+
+def delete_course_data(db: Session, course: Course) -> list[Path]:
+    owned = _collect_rows(db, {("courses", "id"): {course.id}})
+    storage_paths = _storage_paths(owned)
+    _delete_collected_rows(db, owned, include_users=False)
+    db.commit()
+    _unlink_storage(storage_paths)
+    return storage_paths
+
+
+def _storage_paths(rows: dict[str, list[dict[str, Any]]]) -> list[Path]:
+    return [
         Path(str(row["storage_path"]))
-        for row in owned.get("documents", [])
+        for row in rows.get("documents", [])
         if row.get("storage_path")
     ]
 
-    tables_by_name = {table.name: table for table in Base.metadata.sorted_tables}
+
+def _delete_collected_rows(
+    db: Session,
+    owned: dict[str, list[dict[str, Any]]],
+    *,
+    include_users: bool,
+) -> None:
     for table in reversed(Base.metadata.sorted_tables):
-        if table.name == "users":
+        if table.name == "users" and not include_users:
             continue
         rows = owned.get(table.name)
         if not rows:
             continue
         _delete_rows(db, table, rows)
 
-    db.execute(delete(User.__table__).where(User.__table__.c.id == user.id))
-    db.commit()
 
+def _unlink_storage(storage_paths: list[Path]) -> None:
+    parents: set[Path] = set()
     for path in storage_paths:
         path.unlink(missing_ok=True)
-        parent = path.parent
+        parents.add(path.parent)
+    for parent in parents:
         try:
             parent.rmdir()
         except OSError:
             pass
-
-    return storage_paths
 
 
 def _delete_rows(db: Session, table: Table, rows: list[dict[str, Any]]) -> None:
