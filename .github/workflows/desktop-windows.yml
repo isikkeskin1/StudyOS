@@ -63,6 +63,96 @@ jobs:
             throw "Missing bundled StudyOS backend executable"
           }
 
+      - name: Smoke desktop legacy database migration
+        shell: pwsh
+        run: |
+          $legacyRoot = Join-Path $env:RUNNER_TEMP "studyos-legacy"
+          New-Item -ItemType Directory -Path $legacyRoot -Force | Out-Null
+          $dbPath = Join-Path $legacyRoot "legacy.db"
+          $uploadPath = Join-Path $legacyRoot "uploads"
+
+          @'
+          import sqlite3
+          import sys
+
+          path = sys.argv[1]
+          connection = sqlite3.connect(path)
+          try:
+              connection.execute(
+                  """
+                  CREATE TABLE users (
+                      id VARCHAR(36) PRIMARY KEY,
+                      email VARCHAR(320) NOT NULL UNIQUE,
+                      password_hash VARCHAR(512) NOT NULL,
+                      created_at DATETIME NOT NULL
+                  )
+                  """
+              )
+              connection.commit()
+          finally:
+              connection.close()
+          '@ | python - $dbPath
+
+          $env:STUDYOS_ENV = "desktop"
+          $env:STUDYOS_DATABASE_URL = "sqlite:///$($dbPath -replace '\\','/')"
+          $env:STUDYOS_DATA_DIR = $uploadPath
+          $env:STUDYOS_DESKTOP_HOST = "127.0.0.1"
+          $env:STUDYOS_DESKTOP_PORT = "8766"
+          $backend = Start-Process "desktop/build/backend/StudyOSBackend/StudyOSBackend.exe" -PassThru
+          try {
+            $healthy = $false
+            for ($attempt = 0; $attempt -lt 90; $attempt++) {
+              try {
+                $response = Invoke-WebRequest "http://127.0.0.1:8766/api/v1/health/ready" -UseBasicParsing -TimeoutSec 2
+                if ($response.StatusCode -eq 200) {
+                  $healthy = $true
+                  break
+                }
+              } catch {}
+              if ($backend.HasExited) {
+                throw "Bundled backend exited during legacy database migration smoke"
+              }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $healthy) {
+              throw "Bundled backend never became ready after legacy database migration"
+            }
+
+            @'
+            import sqlite3
+            import sys
+
+            connection = sqlite3.connect(sys.argv[1])
+            try:
+                columns = {
+                    row[1]
+                    for row in connection.execute("PRAGMA table_info(users)").fetchall()
+                }
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    ).fetchall()
+                }
+                required_tables = {
+                    "alembic_version",
+                    "catalog_courses",
+                    "catalog_sources",
+                }
+                if "is_admin" not in columns:
+                    raise SystemExit("users.is_admin was not migrated")
+                missing = required_tables - tables
+                if missing:
+                    raise SystemExit(f"Missing migrated tables: {sorted(missing)}")
+            finally:
+                connection.close()
+            '@ | python - $dbPath
+          } finally {
+            if (-not $backend.HasExited) {
+              Stop-Process -Id $backend.Id -Force
+            }
+          }
+
       - name: Smoke bundled backend
         shell: pwsh
         run: |
