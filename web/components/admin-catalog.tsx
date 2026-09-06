@@ -75,6 +75,7 @@ export function AdminCatalog({
   const [academicYear, setAcademicYear] = useState("");
   const [language, setLanguage] = useState("English");
   const [description, setDescription] = useState("");
+  const [assignEmail, setAssignEmail] = useState("");
   const [seedUrls, setSeedUrls] = useState("");
   const [maxDepth, setMaxDepth] = useState("2");
   const [maxSources, setMaxSources] = useState("80");
@@ -239,6 +240,22 @@ export function AdminCatalog({
       setNotice(
         `${documents.length} source${documents.length === 1 ? "" : "s"} imported and analyzed.`,
       );
+    });
+  };
+
+  const assignToUser = () => {
+    if (!selected || !assignEmail.trim()) return;
+    void run(async () => {
+      await api(
+        `/api/v1/admin/catalog/courses/${selected.id}/assign`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: assignEmail.trim() }),
+        },
+      );
+      setNotice(`Course assigned to ${assignEmail.trim()}.`);
+      setAssignEmail("");
     });
   };
 
@@ -563,6 +580,35 @@ export function AdminCatalog({
                   >
                     {selected.published ? "Unpublish course" : "Publish course"}
                   </button>
+                </section>
+
+                <section className="manager-section">
+                  <div className="manager-section-head">
+                    <div>
+                      <span>Assignment</span>
+                      <strong>Push course to a user account</strong>
+                    </div>
+                  </div>
+                  <p className="manager-note">
+                    Assigning creates a personal StudyOS copy of the curated course for the
+                    selected user. The catalog course must be published first.
+                  </p>
+                  <div className="admin-assignment-row">
+                    <input
+                      type="email"
+                      value={assignEmail}
+                      onChange={(event) => setAssignEmail(event.target.value)}
+                      placeholder="student@example.com"
+                    />
+                    <button
+                      className="primary-button"
+                      type="button"
+                      disabled={busy || !selected.published || !assignEmail.trim()}
+                      onClick={assignToUser}
+                    >
+                      Assign course
+                    </button>
+                  </div>
                 </section>
               </>
             )}
