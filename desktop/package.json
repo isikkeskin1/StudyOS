@@ -61,7 +61,6 @@
           ]
         }
       ],
-      "artifactName": "StudyOS-${version}-Windows-${arch}.${ext}",
       "icon": "../web/public/icons/icon-512.png"
     },
     "nsis": {
@@ -69,7 +68,11 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "StudyOS"
+      "shortcutName": "StudyOS",
+      "artifactName": "StudyOS-${version}-Windows-x64-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "StudyOS-${version}-Windows-x64-Portable.${ext}"
     }
   }
 }
