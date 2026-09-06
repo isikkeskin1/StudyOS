@@ -2370,3 +2370,28 @@ button,
     white-space: nowrap;
   }
 }
+
+
+/* Prevent flex/grid children from widening the page at intermediate desktop widths. */
+.app-shell,
+.main-content,
+.workspace-app,
+.workspace-main,
+.topbar,
+.workspace-topbar {
+  max-width: 100%;
+}
+.main-content,
+.workspace-main,
+.topbar > *,
+.workspace-topbar > *,
+.topbar-actions,
+.panel,
+.metric-card,
+.course-card {
+  min-width: 0;
+}
+.topbar-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
