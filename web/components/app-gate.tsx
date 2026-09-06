@@ -28,7 +28,7 @@ export function AppGate() {
   const enterProduct = async (resolvedUser: AuthUser) => {
     setUser(resolvedUser);
     window.dispatchEvent(new Event("studyos:authenticated"));
-    const exists = await hasCourse();
+    const exists = resolvedUser.is_admin ? true : await hasCourse();
     setMode(exists ? "dashboard" : "setup");
   };
 
@@ -87,6 +87,7 @@ export function AppGate() {
   return (
     <Dashboard
       userEmail={user?.email ?? null}
+      isAdmin={user?.is_admin ?? false}
       onSignOut={() => void signOut()}
       onAccountDeleted={() => {
         window.dispatchEvent(new Event("studyos:signed-out"));
