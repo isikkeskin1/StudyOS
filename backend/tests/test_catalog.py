@@ -120,6 +120,31 @@ def test_admin_can_publish_polito_course_and_user_can_enroll(tmp_path: Path) -> 
         assert intelligence.status_code == 200
 
 
+        with TestClient(app) as assigned_user:
+            assigned_registration = assigned_user.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": "assigned@example.com",
+                    "password": "assigned-password-123",
+                },
+            )
+            assert assigned_registration.status_code == 201
+            assigned_user_id = assigned_registration.json()["user"]["id"]
+
+            assigned = admin.post(
+                f"/api/v1/admin/catalog/courses/{catalog['id']}/assign/{assigned_user_id}"
+            )
+            assert assigned.status_code == 201
+            assigned_course_id = assigned.json()["id"]
+
+            assigned_courses = assigned_user.get("/api/v1/courses")
+            assert assigned_courses.status_code == 200
+            assert any(
+                course["id"] == assigned_course_id
+                for course in assigned_courses.json()
+            )
+
+
 def test_non_admin_cannot_create_catalog_course(tmp_path: Path) -> None:
     app = _app(tmp_path)
 
