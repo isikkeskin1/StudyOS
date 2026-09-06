@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from urllib.parse import urlencode
 
+import httpx
+
 from app.models.catalog import CatalogCourse
 
 _POLITO_CODE_RE = re.compile(r"^[0-9A-Z]{5,12}$")
@@ -67,5 +69,65 @@ def suggest_catalog_seed_urls(
             "Official Politecnico di Torino curriculum/teaching-plan page for the "
             "selected degree program and cohort."
         )
+
+    return urls, notes
+
+
+def discover_polito_official_seeds(
+    catalog: CatalogCourse,
+    *,
+    timeout_seconds: float = 12.0,
+) -> tuple[list[str], list[str]]:
+    """Resolve useful official POLITO seeds from only the catalog course metadata.
+
+    The exam endpoint is deterministic from the teaching code. Its returned HTML often
+    links or names the relevant teaching/curriculum surfaces, which the normal bounded
+    catalog crawler can then follow. This intentionally does not use a search engine or
+    scrape third-party indexes.
+    """
+    urls, notes = suggest_catalog_seed_urls(catalog)
+    exam_url = urls[0]
+
+    try:
+        response = httpx.get(
+            exam_url,
+            timeout=timeout_seconds,
+            follow_redirects=True,
+            headers={"User-Agent": "StudyOS/0.51 institutional-course-discovery"},
+        )
+        response.raise_for_status()
+    except httpx.HTTPError:
+        return urls, notes
+
+    official_links = re.findall(
+        r"""href=["']([^"'#]+)["']""",
+        response.text,
+        flags=re.IGNORECASE,
+    )
+    for link in official_links:
+        if link.startswith("/"):
+            link = "https://didattica.polito.it" + link
+        if not link.startswith("https://didattica.polito.it/"):
+            continue
+        lowered = link.lower()
+        if not any(
+            token in lowered
+            for token in (
+                "offerta_formativa",
+                "insegnamento",
+                "teaching",
+                "programma",
+                "scheda",
+            )
+        ):
+            continue
+        if link not in urls:
+            urls.append(link)
+            notes.append(
+                "Official Politecnico di Torino teaching/curriculum link discovered "
+                "from the course exam surface."
+            )
+        if len(urls) >= 6:
+            break
 
     return urls, notes
