@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from app import models  # noqa: F401
 from app.api.analytics import router as analytics_router
+from app.api.auth import router as auth_router
 from app.api.calendar_focus import router as calendar_focus_router
 from app.api.calibration import router as calibration_router
 from app.api.cheat_sheet import router as cheat_sheet_router
@@ -30,6 +31,7 @@ from app.api.tutor_benchmark import router as tutor_benchmark_router
 from app.api.tutor_benchmark_history import router as tutor_benchmark_history_router
 from app.api.tutor_embedding_index import router as tutor_embedding_index_router
 from app.api.tutor_remediation import router as tutor_remediation_router
+from app.core.auth import AuthenticationMiddleware
 from app.core.config import Settings, get_settings
 from app.core.database import Base, create_database_engine, create_session_factory
 
@@ -55,15 +57,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application = FastAPI(
         title=resolved_settings.app_name,
-        version="0.44.0",
+        version="0.45.0",
         description="Backend API for StudyOS.",
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings
     application.state.engine = engine
     application.state.session_factory = session_factory
+    application.add_middleware(AuthenticationMiddleware)
 
     application.include_router(health_router, prefix=resolved_settings.api_prefix)
+    application.include_router(auth_router, prefix=resolved_settings.api_prefix)
     application.include_router(courses_router, prefix=resolved_settings.api_prefix)
     application.include_router(planning_router, prefix=resolved_settings.api_prefix)
     application.include_router(emergency_planning_router, prefix=resolved_settings.api_prefix)

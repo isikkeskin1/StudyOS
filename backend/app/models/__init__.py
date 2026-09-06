@@ -1,3 +1,4 @@
+from app.models.auth import AuthSession, User
 from app.models.calendar_focus import FocusSession, SemesterCalendarPlan
 from app.models.cheat_sheet import CheatSheet
 from app.models.course import Course

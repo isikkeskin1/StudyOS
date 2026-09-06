@@ -388,6 +388,7 @@ def create_semester_queue(
     plan = build_multi_course_plan(db, MultiCoursePlanRequest(**payload.model_dump()))
     initial_minutes = round(payload.available_hours * 60)
     queue = SemesterStudyQueue(
+        user_id=db.info["user_id"],
         status="active" if plan.schedule else "completed",
         initial_available_minutes=initial_minutes,
         remaining_available_minutes=initial_minutes,

@@ -68,7 +68,13 @@ function activityLabel(value: string) {
   });
 }
 
-export function Dashboard() {
+export function Dashboard({
+  userEmail,
+  onSignOut,
+}: {
+  userEmail: string | null;
+  onSignOut: () => void;
+}) {
   const [days, setDays] = useState<WindowDays>(30);
   const [courseId, setCourseId] = useState("all");
   const [timezone] = useState(() => {
@@ -203,11 +209,11 @@ export function Dashboard() {
           <a href="#courses"><span>03</span> Courses</a>
           <a href="#risks"><span>04</span> Risks</a>
         </nav>
-        <div className="sidebar-foot">
+        <div className="sidebar-foot account-foot">
           <span className="status-dot" />
           <div>
-            <strong>Local API</strong>
-            <small>FastAPI connected</small>
+            <strong>{userEmail ?? "Signed in"}</strong>
+            <small>Private workspace</small>
           </div>
         </div>
       </aside>
@@ -237,6 +243,9 @@ export function Dashboard() {
             </button>
             <button className="ghost-button" onClick={() => void load()} disabled={loading}>
               {loading ? "Syncing…" : "Refresh"}
+            </button>
+            <button className="ghost-button" onClick={onSignOut}>
+              Sign out
             </button>
           </div>
         </section>
