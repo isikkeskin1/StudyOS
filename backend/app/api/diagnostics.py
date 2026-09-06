@@ -13,6 +13,11 @@ from app.models.course_intelligence import CourseTopic
 from app.models.diagnostics import DiagnosticQuestion, DiagnosticResponse, DiagnosticSession
 from app.models.exam_intelligence import ExamAnalysis, ExamQuestion, ExamQuestionTopic
 from app.models.grading import ExamQuestionReference
+from app.schemas.diagnostic_summary import (
+    DiagnosticSessionMistakeSummaryRead,
+    DiagnosticSessionSummaryRead,
+    DiagnosticSessionTopicSummaryRead,
+)
 from app.schemas.diagnostics import (
     DiagnosticAnswerRead,
     DiagnosticAutoGradeCreate,
@@ -26,11 +31,6 @@ from app.schemas.diagnostics import (
     DiagnosticSessionCreate,
     DiagnosticSessionRead,
     TopicMasteryRead,
-)
-from app.schemas.diagnostic_summary import (
-    DiagnosticSessionMistakeSummaryRead,
-    DiagnosticSessionSummaryRead,
-    DiagnosticSessionTopicSummaryRead,
 )
 from app.services.diagnostics import (
     DiagnosticStateError,
