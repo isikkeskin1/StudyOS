@@ -117,6 +117,45 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run dist:win
 
+      - name: Smoke packaged portable app
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          $portable = Get-ChildItem "dist/*Portable.exe" | Select-Object -First 1
+          if (-not $portable) {
+            throw "Portable StudyOS executable was not produced"
+          }
+          $logPath = Join-Path $env:RUNNER_TEMP "studyos-packaged-desktop.log"
+          Remove-Item $logPath -ErrorAction SilentlyContinue
+          $env:STUDYOS_DESKTOP_LOG_PATH = $logPath
+          $process = Start-Process $portable.FullName -PassThru
+          try {
+            $ready = $false
+            for ($attempt = 0; $attempt -lt 120; $attempt++) {
+              if (Test-Path $logPath) {
+                $log = Get-Content $logPath -Raw
+                if ($log -match "StudyOS desktop ready at") {
+                  $ready = $true
+                  break
+                }
+                if ($log -match "StudyOS desktop startup failed") {
+                  throw "Packaged StudyOS entered recovery mode. Log: $log"
+                }
+              }
+              if ($process.HasExited) {
+                throw "Packaged StudyOS exited before becoming ready"
+              }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $ready) {
+              $log = if (Test-Path $logPath) { Get-Content $logPath -Raw } else { "<no desktop log>" }
+              throw "Packaged StudyOS did not become ready. Log: $log"
+            }
+          } finally {
+            Get-Process StudyOS -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Get-Process StudyOSBackend -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7
         with:
