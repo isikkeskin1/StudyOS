@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
@@ -11,7 +11,14 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import hash_password, new_session_token, token_digest, verify_password
 from app.models.auth import AuthSession, User
-from app.schemas.auth import AuthRead, LoginRequest, RegisterRequest, UserRead
+from app.schemas.auth import (
+    AuthRead,
+    DeleteAccountRequest,
+    LoginRequest,
+    RegisterRequest,
+    UserRead,
+)
+from app.services.account_data import delete_user_data, export_user_data
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 SESSION_DAYS = 30
@@ -19,6 +26,22 @@ SESSION_DAYS = 30
 
 def _user_read(user: User) -> UserRead:
     return UserRead(id=user.id, email=user.email, created_at=user.created_at)
+
+
+def _current_user(request: Request, db: Session) -> User:
+    user_id = getattr(request.state, "user_id", None)
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account not found",
+        )
+    return user
 
 
 def _issue_session(
@@ -106,13 +129,30 @@ def me(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
 ) -> UserRead:
-    user_id = getattr(request.state, "user_id", None)
-    if user_id is None:
+    return _user_read(_current_user(request, db))
+
+
+@router.get("/export")
+def export_account(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, Any]:
+    user = _current_user(request, db)
+    return export_user_data(db, user)
+
+
+@router.delete("/account", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(
+    payload: DeleteAccountRequest,
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    user = _current_user(request, db)
+    if not verify_password(payload.password, user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password confirmation failed",
         )
-    user = db.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account not found")
-    return _user_read(user)
+    delete_user_data(db, user)
+    response.delete_cookie("studyos_session", path="/")
