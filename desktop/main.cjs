@@ -150,9 +150,9 @@ function waitForHttp(url, timeoutMs = 30000, label = "StudyOS service") {
 
 function bundledBackendPath() {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, "backend", "StudyOSBackend.exe");
+    return path.join(process.resourcesPath, "backend", "StudyOSBackend", "StudyOSBackend.exe");
   }
-  return path.resolve(__dirname, "build/backend/StudyOSBackend.exe");
+  return path.resolve(__dirname, "build/backend/StudyOSBackend/StudyOSBackend.exe");
 }
 
 async function startLocalBackend() {
