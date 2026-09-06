@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AccountSettings } from "@/components/account-settings";
+import { AdminCatalog } from "@/components/admin-catalog";
 import { CourseManager } from "@/components/course-manager";
 import { GlobalSearch } from "@/components/global-search";
 
@@ -72,10 +73,12 @@ function activityLabel(value: string) {
 
 export function Dashboard({
   userEmail,
+  isAdmin,
   onSignOut,
   onAccountDeleted,
 }: {
   userEmail: string | null;
+  isAdmin: boolean;
   onSignOut: () => void;
   onAccountDeleted: () => void;
 }) {
@@ -92,6 +95,7 @@ export function Dashboard({
   const [actionBusy, setActionBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -247,6 +251,11 @@ export function Dashboard({
             <button className="ghost-button" onClick={() => setManagerOpen(true)}>
               Manage courses
             </button>
+            {isAdmin && (
+              <button className="ghost-button admin-button" onClick={() => setAdminOpen(true)}>
+                Admin catalog
+              </button>
+            )}
             <button className="ghost-button" onClick={() => void load()} disabled={loading}>
               {loading ? "Syncing…" : "Refresh"}
             </button>
@@ -498,6 +507,11 @@ export function Dashboard({
           </>
         )}
       </main>
+      <AdminCatalog
+        open={adminOpen}
+        onClose={() => setAdminOpen(false)}
+        onChanged={() => void load()}
+      />
       <CourseManager
         open={managerOpen}
         onClose={() => setManagerOpen(false)}
