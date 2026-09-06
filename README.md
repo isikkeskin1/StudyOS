@@ -1,462 +1,361 @@
-# StudyOS
+<div align="center">
 
-StudyOS is an evidence-driven academic operating system that turns uploaded course material and student performance into adaptive study plans, mastery estimates, grade forecasts, source-grounded tutoring, and time-constrained exam optimization.
+# 🧠 StudyOS
 
-> **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
+### Your course material in. A study operating system out.
 
-## Current milestone — v0.50 beta release hardening
+**StudyOS turns your notes, slides, past papers, deadlines, grades, and actual performance into one adaptive system that tells you what to study next — and why.**
 
-StudyOS backend and web are now at **v0.50.0**. This milestone freezes feature growth and
-focuses on beta-readiness: account-scoped data ownership, export/deletion controls,
-destructive-action confirmation, stronger onboarding validation, enforced SQLite foreign
-keys in development/tests, auth abuse throttling, secure browser/API headers, production
-secret defaults, writable-storage readiness checks, and deployment/browser smoke coverage.
+<br />
 
-## Spaced-repetition workflow
+![Version](https://img.shields.io/badge/version-v0.50.0-7C3AED?style=for-the-badge)
+![Status](https://img.shields.io/badge/status-BETA-F59E0B?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-ready-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 
-Due reviews now launch persistent, single-question review sessions. Selection uses the
-existing calibrated retention queue and its topic priority. An optional `topic_id`
-selects a specific due topic. Repeated starts resume unfinished work; skipped or
-solution-revealed reviews can be restarted without recording mastery evidence.
+<br />
+
+> ### Stop asking “what should I study?”
+> Upload the course. Set the target. StudyOS builds the path.
+
+</div>
+
+---
+
+## ✨ What is StudyOS?
+
+Most study apps give you a timer, a to-do list, or a chatbot.
+
+**StudyOS is built to make decisions.**
+
+It ingests your real course material, measures what you actually know, estimates where your marks are being lost, watches deadlines and forgetting, and continuously chooses the highest-value work available.
 
 ```text
-POST /api/v1/courses/{course_id}/review-sessions
-GET  /api/v1/courses/{course_id}/review-sessions
-GET  /api/v1/courses/{course_id}/review-sessions/{review_id}
-POST /api/v1/courses/{course_id}/review-sessions/{review_id}/answer
-POST /api/v1/courses/{course_id}/review-sessions/{review_id}/skip
+📚 Course files + 📝 Past papers + 🎯 Target grade + ⏳ Time available
+                              │
+                              ▼
+                    ┌───────────────────┐
+                    │      StudyOS      │
+                    │ Academic engine   │
+                    └───────────────────┘
+                              │
+          ┌───────────────────┼───────────────────┐
+          ▼                   ▼                   ▼
+     🧠 Mastery          📈 Grade forecast    🔎 Weaknesses
+          │                   │                   │
+          └───────────────────┼───────────────────┘
+                              ▼
+                    ⚡ Best next action
+                              │
+                              ▼
+                 🔁 Measure → adapt → repeat
 ```
 
-Start with `{ "provider": "local" }` or the configured tutor provider. Answer with
-`{ "student_answer": "...", "grading_provider": "local", "duration_seconds": 90 }`.
-The returned practice ID also supports the existing tutor hint and solution endpoints.
-Local generation requires a mapped question with a reference solution for the selected
-topic; unavailable material or no due topic returns 409 without creating a partial session.
+StudyOS does **not** assume that every topic deserves equal time. If one hour of Physics is expected to help your target more than one hour of Programming, it can prioritize Physics. If that changes after a practice session, the plan changes too.
 
-Grading uses the existing evidence-weighted practice pipeline, including hint penalties,
-mastery recomputation, and history. The response includes the graded attempt and the
-refreshed review priority and due state. Completion means an answer was graded, not
-that the answer was correct. Revealed solutions cannot be submitted as mastery evidence.
-Duplicate answers are rejected. Skipping is idempotent and never marks a topic reviewed.
+---
 
-Creation persists the question and review link in one transaction. A unique active
-reservation prevents duplicate unfinished reviews for a topic. Each session preserves
-its original selection reason and evidence timestamp for inspection later.
+## 🚀 The experience
 
-## Semester command center
+| | You do | StudyOS does |
+|---|---|---|
+| **1 · Add courses** | Enter your subjects, grading scale, exam dates and target grades. | Creates the academic model for each course. |
+| **2 · Upload material** | Drop in PDFs, DOCX, PPTX, TXT or Markdown. | Extracts, chunks, classifies and connects material to topics and evidence. |
+| **3 · Measure yourself** | Complete diagnostics and practice. | Builds topic-level mastery, confidence, mistake and retention models. |
+| **4 · Set your constraints** | Tell it how much time you actually have. | Calculates where each study block has the highest expected value. |
+| **5 · Execute** | Follow the next action. | Tracks completion, updates evidence and rebuilds unfinished work when reality changes. |
 
+---
 
+## 🔥 What makes it different?
 
-`GET /api/v1/semester/dashboard` returns course estimates, normalized target gaps,
-calendar-day deadline pressure, due review counts, queue summaries, and the next
-executable study block. Supply `?queue_id=...` to select a specific queue; otherwise
-it selects the newest active queue. Separate queue budgets are never added together.
+### 🎯 It optimizes for the grade you want
 
-Courses with no measured topics return a null grade and an `unmeasured` target status.
-Partially measured courses use the existing retention-aware model and baseline for
-unmeasured topics; the response includes evidence coverage and confidence. Target
-status indicates an estimated gap, not a predicted probability of passing or failing.
+StudyOS models your **target gap**, not just generic “progress.”
 
-The dashboard is read-only. Changed evidence or course settings, a new calendar day,
-missing topics, or exact deadlines that no longer fit flag the queue for refresh.
-Stale planned work is withheld from `next_action`; in-progress work remains visible.
-Use the queue refresh endpoint to rebuild it. Saved forecasts remain available in
-queue revisions, separate from the dashboard's current course estimates.
-
-## Persistent semester control loop
-
-
-
-StudyOS can now persist a multi-course optimization as one executable semester study
-queue. The queue preserves immutable planning revisions while the current revision
-supports starting, completing, and skipping blocks in strict order.
+A 25/30 target in Physics and an 80/100 target in Programming can compete for the same limited study time without incorrectly comparing raw marks across unrelated grading scales.
 
 ```text
-POST /api/v1/semester-queues
-GET  /api/v1/semester-queues
-GET  /api/v1/semester-queues/{queue_id}
-
-POST /api/v1/semester-queues/{queue_id}/blocks/{block_id}/start
-POST /api/v1/semester-queues/{queue_id}/blocks/{block_id}/complete
-POST /api/v1/semester-queues/{queue_id}/blocks/{block_id}/skip
-POST /api/v1/semester-queues/{queue_id}/refresh
-```
-
-Actual completion time reduces the shared remaining budget. Missed time is tracked
-separately. Every completion, skip, or manual budget change supersedes unfinished
-blocks and runs the cross-course optimizer again with the remaining time.
-
-Exact deadline horizons are stored as absolute timestamps, so they continue to count
-down across revisions. Each revision also stores a source fingerprint for course
-deadlines, targets, grade scales, and measured topic mastery. Reading an idle queue
-automatically creates a `source_change` revision when those inputs have changed or an
-exact deadline crosses a scheduling-block boundary. In-progress work is never
-silently superseded.
-
-Completed study contributes only a schedule-local mastery projection. New measured
-mastery supersedes older projections, so executing a queue never writes synthetic
-diagnostic evidence.
-
-Each revision exposes the optimizer model, per-course forecasts and allocations,
-aggregate target-gap metrics, utility, and its complete block history.
-
-## Multi-course optimization
-
-StudyOS can now allocate one scarce study-time budget across multiple courses with different grading scales, targets, deadlines, and evidence quality.
-
-```text
-Physics          25 / 30 target
-Programming      80 / 100 target
-Linear Algebra   27 / 30 target
-
-7 hours available
+Expected mark gain
+        ×
+Deadline pressure
+        ×
+Evidence confidence
         ↓
-normalized target-gap utility
-+ deadline pressure
-+ evidence confidence
-        ↓
-block-by-block global competition
-        ↓
-ordered cross-course study schedule
+Value of the next study block
 ```
 
-### Multi-course endpoint
+When a course reaches its projected target, StudyOS can stop allocating scarce time to it instead of manufacturing busywork.
 
-```text
-POST /api/v1/multi-course-plan
+### 🧠 It models what you actually know
 
-POST /api/v1/semester-queues
-GET  /api/v1/semester-queues/{queue_id}
-POST /api/v1/semester-queues/{queue_id}/refresh
-```
+Mastery is evidence-driven and topic-level. StudyOS combines diagnostics, practice attempts, mistakes, answer history, retention and evidence confidence instead of reducing an entire course to one progress bar.
 
-Example request:
-
-```json
-{
-  "available_hours": 7,
-  "block_minutes": 30,
-  "courses": [
-    {
-      "course_id": "physics-id",
-      "hours_until_exam": 18
-    },
-    {
-      "course_id": "linear-id",
-      "hours_until_exam": 48
-    },
-    {
-      "course_id": "programming-id",
-      "hours_until_exam": 96
-    }
-  ]
-}
-```
-
-Each course can also override its target grade, baseline mastery, per-topic mastery, and whether stored measured mastery should be used.
-
-### Raw marks are never compared across unrelated grade scales
-
-A gain of `+2` marks in a 30-point course is not treated as equivalent to `+2` marks in a 100-point course.
-
-For every candidate block, StudyOS first calculates the expected mark gain using the existing calibrated course model, then converts only the useful part of that gain into normalized target-gap reduction:
-
-```text
-raw expected mark gain
-        ↓
-min(raw gain, remaining target gap)
-        ↓
-divide by course maximum grade
-        ↓
-normalized target-gap reduction
-```
-
-The global utility used for allocation is:
-
-```text
-normalized target-gap reduction
-× deadline multiplier
-× confidence multiplier
-```
-
-This means two otherwise identical courses on 30-point and 100-point scales produce comparable normalized utility even though their raw expected mark gains differ substantially.
-
-### Sequential global allocation
-
-The optimizer is `normalized-target-utility-greedy-v1`.
-
-It does not rank courses once and assign fixed chunks. After every study block it:
-
-```text
-updates projected topic mastery
-        ↓
-recalculates projected course grade
-        ↓
-recalculates remaining target gap
-        ↓
-reduces exact deadline horizon by elapsed global study time
-        ↓
-re-evaluates every eligible course
-        ↓
-selects the highest current utility block
-```
-
-Diminishing returns inside one course can therefore cause the next block to move to another course.
-
-### Deadline pressure
-
-A course request may provide exact `hours_until_exam`.
-
-Exact deadline horizons are hard cutoffs. If only 30 minutes remain before that exam, StudyOS cannot allocate a later block to the course after those 30 minutes have elapsed in the global schedule.
-
-Deadline pressure also increases when the estimated study hours required to reach the target consume a large share of the exact time remaining.
-
-Course-level `exam_date` is still supported when exact hours are not provided. Because `exam_date` contains only a calendar date, it contributes **coarse urgency weighting only**. StudyOS does not invent an exam clock time.
-
-### Evidence uncertainty
-
-Expected study gains with weaker evidence are conservatively shrunk before courses compete globally.
-
-Current confidence multipliers are:
-
-```text
-low      0.80
-medium   0.90
-high     1.00
-```
-
-This does not change stored mastery. It only prevents a poorly measured course from winning scarce global time purely because a noisy point estimate looks large.
-
-### Targets are real stopping conditions
-
-Once a course reaches its stated target under the planning projection, it stops receiving scarce time.
-
-If every selected course has already reached its target, StudyOS returns the remaining time as `unallocated_hours` rather than generating fake productivity work just to fill the schedule.
-
-The response exposes both per-course and global results:
-
-```text
-ordered cross-course blocks
-next action
-raw expected mark gain per block
-normalized target-gap reduction
-utility score
-course allocation totals
-current and projected grades
-target gaps before / after
-deadline source and multiplier
-plan confidence and confidence multiplier
-unallocated time
-```
-
-Expected gains and utility remain planning heuristics, not guaranteed exam results.
-
-## Persistent Emergency Mode
-
-Single-course Emergency Mode can persist an optimized schedule, record what actually happened, and rebuild only the unfinished portion when time or mastery changes.
-
-```text
-POST /api/v1/courses/{course_id}/emergency-plan
-POST /api/v1/courses/{course_id}/emergency-schedules
-GET  /api/v1/courses/{course_id}/emergency-schedules
-GET  /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}
-```
-
-Current-revision blocks support:
-
-```text
-POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/blocks/{block_id}/start
-POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/blocks/{block_id}/complete
-POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/blocks/{block_id}/skip
-POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/reschedule
-```
-
-Every replan creates an immutable revision. Old unfinished blocks become `superseded`, while completed and skipped blocks remain historical evidence of what happened.
-
-Actual minutes affect the remaining budget: finishing early preserves time, finishing late consumes extra time, and skipped blocks can explicitly record lost minutes.
-
-Study completion never writes fake mastery evidence. Schedule-local learning projections are replaced by newer diagnostic or practice evidence whenever it exists.
-
-## Planning and grade modelling
-
-The normal `heuristic-v5` planner combines course importance, exam weight, effective mastery, mistake burden, personalized learning scale, and calibrated retention.
-
-The single-course Emergency Mode optimizer `expected-marks-greedy-v1` assigns each study block to the topic with the highest current expected marginal mark gain.
-
-The `probabilistic-v1` layer adds score distributions, likely ranges, target probabilities, study-hour scenarios, and evidence-quality-driven uncertainty.
-
-Immutable pre-exam forecasts can later receive real outcomes. StudyOS measures prediction error, interval coverage, Brier score, and log loss; guarded empirical recalibration is evaluated with rolling-origin held-out validation.
-
-## Tutor grounding and retrieval
-
-Tutor requests support:
-
-```text
-retrieval_mode: auto | lexical | semantic | hybrid
-provider: auto | local | openai
-```
-
-Current retrieval signals include BM25, course-topic evidence, embedding cosine similarity, and a persistent chunk-vector cache.
-
-Generated tutor prose is decomposed into atomic claims and validated locally for citation validity, contradictions, unsupported additions, and numerical consistency before return.
-
-StudyOS also supports adaptive practice, rubric-aware grading, multi-question session memory, remediation teaching, semantic retrieval, persistent incremental embeddings, and hard-negative retrieval benchmarking.
-
-### Retrieval regression suites
-
-Course-level benchmark suites persist labeled queries and relevant chunks. Repeated runs preserve full results and compare bounded ranking metrics against a prior same-K baseline.
-
-```text
-Top-1 accuracy
-Hit@K
-Recall@K
-MRR
-        ↓
-PASS | REGRESSION | NO_BASELINE
-```
-
-This lets retrieval changes be measured before adopting additional vector-search infrastructure.
-
-## Intelligence stack
-
-### Course intelligence
-
-- PDF, DOCX, PPTX, TXT, and Markdown ingestion
-- page/slide-aware extraction and deterministic chunking
-- document classification and deduplication
-- course topic graph and source evidence
-- past-paper question/mark extraction
-- topic frequency and normalized exam weighting
-
-### Diagnostics and mastery
-
-- adaptive diagnostics from real past-paper questions
-- Bayesian topic mastery and confidence
-- mistake taxonomy and recurring mistake analytics
-- response-level mastery history and trends
+**Built in:**
+- adaptive diagnostics from course questions
+- Bayesian topic mastery + confidence
+- recurring mistake taxonomy
+- response-level mastery history
 - forgetting-aware effective mastery
-- personalized learning responsiveness and retention calibration
-- exam-aware review queue
-- practice evidence integrated into the same mastery model
+- personalized learning and retention calibration
+- exam-aware review queues
+- spaced-repetition review sessions
 
-## API highlights
+### 📚 The tutor is grounded in your course
+
+StudyOS can retrieve from your uploaded material using lexical, semantic or hybrid retrieval.
+
+Tutor responses are validated for citation validity, contradictions, unsupported additions and numerical consistency. Practice supports hints, rubric-aware grading, session memory, remediation and source-linked solutions.
+
+> The goal is not “AI that sounds confident.”  
+> The goal is **answers you can trace back to the material you are studying.**
+
+### ⚡ Emergency Mode
+
+Exam tomorrow? Three chapters left? Five hours available?
+
+Emergency Mode treats time as a hard constraint and greedily allocates blocks by expected marginal marks. The schedule is persistent: finishing early preserves time, finishing late consumes it, and replanning only rebuilds unfinished work.
+
+### 🗓️ One semester, one control loop
+
+StudyOS can optimize multiple courses under a **single shared time budget**.
 
 ```text
-POST /api/v1/courses/{course_id}/documents
-POST /api/v1/courses/{course_id}/documents/{document_id}/process
-POST /api/v1/courses/{course_id}/analyze
-POST /api/v1/courses/{course_id}/exam-intelligence/analyze
-
-POST /api/v1/courses/{course_id}/diagnostics
-GET  /api/v1/courses/{course_id}/mastery
-GET  /api/v1/courses/{course_id}/mastery/history
-GET  /api/v1/courses/{course_id}/mistakes
-GET  /api/v1/courses/{course_id}/reviews
-
-POST /api/v1/courses/{course_id}/study-plan
-POST /api/v1/courses/{course_id}/emergency-plan
-POST /api/v1/courses/{course_id}/emergency-schedules
-GET  /api/v1/courses/{course_id}/emergency-schedules
-GET  /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}
-POST /api/v1/courses/{course_id}/emergency-schedules/{schedule_id}/reschedule
-
-POST /api/v1/multi-course-plan
-
-POST /api/v1/courses/{course_id}/grade-forecast
-POST /api/v1/courses/{course_id}/grade-forecast/calibrated
-GET  /api/v1/courses/{course_id}/forecast-calibration
-GET  /api/v1/courses/{course_id}/forecast-validation
-
-POST /api/v1/courses/{course_id}/tutor/search
-POST /api/v1/courses/{course_id}/tutor/ask
-POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark
-POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites
-POST /api/v1/courses/{course_id}/tutor/retrieval-benchmark-suites/{suite_id}/runs
-GET  /api/v1/courses/{course_id}/tutor/embedding-index
-POST /api/v1/courses/{course_id}/tutor/embedding-index/sync
-
-POST /api/v1/courses/{course_id}/tutor/practice
-POST /api/v1/courses/{course_id}/tutor/practice-sessions
-POST /api/v1/courses/{course_id}/tutor/practice/{practice_id}/evaluate
-GET  /api/v1/courses/{course_id}/tutor/practice/{practice_id}/solution
+Physics ───────┐
+Linear Algebra ├──► global optimizer ───► ordered study queue
+Programming ───┘                              │
+                                              ▼
+                                      one next action
 ```
 
-FastAPI exposes interactive docs at `/docs` while the server is running.
+Deadlines continue counting down. Changed mastery, targets, grade settings and available time can trigger a new immutable queue revision while completed work stays in history.
 
-## Roadmap
+### 📊 Forecasts with uncertainty
 
-### Phase 1 — Course intelligence and planning
-- [x] source-aware document pipeline
-- [x] topic intelligence and past-paper weighting
-- [x] study planner
+StudyOS does not pretend a grade forecast is certainty.
 
-### Phase 2 — Diagnostics and mastery
-- [x] adaptive diagnostics and persistent mastery
-- [x] mistakes and answer evidence
-- [x] forgetting-aware reviews
-- [x] mastery history and personalized learning/retention calibration
-- [x] deterministic and rubric-aware grading
+The probabilistic layer supports:
+- score distributions and likely ranges
+- target probabilities
+- study-hour scenarios
+- evidence-quality-driven uncertainty
+- immutable pre-exam forecasts
+- real-outcome comparison
+- Brier score, log loss and interval coverage
+- guarded empirical recalibration with held-out validation
 
-### Phase 3 — Grade modelling
-- [x] probabilistic score distributions and target probabilities
-- [x] immutable forecasts and real outcomes
-- [x] guarded empirical recalibration
-- [x] reliability curves and rolling held-out validation
+---
 
-### Phase 4 — Course-aware tutor
-- [x] grounded retrieval and exact citations
-- [x] semantic reranking and persistent embedding cache
-- [x] adaptive practice, rubric grading, session memory, remediation teaching
-- [x] atomic claim validation
-- [x] hard-negative retrieval benchmark
-- [x] persisted benchmark suites and regression history
-- [ ] external ANN/vector backend only when benchmarked scale justifies it
+## 🧩 Feature map
 
-### Phase 5 — Optimization
-- [x] expected marks per study hour
-- [x] Emergency Mode
-- [x] persistent schedules and automatic rescheduling
-- [x] normalized multi-course optimization
+| Area | What StudyOS can do |
+|---|---|
+| 📥 **Course intelligence** | Ingest PDFs, DOCX, PPTX, TXT and Markdown; classify documents; extract topics and past-paper evidence |
+| 🧠 **Mastery** | Diagnostics, topic mastery, confidence, mistakes, history, forgetting and personalized calibration |
+| 📝 **Practice** | Adaptive questions, hints, rubric-aware grading, remediation and persistent practice sessions |
+| 🔁 **Reviews** | Retention-aware due queues and persistent spaced-repetition sessions |
+| 🤖 **Tutor** | Grounded search, citations, semantic/hybrid retrieval and claim validation |
+| 📈 **Forecasting** | Grade projections, uncertainty, target probability and calibration |
+| 🎯 **Planning** | Normal study plans, expected-marks optimization and target-aware stopping |
+| 🚨 **Emergency Mode** | Hard-deadline optimization with persistent schedules and automatic replanning |
+| 🌐 **Semester OS** | Cross-course optimization, persistent semester queues and command-center analytics |
+| 📄 **Cheat sheets** | Source-grounded formulas, methods and recurring mistakes |
+| 📅 **Calendar & focus** | Calendar-aware planning and focus workflow integration |
+| 📲 **PWA** | Installable web app, offline shell and notifications |
+| 🔐 **Account controls** | Account-scoped ownership, export and confirmed deletion |
 
-### Phase 6 — Study operating system
-- [x] persistent semester-wide study queue
-- [x] semester command-center API and analytics UI
-- [x] spaced-repetition and review workflow
-- [x] source-grounded cheat-sheet generation
-- [x] calendar/focus integration
-- [x] PWA, offline shell, and notifications
-- [x] account-scoped authentication and data controls
-- [x] beta security and production hardening
+---
 
-## Tech stack
+## 🛡️ Built for a real beta, not just a demo
 
-Python 3.12+, FastAPI, Pydantic, SQLAlchemy 2, PostgreSQL/SQLite, pypdf, python-docx, python-pptx, OpenAI SDK, Pytest, Ruff, Docker Compose, GitHub Actions, and a Next.js/TypeScript client.
+v0.50 is the **beta hardening release**.
 
-The current production topology uses PostgreSQL, a FastAPI API container, a non-root Next.js web container, persistent upload storage, and the push worker. A distributed rate limiter and an external ANN/vector backend remain scale-driven future infrastructure rather than beta requirements.
+The release includes:
 
-## Local development
+🟣 account-scoped data ownership  
+🔵 account export with sensitive-field redaction  
+🟠 password + literal confirmation for destructive account deletion  
+🟢 authentication abuse throttling and `Retry-After`  
+🟡 expired-session cleanup  
+🔴 CSP, HSTS and browser/API security headers  
+⚪ production secret requirements  
+🟤 database + writable-storage readiness checks  
+🔷 non-root application containers  
+🟪 migration, container, deployment and browser E2E gates
+
+The current release audit is documented in [`docs/releases/v0.50.0-beta-audit.md`](docs/releases/v0.50.0-beta-audit.md).
+
+---
+
+## 🏗️ Architecture
+
+```text
+                         ┌────────────────────┐
+                         │   Next.js Web/PWA  │
+                         │   React 19 client  │
+                         └─────────┬──────────┘
+                                   │ same-origin /api
+                                   ▼
+                         ┌────────────────────┐
+                         │      FastAPI       │
+                         │ auth • courses • AI│
+                         └──────┬───────┬─────┘
+                                │       │
+                    ┌───────────┘       └───────────┐
+                    ▼                               ▼
+          ┌──────────────────┐            ┌──────────────────┐
+          │ PostgreSQL/SQLite│            │ Persistent files │
+          │ academic state   │            │ course uploads   │
+          └──────────────────┘            └──────────────────┘
+                    │
+                    ▼
+          ┌──────────────────┐
+          │ Intelligence     │
+          │ mastery • plans  │
+          │ retrieval • tutor│
+          │ forecasts        │
+          └──────────────────┘
+```
+
+### Stack
+
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2-D71F00?style=flat-square)
+![Playwright](https://img.shields.io/badge/Playwright-E2E-2EAD33?style=flat-square&logo=playwright&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI-2088FF?style=flat-square&logo=githubactions&logoColor=white)
+
+**Frontend:** Next.js 15 · React 19 · TypeScript 5.9 · PWA  
+**Backend:** Python 3.12+ · FastAPI · Pydantic · SQLAlchemy 2  
+**Data:** PostgreSQL in production · SQLite for local development/tests · persistent upload storage  
+**Intelligence:** course extraction · retrieval · mastery · planning · forecasting · tutoring  
+**Ops:** Docker Compose · GitHub Actions · Playwright · Ruff · Pytest
+
+---
+
+## 🧪 Quality gates
+
+StudyOS is tested as a system, not only as isolated functions.
+
+```text
+Backend
+├── Ruff
+├── Alembic migration smoke
+├── Pytest suite
+└── Backend container build
+
+Web
+├── ESLint
+├── TypeScript
+├── PWA contract
+├── Next.js production build
+└── Web container build
+
+Deployment
+├── Docker Compose validation
+├── Full stack startup
+├── Readiness checks
+├── Web topology
+├── API through web proxy
+└── Playwright browser E2E
+```
+
+---
+
+## 💻 Run StudyOS locally
+
+### Backend
 
 ```bash
-cd backend
+git clone https://github.com/isikkeskin1/StudyOS.git
+cd StudyOS/backend
+
 python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+
 pip install -e ".[dev]"
 uvicorn app.main:app --reload
-
-ruff check .
-pytest
 ```
 
-## Production deployment checklist
+The API is then available locally and FastAPI exposes interactive API documentation at `/docs`.
 
-1. Copy the backend environment example and set a long random `POSTGRES_PASSWORD`.
-2. Set `STUDYOS_ENV=production`, production URLs/proxy settings, and any enabled provider credentials.
-3. Configure `STUDYOS_FORWARDED_ALLOW_IPS` to the actual trusted reverse proxy addresses; do not use a public wildcard outside the private Compose topology.
-4. Keep VAPID keys as a valid pair if push notifications are enabled.
-5. Run `docker compose config --quiet`, then `docker compose up -d --build`.
-6. Require both `/api/v1/health/live` and `/api/v1/health/ready` to be healthy before routing beta traffic.
-7. Verify browser security headers, sign-up/login, first-course onboarding, upload/processing, study flow, export, and account deletion.
-8. Run backend CI, web CI, and the deployment/browser smoke suite before tagging a release.
+### Web
 
-## Beta posture
+Open another terminal:
 
-v0.50.0 is the beta hardening milestone. Subsequent v0.5x releases should prioritize real-user feedback, regressions, security fixes, compatibility, and operational reliability over large new feature surfaces. The detailed v0.50 release audit lives in `docs/releases/v0.50.0-beta-audit.md`.
+```bash
+cd StudyOS/web
+npm install
+npm run dev
+```
+
+The web app uses the local FastAPI backend through the configured Next.js rewrite.
+
+---
+
+## 🐳 Production-style Docker deployment
+
+1. Copy the backend environment example and set a **long random** `POSTGRES_PASSWORD`.
+2. Set `STUDYOS_ENV=production`, production URL/proxy settings and any provider credentials you intend to use.
+3. Configure `STUDYOS_FORWARDED_ALLOW_IPS` for your trusted reverse proxy. Do not expose wildcard proxy trust outside the private Compose topology.
+4. Configure a valid VAPID key pair if push notifications are enabled.
+5. Validate and start:
+
+```bash
+docker compose config --quiet
+docker compose up -d --build
+```
+
+6. Do not route beta traffic until both liveness and readiness are healthy.
+7. Verify signup/login, onboarding, upload/processing, study flow, export and account deletion.
+8. Require backend CI, web CI and deployment/browser smoke to pass before a release.
+
+---
+
+## 🗺️ Roadmap
+
+| Phase | Status | Milestone |
+|---|---|---|
+| **1 · Course intelligence** | ✅ Complete | Source-aware ingestion, topic intelligence, past-paper weighting |
+| **2 · Diagnostics & mastery** | ✅ Complete | Adaptive diagnostics, mistakes, retention, calibration |
+| **3 · Grade modelling** | ✅ Complete | Probabilistic forecasts, outcomes and validation |
+| **4 · Course-aware tutor** | ✅ Complete* | Grounded retrieval, practice, semantic reranking, claim validation |
+| **5 · Optimization** | ✅ Complete | Expected-marks planning, Emergency Mode, multi-course optimization |
+| **6 · Study operating system** | ✅ Complete | Semester queues, reviews, cheat sheets, calendar/focus, PWA |
+| **v0.50 · Beta hardening** | 🟣 Current | Security, data controls, failure states, production readiness |
+
+\*An external ANN/vector backend remains intentionally scale-driven rather than a beta requirement.
+
+### What comes after v0.50?
+
+The v0.5x line prioritizes **real-user feedback, regressions, reliability, compatibility and security** over throwing more feature surface into the product.
+
+---
+
+## ⚠️ Beta notes
+
+StudyOS is currently a **beta**. Grade forecasts, expected mark gains and optimization scores are decision-support estimates — not guarantees of exam results.
+
+OpenAI-backed functionality requires valid provider configuration. Core local workflows and CI do not require external provider credentials.
+
+The current authentication rate limiter is process-local and appropriate for the current single-API-process topology. A shared/distributed limiter should replace it before horizontally scaling the API.
+
+---
+
+<div align="center">
+
+## 🎓 Built around one question
+
+### **“Given what I know, what I need, and how much time I have — what should I do next?”**
+
+StudyOS exists to answer that question continuously.
+
+<br />
+
+**v0.50.0 Beta · Study smarter under real constraints.**
+
+</div>
