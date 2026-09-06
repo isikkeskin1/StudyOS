@@ -46,8 +46,11 @@
 <body>
   <main>
     <div class="mark">🧠</div>
-    <h1>StudyOS needs a server</h1>
-    <p>The bundled local StudyOS backend could not start. You can connect this desktop client to a hosted StudyOS server instead.</p>
+    <h1>StudyOS couldn't start</h1>
+    <p id="summary">The bundled desktop services did not start correctly. You can retry the local StudyOS runtime or connect to a hosted StudyOS server.</p>
+    <div id="startup-error" style="display:none;margin-top:16px;padding:12px 14px;border:1px solid rgba(248,113,113,.25);border-radius:10px;background:rgba(127,29,29,.12);color:#fecaca;font-size:12px;line-height:1.5;word-break:break-word;"></div>
+    <button id="retry-local" type="button">Retry bundled local StudyOS</button>
+    <p id="log-path" class="note" style="margin-top:10px;padding-top:0;border-top:0;"></p>
     <form id="form">
       <label>
         StudyOS server URL
@@ -62,7 +65,31 @@
     const form = document.getElementById("form");
     const input = document.getElementById("url");
     const button = document.getElementById("submit");
+    const retryLocal = document.getElementById("retry-local");
     const status = document.getElementById("status");
+    const startupError = document.getElementById("startup-error");
+    const logPath = document.getElementById("log-path");
+
+    window.studyosDesktop.getStartupError().then(({ message, logPath: path }) => {
+      if (message) {
+        startupError.style.display = "block";
+        startupError.textContent = message;
+      }
+      if (path) logPath.textContent = `Diagnostic log: ${path}`;
+    }).catch(() => {});
+
+    retryLocal.addEventListener("click", async () => {
+      retryLocal.disabled = true;
+      button.disabled = true;
+      status.textContent = "Retrying local StudyOS…";
+      try {
+        await window.studyosDesktop.useLocalBackend();
+      } catch (error) {
+        status.textContent = error?.message || "Local StudyOS could not start.";
+        retryLocal.disabled = false;
+        button.disabled = false;
+      }
+    });
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       button.disabled = true;
