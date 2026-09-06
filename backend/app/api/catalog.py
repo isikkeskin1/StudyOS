@@ -218,24 +218,13 @@ def list_catalog_courses(
     return [_catalog_read(db, item) for item in items]
 
 
-@router.post(
-    "/catalog/courses/{catalog_id}/enroll",
-    response_model=CourseRead,
-    status_code=status.HTTP_201_CREATED,
-)
-def enroll_catalog_course(
-    catalog_id: str,
-    request: Request,
-    db: Annotated[Session, Depends(get_db)],
+def _instantiate_catalog_course(
+    db: Session,
+    *,
+    item: CatalogCourse,
+    user_id: str,
+    data_dir: Path,
 ) -> Course:
-    user_id = _current_user_id(request)
-    settings = request.app.state.settings
-
-    _unscoped(db)
-    item = db.get(CatalogCourse, catalog_id)
-    if item is None or not item.published:
-        raise HTTPException(status_code=404, detail="Catalog course not found")
-
     source = db.get(Course, item.source_course_id)
     if source is None:
         raise HTTPException(status_code=409, detail="Catalog source course is missing")
@@ -265,11 +254,10 @@ def enroll_catalog_course(
     db.commit()
     db.refresh(target)
 
-    target_dir = Path(settings.data_dir) / target.id
+    target_dir = data_dir / target.id
     target_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        cloned_documents: list[Document] = []
         for source_document in source_documents:
             document_id = str(uuid4())
             suffix = Path(source_document.original_filename).suffix or source_document.extension
@@ -291,7 +279,6 @@ def enroll_catalog_course(
             db.commit()
             db.refresh(document)
             process_document(db, document)
-            cloned_documents.append(document)
 
         analyze_course(db, target.id)
         try:
@@ -308,3 +295,57 @@ def enroll_catalog_course(
 
     db.refresh(target)
     return target
+
+
+@router.post(
+    "/catalog/courses/{catalog_id}/enroll",
+    response_model=CourseRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def enroll_catalog_course(
+    catalog_id: str,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> Course:
+    user_id = _current_user_id(request)
+    _unscoped(db)
+    item = db.get(CatalogCourse, catalog_id)
+    if item is None or not item.published:
+        raise HTTPException(status_code=404, detail="Catalog course not found")
+
+    return _instantiate_catalog_course(
+        db,
+        item=item,
+        user_id=user_id,
+        data_dir=Path(request.app.state.settings.data_dir),
+    )
+
+
+@router.post(
+    "/admin/catalog/courses/{catalog_id}/assign/{user_id}",
+    response_model=CourseRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def assign_catalog_course(
+    catalog_id: str,
+    user_id: str,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> Course:
+    _require_admin(request, db)
+    _unscoped(db)
+
+    target_user = db.get(User, user_id)
+    if target_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    item = db.get(CatalogCourse, catalog_id)
+    if item is None or not item.published:
+        raise HTTPException(status_code=404, detail="Catalog course not found")
+
+    return _instantiate_catalog_course(
+        db,
+        item=item,
+        user_id=target_user.id,
+        data_dir=Path(request.app.state.settings.data_dir),
+    )
