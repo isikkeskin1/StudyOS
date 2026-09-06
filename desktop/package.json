@@ -1,6 +1,6 @@
 {
   "name": "studyos-desktop",
-  "version": "0.51.0",
+  "version": "0.51.2",
   "private": true,
   "description": "StudyOS desktop client",
   "main": "main.cjs",
