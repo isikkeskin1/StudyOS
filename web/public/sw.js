@@ -1,4 +1,4 @@
-const CACHE_NAME = "studyos-shell-v0.46.0";
+const CACHE_NAME = "studyos-shell-v0.47.0";
 const PRECACHE = [
   "/",
   "/offline",
@@ -73,6 +73,27 @@ self.addEventListener("notificationclick", (event) => {
       }
       if (self.clients.openWindow) return self.clients.openWindow(target);
       return undefined;
+    }),
+  );
+});
+
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { body: event.data ? event.data.text() : "" };
+  }
+
+  const title = payload.title || "StudyOS";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: payload.body || "You have a StudyOS update.",
+      tag: payload.tag || "studyos-push",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: payload.url || "/#overview" },
     }),
   );
 });

@@ -8,6 +8,8 @@ from app import models  # noqa: F401
 from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
 from app.api.calendar_focus import router as calendar_focus_router
+from app.api.calendar_subscription import public_router as public_calendar_router
+from app.api.calendar_subscription import router as calendar_subscription_router
 from app.api.calibration import router as calibration_router
 from app.api.cheat_sheet import router as cheat_sheet_router
 from app.api.courses import router as courses_router
@@ -22,6 +24,7 @@ from app.api.mastery_history import router as mastery_history_router
 from app.api.mistakes import router as mistakes_router
 from app.api.multi_course_planning import router as multi_course_planning_router
 from app.api.planning import router as planning_router
+from app.api.push_notifications import router as push_notifications_router
 from app.api.review_session import router as review_session_router
 from app.api.reviews import router as reviews_router
 from app.api.semester_dashboard import router as semester_dashboard_router
@@ -73,7 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application = FastAPI(
         title=resolved_settings.app_name,
-        version="0.46.0",
+        version="0.47.0",
         description="Backend API for StudyOS.",
         lifespan=lifespan,
     )
@@ -93,6 +96,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(semester_dashboard_router, prefix=resolved_settings.api_prefix)
     application.include_router(semester_queue_router, prefix=resolved_settings.api_prefix)
     application.include_router(calendar_focus_router, prefix=resolved_settings.api_prefix)
+    application.include_router(calendar_subscription_router, prefix=resolved_settings.api_prefix)
+    application.include_router(push_notifications_router, prefix=resolved_settings.api_prefix)
     application.include_router(analytics_router, prefix=resolved_settings.api_prefix)
     application.include_router(diagnostics_router, prefix=resolved_settings.api_prefix)
     application.include_router(exam_day_router, prefix=resolved_settings.api_prefix)
@@ -109,6 +114,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(tutor_benchmark_history_router, prefix=resolved_settings.api_prefix)
     application.include_router(tutor_embedding_index_router, prefix=resolved_settings.api_prefix)
     application.include_router(tutor_remediation_router, prefix=resolved_settings.api_prefix)
+
+    application.include_router(public_calendar_router)
 
     @application.get("/")
     def root() -> dict[str, str]:
