@@ -6,6 +6,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   CheatSheet,
   CourseIntelligence,
+  DiagnosticNext,
+  DiagnosticQuestion,
+  DiagnosticResponse,
+  DiagnosticSession,
+  DiagnosticSummary,
   ForecastSnapshot,
   MistakeIntel,
   PracticeEvaluation,
@@ -16,7 +21,7 @@ import type {
 } from "@/lib/workspace-types";
 import type { Course, CourseDocument, CourseSetup } from "@/lib/setup-types";
 
-type Tab = "overview" | "topics" | "sources" | "tutor" | "mistakes" | "forecast" | "cheats";
+type Tab = "overview" | "topics" | "sources" | "exam" | "tutor" | "mistakes" | "forecast" | "cheats";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...init, cache: "no-store" });
@@ -66,6 +71,15 @@ export function CourseWorkspace({ courseId }: { courseId: string }) {
   const [evaluation, setEvaluation] = useState<PracticeEvaluation | null>(null);
   const [selectedTopic, setSelectedTopic] = useState("");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
+  const [diagnostic, setDiagnostic] = useState<DiagnosticSession | null>(null);
+  const [diagnosticQuestion, setDiagnosticQuestion] = useState<DiagnosticQuestion | null>(null);
+  const [diagnosticAnswer, setDiagnosticAnswer] = useState("");
+  const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResponse | null>(null);
+  const [diagnosticSummary, setDiagnosticSummary] = useState<DiagnosticSummary | null>(null);
+  const [diagnosticCount, setDiagnosticCount] = useState("8");
+  const [selfScore, setSelfScore] = useState("0.5");
+  const [selfConfidence, setSelfConfidence] = useState("0.7");
+  const [selfMistake, setSelfMistake] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -195,6 +209,134 @@ export function CourseWorkspace({ courseId }: { courseId: string }) {
     });
   };
 
+  const refreshSemesterAfterDiagnostic = async () => {
+    const semester = await optional<{ selected_queue_id: string | null }>(
+      "/api/v1/semester/dashboard",
+      { selected_queue_id: null },
+    );
+    if (semester.selected_queue_id) {
+      try {
+        await request(
+          `/api/v1/semester-queues/${semester.selected_queue_id}/refresh`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          },
+        );
+      } catch {
+        // A missing or completed queue should not block diagnostic completion.
+      }
+    }
+  };
+
+  const loadNextDiagnostic = async (session: DiagnosticSession) => {
+    const next = await request<DiagnosticNext>(
+      `/api/v1/courses/${courseId}/diagnostics/${session.id}/next`,
+    );
+    setDiagnostic(next.session);
+    setDiagnosticQuestion(next.question);
+    setDiagnosticAnswer("");
+    setDiagnosticResult(null);
+
+    if (!next.question || next.session.status === "completed") {
+      const summary = await request<DiagnosticSummary>(
+        `/api/v1/courses/${courseId}/diagnostics/${session.id}/summary`,
+      );
+      setDiagnosticSummary(summary);
+      await refreshSemesterAfterDiagnostic();
+      await load();
+    }
+  };
+
+  const startDiagnostic = () => {
+    void run(async () => {
+      const session = await request<DiagnosticSession>(
+        `/api/v1/courses/${courseId}/diagnostics`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question_count: Number(diagnosticCount) }),
+        },
+      );
+      setDiagnostic(session);
+      setDiagnosticSummary(null);
+      await loadNextDiagnostic(session);
+    });
+  };
+
+  const submitDiagnostic = (event: FormEvent) => {
+    event.preventDefault();
+    if (!diagnostic || !diagnosticQuestion || !diagnosticAnswer.trim()) return;
+    void run(async () => {
+      const base = `/api/v1/courses/${courseId}/diagnostics/${diagnostic.id}`;
+      let result: DiagnosticResponse;
+      if (diagnosticQuestion.automatic_grading_available) {
+        result = await request<DiagnosticResponse>(`${base}/grade`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            diagnostic_question_id: diagnosticQuestion.id,
+            student_answer: diagnosticAnswer.trim(),
+            confidence: Number(selfConfidence),
+          }),
+        });
+      } else {
+        const score = Number(selfScore);
+        result = await request<DiagnosticResponse>(`${base}/responses`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            diagnostic_question_id: diagnosticQuestion.id,
+            score,
+            confidence: Number(selfConfidence),
+            grading_source: "self",
+            student_answer: diagnosticAnswer.trim(),
+            mistakes:
+              selfMistake && score < 1
+                ? [{ category: selfMistake, severity: Math.max(0.1, 1 - score), source: "self" }]
+                : [],
+          }),
+        });
+      }
+      setDiagnosticResult(result);
+      setDiagnostic(result.session);
+      await load();
+
+      if (result.session.status === "completed") {
+        const summary = await request<DiagnosticSummary>(`${base}/summary`);
+        setDiagnosticSummary(summary);
+        setDiagnosticQuestion(null);
+        await refreshSemesterAfterDiagnostic();
+      }
+    });
+  };
+
+  const continueDiagnostic = () => {
+    if (!diagnostic) return;
+    void run(async () => {
+      await loadNextDiagnostic(diagnostic);
+    });
+  };
+
+  const endDiagnostic = () => {
+    if (!diagnostic) return;
+    void run(async () => {
+      const session = await request<DiagnosticSession>(
+        `/api/v1/courses/${courseId}/diagnostics/${diagnostic.id}/complete`,
+        { method: "POST" },
+      );
+      setDiagnostic(session);
+      setDiagnosticQuestion(null);
+      const summary = await request<DiagnosticSummary>(
+        `/api/v1/courses/${courseId}/diagnostics/${diagnostic.id}/summary`,
+      );
+      setDiagnosticSummary(summary);
+      await refreshSemesterAfterDiagnostic();
+      await load();
+    });
+  };
+
   const createCheatSheet = () => {
     void run(async () => {
       await request<CheatSheet>(`/api/v1/courses/${courseId}/cheat-sheets`, {
@@ -256,6 +398,7 @@ export function CourseWorkspace({ courseId }: { courseId: string }) {
             ["overview", "Overview"],
             ["topics", "Topics & mastery"],
             ["sources", "Sources"],
+            ["exam", "Diagnostic exam"],
             ["tutor", "Tutor & practice"],
             ["mistakes", "Mistakes"],
             ["forecast", "Forecast"],
@@ -359,6 +502,220 @@ export function CourseWorkspace({ courseId }: { courseId: string }) {
               {!documents.length && <p className="muted">No course material uploaded.</p>}
             </div>
             {setup.analysis_stale && <div className="workspace-warning">The source set changed after analysis. Re-run analysis from Manage courses before trusting plans.</div>}
+          </section>
+        )}
+
+        {tab === "exam" && (
+          <section className="panel workspace-panel diagnostic-panel">
+            <div className="panel-head">
+              <div>
+                <p className="eyebrow">Adaptive exam mode</p>
+                <h2>Diagnostic exam</h2>
+              </div>
+              {diagnostic && (
+                <span>
+                  {diagnostic.answered_question_count} / {diagnostic.requested_question_count} answered
+                </span>
+              )}
+            </div>
+
+            {!diagnostic && !diagnosticSummary && (
+              <div className="diagnostic-start">
+                <div>
+                  <h3>Measure what you actually know.</h3>
+                  <p>
+                    StudyOS selects questions from analyzed past exams, adapts coverage toward uncertain
+                    high-value topics, and updates mastery after every answer.
+                  </p>
+                </div>
+                <label>
+                  Questions
+                  <select value={diagnosticCount} onChange={(e) => setDiagnosticCount(e.target.value)}>
+                    <option value="5">5 · quick</option>
+                    <option value="8">8 · focused</option>
+                    <option value="12">12 · standard</option>
+                    <option value="20">20 · full</option>
+                  </select>
+                </label>
+                <button className="primary-button" onClick={startDiagnostic} disabled={busy || !intelligence}>
+                  Start diagnostic
+                </button>
+                <small>Requires at least one processed past-exam document.</small>
+              </div>
+            )}
+
+            {diagnostic && diagnosticQuestion && !diagnosticResult && (
+              <div className="diagnostic-question">
+                <div className="diagnostic-progress">
+                  <span
+                    style={{
+                      width: `${Math.max(
+                        4,
+                        (diagnostic.answered_question_count / diagnostic.requested_question_count) * 100,
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <div className="diagnostic-meta">
+                  <span>Question {diagnosticQuestion.sequence}</span>
+                  <span>{diagnosticQuestion.primary_topic_name}</span>
+                  <span>{diagnosticQuestion.marks ?? "?"} marks</span>
+                  <span>{diagnosticQuestion.automatic_grading_available ? "Auto-grade" : "Self-grade"}</span>
+                </div>
+                <h3>{diagnosticQuestion.question_label}</h3>
+                <p className="diagnostic-question-text">{diagnosticQuestion.text}</p>
+                <small className="diagnostic-source">Source: {diagnosticQuestion.source_label}</small>
+
+                <form className="diagnostic-answer-form" onSubmit={submitDiagnostic}>
+                  <label>
+                    Your answer
+                    <textarea
+                      value={diagnosticAnswer}
+                      onChange={(e) => setDiagnosticAnswer(e.target.value)}
+                      placeholder="Work the question as if this were the exam. Include equations, reasoning, values, and units."
+                    />
+                  </label>
+
+                  {!diagnosticQuestion.automatic_grading_available && (
+                    <div className="diagnostic-self-grade">
+                      <label>
+                        Self score
+                        <select value={selfScore} onChange={(e) => setSelfScore(e.target.value)}>
+                          <option value="0">0%</option>
+                          <option value="0.25">25%</option>
+                          <option value="0.5">50%</option>
+                          <option value="0.75">75%</option>
+                          <option value="1">100%</option>
+                        </select>
+                      </label>
+                      <label>
+                        Main mistake
+                        <select value={selfMistake} onChange={(e) => setSelfMistake(e.target.value)}>
+                          <option value="">None / unsure</option>
+                          <option value="concept">Concept</option>
+                          <option value="formula_selection">Formula selection</option>
+                          <option value="algebra">Algebra</option>
+                          <option value="arithmetic">Arithmetic</option>
+                          <option value="sign">Sign</option>
+                          <option value="units">Units</option>
+                          <option value="interpretation">Interpretation</option>
+                          <option value="incomplete_reasoning">Incomplete reasoning</option>
+                          <option value="careless">Careless</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </label>
+                    </div>
+                  )}
+
+                  <label className="diagnostic-confidence">
+                    Confidence
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={selfConfidence}
+                      onChange={(e) => setSelfConfidence(e.target.value)}
+                    />
+                    <span>{pct(Number(selfConfidence))}</span>
+                  </label>
+
+                  <div className="diagnostic-buttons">
+                    <button className="ghost-button" type="button" onClick={endDiagnostic} disabled={busy}>
+                      End exam
+                    </button>
+                    <button className="primary-button" disabled={busy || !diagnosticAnswer.trim()}>
+                      {diagnosticQuestion.automatic_grading_available ? "Submit & grade" : "Record answer"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {diagnosticResult && diagnostic && (
+              <div className="diagnostic-result">
+                <div className="diagnostic-score-ring">
+                  <strong>{pct(diagnosticResult.score)}</strong>
+                  <span>{diagnosticResult.grading_source} grade</span>
+                </div>
+                <div className="diagnostic-feedback">
+                  <h3>{diagnosticResult.score >= 0.75 ? "Strong response" : diagnosticResult.score >= 0.5 ? "Partial response" : "Needs review"}</h3>
+                  <p>{diagnosticResult.answer?.feedback ?? "Answer recorded. Mastery has been recalculated from this evidence."}</p>
+                  {diagnosticResult.mistakes.length > 0 && (
+                    <div className="diagnostic-mistakes">
+                      {diagnosticResult.mistakes.map((mistake) => (
+                        <span key={mistake.category}>
+                          {mistake.category.replaceAll("_", " ")} · {pct(mistake.severity)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="diagnostic-buttons">
+                    <button className="ghost-button" onClick={() => setTab("topics")}>View mastery</button>
+                    {diagnostic.status === "completed" ? (
+                      <button className="primary-button" onClick={() => {
+                        setDiagnosticResult(null);
+                        setDiagnosticQuestion(null);
+                      }}>View results</button>
+                    ) : (
+                      <button className="primary-button" onClick={continueDiagnostic} disabled={busy}>Next question</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {diagnosticSummary && (
+              <div className="diagnostic-summary">
+                <div className="diagnostic-summary-head">
+                  <div>
+                    <p className="eyebrow">Post-diagnostic readout</p>
+                    <h3>{pct(diagnosticSummary.average_score)} average</h3>
+                    <span>
+                      {diagnosticSummary.answered_question_count} answered · {Math.round(diagnosticSummary.total_duration_seconds / 60)} min · {diagnosticSummary.automatic_grade_count} auto-graded
+                    </span>
+                  </div>
+                  <button className="ghost-button" onClick={() => {
+                    setDiagnostic(null);
+                    setDiagnosticSummary(null);
+                    setDiagnosticResult(null);
+                  }}>New diagnostic</button>
+                </div>
+
+                <div className="diagnostic-summary-grid">
+                  <div>
+                    <h4>Topic performance</h4>
+                    {diagnosticSummary.topic_summaries.map((topic) => (
+                      <button key={topic.topic_id} onClick={() => { setSelectedTopic(topic.topic_name); setTab("tutor"); }}>
+                        <span><strong>{topic.topic_name}</strong><small>{topic.question_count} question{topic.question_count === 1 ? "" : "s"}</small></span>
+                        <b>{pct(topic.average_score)}</b>
+                      </button>
+                    ))}
+                  </div>
+                  <div>
+                    <h4>Detected mistakes</h4>
+                    {diagnosticSummary.mistakes.length ? diagnosticSummary.mistakes.map((mistake) => (
+                      <div key={mistake.category}>
+                        <span>{mistake.category.replaceAll("_", " ")}</span>
+                        <b>{mistake.occurrences}× · {pct(mistake.average_severity)}</b>
+                      </div>
+                    )) : <p className="muted">No mistake categories recorded.</p>}
+                  </div>
+                </div>
+
+                <div className="diagnostic-reopt">
+                  <span>Mastery and mistake intelligence were updated. The active semester queue was refreshed when available.</span>
+                  <div>
+                    <button className="ghost-button" onClick={() => setTab("mistakes")}>Review mistakes</button>
+                    <button className="primary-button" onClick={() => {
+                      const weakest = diagnosticSummary.topic_summaries[0];
+                      if (weakest) setSelectedTopic(weakest.topic_name);
+                      setTab("tutor");
+                    }}>Practice weakest topic</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
         )}
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter, defaultdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.course import Course
 from app.models.course_intelligence import CourseTopic
-from app.models.diagnostics import DiagnosticQuestion, DiagnosticSession
+from app.models.diagnostics import DiagnosticQuestion, DiagnosticResponse, DiagnosticSession
 from app.models.exam_intelligence import ExamAnalysis, ExamQuestion, ExamQuestionTopic
 from app.models.grading import ExamQuestionReference
 from app.schemas.diagnostics import (
@@ -25,6 +26,11 @@ from app.schemas.diagnostics import (
     DiagnosticSessionCreate,
     DiagnosticSessionRead,
     TopicMasteryRead,
+)
+from app.schemas.diagnostic_summary import (
+    DiagnosticSessionMistakeSummaryRead,
+    DiagnosticSessionSummaryRead,
+    DiagnosticSessionTopicSummaryRead,
 )
 from app.services.diagnostics import (
     DiagnosticStateError,
@@ -357,6 +363,95 @@ def automatically_grade_diagnostic_response(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     return _response_read(db, course_id, session, response)
+
+
+@router.get(
+    "/{course_id}/diagnostics/{session_id}/summary",
+    response_model=DiagnosticSessionSummaryRead,
+)
+def get_diagnostic_summary(
+    course_id: str,
+    session_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> DiagnosticSessionSummaryRead:
+    session = _get_session(db, course_id, session_id)
+    responses = list(
+        db.scalars(
+            select(DiagnosticResponse)
+            .where(DiagnosticResponse.session_id == session.id)
+            .order_by(DiagnosticResponse.created_at)
+        ).all()
+    )
+    questions = {
+        question.id: question
+        for question in db.scalars(
+            select(DiagnosticQuestion).where(DiagnosticQuestion.session_id == session.id)
+        ).all()
+    }
+    topic_ids = {question.primary_topic_id for question in questions.values()}
+    topic_names = {
+        topic.id: topic.name
+        for topic in db.scalars(
+            select(CourseTopic).where(CourseTopic.id.in_(topic_ids))
+        ).all()
+    } if topic_ids else {}
+
+    topic_scores: dict[str, list[float]] = defaultdict(list)
+    mistake_counts: Counter[str] = Counter()
+    mistake_severity: dict[str, float] = defaultdict(float)
+
+    for response in responses:
+        question = questions.get(response.diagnostic_question_id)
+        if question is not None:
+            topic_scores[question.primary_topic_id].append(response.score)
+        for mistake in get_response_mistakes(db, response.id):
+            mistake_counts[mistake.category] += 1
+            mistake_severity[mistake.category] += mistake.severity
+
+    answered = len(responses)
+    return DiagnosticSessionSummaryRead(
+        session_id=session.id,
+        course_id=course_id,
+        status=session.status,
+        answered_question_count=answered,
+        average_score=(
+            round(sum(item.score for item in responses) / answered, 4)
+            if answered
+            else None
+        ),
+        average_confidence=(
+            round(sum(item.confidence for item in responses) / answered, 4)
+            if answered
+            else None
+        ),
+        total_duration_seconds=sum(item.duration_seconds or 0 for item in responses),
+        automatic_grade_count=sum(
+            1 for item in responses if item.grading_source == "automatic"
+        ),
+        self_grade_count=sum(
+            1 for item in responses if item.grading_source != "automatic"
+        ),
+        topic_summaries=[
+            DiagnosticSessionTopicSummaryRead(
+                topic_id=topic_id,
+                topic_name=topic_names.get(topic_id, "Unknown topic"),
+                question_count=len(scores),
+                average_score=round(sum(scores) / len(scores), 4),
+            )
+            for topic_id, scores in sorted(
+                topic_scores.items(),
+                key=lambda item: sum(item[1]) / len(item[1]),
+            )
+        ],
+        mistakes=[
+            DiagnosticSessionMistakeSummaryRead(
+                category=category,
+                occurrences=count,
+                average_severity=round(mistake_severity[category] / count, 4),
+            )
+            for category, count in mistake_counts.most_common()
+        ],
+    )
 
 
 @router.post(
