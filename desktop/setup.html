@@ -51,6 +51,7 @@
     <div id="startup-error" style="display:none;margin-top:16px;padding:12px 14px;border:1px solid rgba(248,113,113,.25);border-radius:10px;background:rgba(127,29,29,.12);color:#fecaca;font-size:12px;line-height:1.5;word-break:break-word;"></div>
     <button id="retry-local" type="button">Retry bundled local StudyOS</button>
     <p id="log-path" class="note" style="margin-top:10px;padding-top:0;border-top:0;"></p>
+    <button id="open-diagnostics" type="button" style="margin-top:8px;background:#111827;border:1px solid rgba(148,163,184,.2);">Open diagnostics folder</button>
     <form id="form">
       <label>
         StudyOS server URL
@@ -69,6 +70,7 @@
     const status = document.getElementById("status");
     const startupError = document.getElementById("startup-error");
     const logPath = document.getElementById("log-path");
+    const openDiagnostics = document.getElementById("open-diagnostics");
 
     window.studyosDesktop.getStartupError().then(({ message, logPath: path }) => {
       if (message) {
@@ -77,6 +79,14 @@
       }
       if (path) logPath.textContent = `Diagnostic log: ${path}`;
     }).catch(() => {});
+
+    openDiagnostics.addEventListener("click", async () => {
+      try {
+        await window.studyosDesktop.openDiagnostics();
+      } catch (error) {
+        status.textContent = error?.message || "Could not open diagnostics folder.";
+      }
+    });
 
     retryLocal.addEventListener("click", async () => {
       retryLocal.disabled = true;
