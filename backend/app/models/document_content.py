@@ -51,7 +51,10 @@ class DocumentAnalysis(Base):
         default=lambda: datetime.now(UTC),
     )
 
-    document: Mapped[Document] = relationship(back_populates="analysis")
+    document: Mapped[Document] = relationship(
+        back_populates="analysis",
+        foreign_keys=[document_id],
+    )
 
 
 class DocumentUnit(Base):

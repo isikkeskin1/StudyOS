@@ -43,6 +43,7 @@ class Document(Base):
         back_populates="document",
         cascade="all, delete-orphan",
         uselist=False,
+        foreign_keys="DocumentAnalysis.document_id",
     )
     units: Mapped[list[DocumentUnit]] = relationship(
         back_populates="document",
