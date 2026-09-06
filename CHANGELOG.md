@@ -2,6 +2,25 @@
 
 All notable StudyOS beta changes are documented here.
 
+## [0.53.0] - 2026-09-06
+
+### Changed
+
+- Desktop startup now upgrades legacy local SQLite databases through bundled Alembic migrations before serving the app.
+- Windows packaging now includes the migration scripts required by the bundled backend.
+- Release validation now tests an actual legacy desktop database and verifies it reaches the current schema.
+
+### Fixed
+
+- Existing desktop databases created before the institutional catalog schema no longer fail when newer StudyOS builds start.
+- Bundled migration resources are resolved correctly from the packaged PyInstaller runtime.
+- Windows legacy-database smoke testing no longer fails on nested PowerShell here-string syntax.
+
+### Release safety
+
+- Backend CI, desktop packaged-app smoke, migration smoke, updater metadata verification and authenticated desktop API traffic remain required release gates.
+- v0.53.0 is intended as an upgrade-safety release rather than a feature expansion.
+
 ## [0.52.0] - 2026-09-06
 
 ### Added
