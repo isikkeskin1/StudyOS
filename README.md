@@ -352,11 +352,12 @@ docker compose up -d --build
 | **6 · Study operating system** | ✅ Complete | Semester queues, reviews, cheat sheets, calendar/focus, PWA |
 | **v0.50 · Beta hardening** | ✅ Complete | Security, data controls, failure states, production readiness |
 | **v0.51 · Desktop beta** | ✅ Complete | Windows installer, portable app, desktop distribution pipeline |
-| **v0.52 · Distribution & catalog** | 🟣 Current | Auto-updates, fast desktop boot, institutional course catalog and admin source discovery |
+| **v0.52 · Distribution & catalog** | ✅ Complete | Auto-updates, fast desktop boot, institutional course catalog and admin source discovery |
+| **v0.53 · Upgrade safety** | 🟣 Current | Legacy desktop DB migrations, packaged migration resources, release-path hardening |
 
 \*An external ANN/vector backend remains intentionally scale-driven rather than a beta requirement.
 
-### What comes after v0.52?
+### What comes after v0.53?
 
 The v0.5x line now prioritizes **beta feedback, updater reliability, institutional course coverage, web deployment, compatibility and security** before the first stable release.
 
