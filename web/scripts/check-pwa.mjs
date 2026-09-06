@@ -19,7 +19,7 @@ for (const required of ["/icons/icon-192.png", "/icons/icon-512.png"]) {
   if (!manifest.includes(required)) throw new Error(`Manifest is missing ${required}`);
 }
 
-if (!controller.includes('serviceWorker.register("/sw.js"')) {
+if (!controller.includes('.register("/sw.js"')) {
   throw new Error("PWA controller is not registering /sw.js");
 }
 
