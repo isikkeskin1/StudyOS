@@ -27,6 +27,7 @@ from app.schemas.document import (
     DocumentRead,
     DocumentUnitRead,
 )
+from app.schemas.course_setup import CourseSetupRead
 from app.schemas.intelligence import (
     CourseAnalysisRead,
     CourseIntelligenceRead,
@@ -34,6 +35,7 @@ from app.schemas.intelligence import (
     TopicEvidenceRead,
     TopicRelationshipRead,
 )
+from app.services.course_setup import course_setup_status
 from app.services.intelligence import NoProcessedDocumentsError, analyze_course
 from app.services.processing import DocumentProcessingError, process_document
 from app.services.storage import (
@@ -72,6 +74,15 @@ def create_course(payload: CourseCreate, db: Annotated[Session, Depends(get_db)]
 @router.get("", response_model=list[CourseRead])
 def list_courses(db: Annotated[Session, Depends(get_db)]) -> list[Course]:
     return list(db.scalars(select(Course).order_by(Course.created_at.desc())).all())
+
+
+@router.get("/{course_id}/setup", response_model=CourseSetupRead)
+def get_course_setup(
+    course_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> CourseSetupRead:
+    course = _get_course(db, course_id)
+    return CourseSetupRead.model_validate(course_setup_status(db, course), from_attributes=True)
 
 
 @router.get("/{course_id}", response_model=CourseRead)
