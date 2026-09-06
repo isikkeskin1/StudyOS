@@ -10,8 +10,8 @@ from app.api.auth import router as auth_router
 from app.api.calendar_focus import router as calendar_focus_router
 from app.api.calendar_subscription import public_router as public_calendar_router
 from app.api.calendar_subscription import router as calendar_subscription_router
-from app.api.catalog import router as catalog_router
 from app.api.calibration import router as calibration_router
+from app.api.catalog import router as catalog_router
 from app.api.cheat_sheet import router as cheat_sheet_router
 from app.api.courses import router as courses_router
 from app.api.diagnostics import router as diagnostics_router
