@@ -2525,3 +2525,147 @@ button,
 @media (max-width: 760px) {
   .manager-delete-confirm input { min-height: 46px; font-size: 16px; }
 }
+
+
+/* Institutional admin catalog */
+.admin-button {
+  border-color: rgba(95, 235, 190, 0.28);
+  color: #9af3d5;
+}
+
+.admin-catalog-panel {
+  width: min(1480px, calc(100vw - 32px));
+  height: min(940px, calc(100vh - 32px));
+}
+
+.admin-catalog-layout {
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+
+.admin-catalog-detail {
+  overflow-y: auto;
+}
+
+.admin-catalog-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.admin-catalog-meta span,
+.admin-source-kind {
+  border: 1px solid rgba(139, 162, 189, 0.18);
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #91a8bf;
+  background: rgba(9, 15, 23, 0.52);
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.admin-source-list {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+  max-height: 430px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.admin-source-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid rgba(139, 162, 189, 0.14);
+  border-radius: 14px;
+  background: rgba(6, 11, 17, 0.56);
+}
+
+.admin-source-main {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.admin-source-main > div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-source-main strong {
+  color: #e8f1f8;
+  line-height: 1.35;
+}
+
+.admin-source-main a {
+  color: #6fc4ff;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.admin-source-main small {
+  color: #a9b8c7;
+}
+
+.admin-source-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.admin-source-actions button {
+  border: 1px solid rgba(139, 162, 189, 0.18);
+  border-radius: 9px;
+  padding: 7px 10px;
+  background: rgba(12, 20, 30, 0.9);
+  color: #cfe0ee;
+  cursor: pointer;
+}
+
+.admin-source-actions button:hover {
+  border-color: rgba(95, 235, 190, 0.42);
+}
+
+.pill.approved {
+  border-color: rgba(95, 235, 190, 0.3);
+  color: #83f0c7;
+}
+
+.pill.imported {
+  border-color: rgba(103, 178, 255, 0.32);
+  color: #8bc5ff;
+}
+
+.pill.rejected,
+.pill.failed,
+.pill.unsupported {
+  border-color: rgba(255, 119, 137, 0.28);
+  color: #ff9dac;
+}
+
+.pill.duplicate {
+  border-color: rgba(246, 193, 90, 0.3);
+  color: #f3cd7e;
+}
+
+@media (max-width: 900px) {
+  .admin-catalog-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-catalog-panel {
+    height: calc(100vh - 16px);
+    width: calc(100vw - 16px);
+  }
+
+  .admin-source-card {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-source-actions {
+    justify-content: flex-start;
+  }
+}
