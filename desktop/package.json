@@ -1,0 +1,66 @@
+{
+  "name": "studyos-desktop",
+  "version": "0.50.0",
+  "private": true,
+  "description": "StudyOS desktop client",
+  "main": "main.cjs",
+  "author": "StudyOS",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis portable",
+    "pack:win": "electron-builder --win dir"
+  },
+  "devDependencies": {
+    "electron": "44.2.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.studyos.desktop",
+    "productName": "StudyOS",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "setup.html",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/.next/standalone",
+        "to": "web"
+      },
+      {
+        "from": "../web/.next/static",
+        "to": "web/.next/static"
+      },
+      {
+        "from": "../web/public",
+        "to": "web/public"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "StudyOS-${version}-Windows-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "StudyOS"
+    }
+  }
+}
