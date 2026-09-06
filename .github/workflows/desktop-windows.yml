@@ -38,7 +38,7 @@ jobs:
           $version = $env:RELEASE_TAG.TrimStart("v")
           $parts = $version.Split(".")
           if ($parts.Count -lt 3) {
-            throw "Release tag must look like v0.52.0"
+            throw "Release tag must look like v0.53.0"
           }
           npm version "$version" --no-git-tag-version --allow-same-version
           Write-Host "Building StudyOS Desktop $version"
