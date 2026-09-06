@@ -182,8 +182,10 @@ def test_exam_intelligence_rejects_numbered_exam_instructions(
             b"30).\n"
             b"During the written exam, students are allowed to bring the course textbook. "
             b"Absolutely no loose sheets of paper are allowed. Blank sheets will be provided. "
-            b"No laptops, ipads, electronic devices or mobile phones are allowed in the classroom. "
-            b"No communication is allowed between students or via Internet during the written exam. "
+            b"No laptops, ipads, electronic devices or mobile phones are allowed "
+            b"in the classroom. "
+            b"No communication is allowed between students or via Internet "
+            b"during the written exam. "
             b"Any student caught communicating will fail the exam, with disciplinary consequences."
         ),
     )
