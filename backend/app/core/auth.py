@@ -50,14 +50,23 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             auth_session = db.scalar(
                 select(AuthSession).where(AuthSession.token_hash == token_digest(token))
             )
-            if (
-                auth_session is None
-                or _utc(auth_session.expires_at) <= datetime.now(UTC)
-            ):
-                return JSONResponse(
+            if auth_session is None:
+                response = JSONResponse(
                     {"detail": "Session expired or invalid"},
                     status_code=HTTPStatus.UNAUTHORIZED,
                 )
+                response.delete_cookie("studyos_session", path="/")
+                return response
+
+            if _utc(auth_session.expires_at) <= datetime.now(UTC):
+                db.delete(auth_session)
+                db.commit()
+                response = JSONResponse(
+                    {"detail": "Session expired or invalid"},
+                    status_code=HTTPStatus.UNAUTHORIZED,
+                )
+                response.delete_cookie("studyos_session", path="/")
+                return response
 
             user_id = auth_session.user_id
             request.state.user_id = user_id
