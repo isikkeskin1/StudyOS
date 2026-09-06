@@ -180,6 +180,7 @@ jobs:
           $logPath = Join-Path $env:RUNNER_TEMP "studyos-packaged-desktop.log"
           Remove-Item $logPath -ErrorAction SilentlyContinue
           $env:STUDYOS_DESKTOP_LOG_PATH = $logPath
+          $env:STUDYOS_DISABLE_AUTO_UPDATE = "1"
           $process = Start-Process $appExe -PassThru
           try {
             $ready = $false
