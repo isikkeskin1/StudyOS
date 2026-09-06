@@ -37,6 +37,21 @@ function childLogFd() {
   return fs.openSync(desktopLogPath(), "a");
 }
 
+function stopRuntime() {
+  if (proxyServer) {
+    proxyServer.close();
+    proxyServer = null;
+  }
+  if (nextProcess) {
+    nextProcess.kill();
+    nextProcess = null;
+  }
+  if (backendProcess) {
+    backendProcess.kill();
+    backendProcess = null;
+  }
+}
+
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
@@ -381,6 +396,7 @@ ipcMain.handle("studyos:get-startup-error", () => ({
 }));
 
 ipcMain.handle("studyos:use-local-backend", async () => {
+  stopRuntime();
   try {
     fs.unlinkSync(configPath());
   } catch (error) {
@@ -400,6 +416,7 @@ ipcMain.handle("studyos:save-backend", async (event, backendUrl) => {
   }
   const normalized = normalizeBackendUrl(backendUrl);
   await probeBackend(normalized);
+  stopRuntime();
   saveConfig(normalized);
   setupWindow?.close();
   setupWindow = null;
@@ -424,6 +441,7 @@ if (hasSingleInstanceLock) {
     try {
       await launchStudyOS();
     } catch (error) {
+      stopRuntime();
       createSetupWindow(error);
     }
   });
@@ -431,15 +449,16 @@ if (hasSingleInstanceLock) {
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    void launchStudyOS().catch((error) => createSetupWindow(error));
+    void launchStudyOS().catch((error) => {
+      stopRuntime();
+      createSetupWindow(error);
+    });
   }
 });
 
 app.on("before-quit", () => {
   app.isQuitting = true;
-  if (proxyServer) proxyServer.close();
-  if (nextProcess) nextProcess.kill();
-  if (backendProcess) backendProcess.kill();
+  stopRuntime();
 });
 
 app.on("window-all-closed", () => {
