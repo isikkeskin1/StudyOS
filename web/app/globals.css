@@ -2154,3 +2154,219 @@ select {
   }
   .global-search-trigger span { display: none; }
 }
+
+
+/* v0.49 mobile/PWA hardening */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+button,
+.ghost-button,
+.primary-button,
+.danger-button {
+  -webkit-tap-highlight-color: transparent;
+}
+@media (max-width: 760px) {
+  body {
+    min-height: 100dvh;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+
+  .main-content {
+    padding-right: max(15px, env(safe-area-inset-right));
+    padding-bottom: max(54px, calc(env(safe-area-inset-bottom) + 36px));
+    padding-left: max(15px, env(safe-area-inset-left));
+  }
+
+  .brand-mark {
+    flex: 0 0 auto;
+  }
+
+  .topbar-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .topbar-actions .global-search-trigger,
+  .topbar-actions select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .topbar-actions .ghost-button {
+    min-height: 44px;
+  }
+
+  .metric-card,
+  .panel,
+  .course-card {
+    min-width: 0;
+  }
+
+  .button-row,
+  .setup-actions,
+  .diagnostic-buttons,
+  .exam-review-actions {
+    flex-wrap: wrap;
+  }
+
+  .button-row > *,
+  .setup-actions > *,
+  .diagnostic-buttons > *,
+  .exam-review-actions > * {
+    min-height: 44px;
+  }
+
+  .setup-shell,
+  .auth-shell {
+    min-height: 100dvh;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+    padding-left: max(12px, env(safe-area-inset-left));
+  }
+
+  .setup-row,
+  .setup-actions,
+  .setup-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .setup-form input,
+  .setup-row input,
+  .setup-row select,
+  .auth-form input {
+    min-height: 46px;
+    font-size: 16px;
+  }
+
+  .manager-panel,
+  .global-search-panel {
+    max-width: 100%;
+  }
+
+  .manager-backdrop,
+  .global-search-backdrop {
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-right: max(8px, env(safe-area-inset-right));
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    padding-left: max(8px, env(safe-area-inset-left));
+  }
+
+  .workspace-sidebar {
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-right: max(14px, env(safe-area-inset-right));
+    padding-left: max(14px, env(safe-area-inset-left));
+  }
+
+  .workspace-main {
+    padding-right: max(14px, env(safe-area-inset-right));
+    padding-bottom: max(54px, calc(env(safe-area-inset-bottom) + 34px));
+    padding-left: max(14px, env(safe-area-inset-left));
+  }
+
+  .workspace-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-nav button {
+    min-width: 0;
+    min-height: 44px;
+    line-height: 1.2;
+  }
+
+  .workspace-search .global-search-trigger {
+    min-height: 44px;
+  }
+
+  .workspace-statuses,
+  .diagnostic-meta {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .workspace-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .topic-row,
+  .source-list > div,
+  .risk-row,
+  .manager-documents > div {
+    min-width: 0;
+  }
+
+  .source-list > div,
+  .manager-documents > div {
+    align-items: flex-start;
+  }
+
+  .source-list strong,
+  .manager-documents strong,
+  .topic-row strong {
+    overflow-wrap: anywhere;
+  }
+
+  .diagnostic-start {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .diagnostic-answer-form textarea,
+  .tutor-form textarea,
+  .practice-question textarea {
+    min-height: 160px;
+    font-size: 16px;
+  }
+
+  .diagnostic-self-grade,
+  .diagnostic-confidence,
+  .exam-review-summary {
+    grid-template-columns: 1fr !important;
+  }
+
+  .diagnostic-result {
+    grid-template-columns: 1fr;
+  }
+
+  .diagnostic-score-ring {
+    width: min(150px, 48vw);
+  }
+
+  .global-search-input-row input {
+    font-size: 16px;
+  }
+
+  .global-search-results > a {
+    padding: 14px;
+  }
+
+  .global-search-result-head {
+    align-items: flex-start;
+  }
+
+  .global-search-result-head small {
+    max-width: 44%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

@@ -75,6 +75,18 @@ jobs:
         run: |
           curl --fail --silent --show-error             http://127.0.0.1:3000/api/v1/health/ready             | grep '"status":"ready"'
 
+      - name: Install browser E2E dependencies
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Browser E2E
+        working-directory: web
+        env:
+          STUDYOS_E2E_BASE_URL: http://127.0.0.1:3000
+        run: npm run e2e
+
       - name: Show logs on failure
         if: failure()
         run: docker compose logs --no-color

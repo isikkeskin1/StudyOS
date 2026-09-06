@@ -1,4 +1,4 @@
-const CACHE_NAME = "studyos-shell-v0.48.0";
+const CACHE_NAME = "studyos-shell-v0.49.0";
 const PRECACHE = [
   "/",
   "/offline",
