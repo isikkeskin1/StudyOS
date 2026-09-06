@@ -12,12 +12,10 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
-def health_check(request: Request) -> dict[str, str]:
+def health_check() -> dict[str, str]:
     return {
         "status": "ok",
         "service": "StudyOS API",
-        "version": request.app.version,
-        "environment": request.app.state.settings.environment,
     }
 
 
@@ -27,6 +25,7 @@ def liveness(request: Request) -> dict[str, str]:
         "status": "alive",
         "service": request.app.title,
         "version": request.app.version,
+        "environment": request.app.state.settings.environment,
     }
 
 
@@ -47,5 +46,6 @@ def readiness(
         "status": "ready",
         "service": request.app.title,
         "version": request.app.version,
+        "environment": request.app.state.settings.environment,
         "database": "ready",
     }
