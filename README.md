@@ -8,7 +8,7 @@
 
 <br />
 
-![Version](https://img.shields.io/badge/version-v0.50.0-7C3AED?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-v0.51.0-7C3AED?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-BETA-F59E0B?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs&logoColor=white)
@@ -22,6 +22,27 @@
 > Upload the course. Set the target. StudyOS builds the path.
 
 </div>
+
+---
+
+## 🖥️ Download StudyOS for Windows
+
+**StudyOS now ships as a desktop app.**
+
+The Windows build bundles the production StudyOS interface into a sandboxed Electron desktop shell and keeps your normal StudyOS account/data flow through your configured StudyOS server.
+
+### Windows downloads
+
+When a GitHub Release is published, CI automatically attaches:
+
+- **StudyOS Windows Installer** — normal NSIS setup wizard with Start Menu + desktop shortcut
+- **StudyOS Portable** — run StudyOS without installing it
+
+👉 **[Download the latest StudyOS release](https://github.com/isikkeskin1/StudyOS/releases/latest)**
+
+On first launch, the desktop beta asks for your StudyOS server URL. Remote servers must use HTTPS; localhost remains available for development.
+
+> **Beta signing note:** current Windows beta binaries are unsigned, so Microsoft SmartScreen may display an “unknown publisher” warning. Code signing is planned before broad public distribution.
 
 ---
 
@@ -326,13 +347,14 @@ docker compose up -d --build
 | **4 · Course-aware tutor** | ✅ Complete* | Grounded retrieval, practice, semantic reranking, claim validation |
 | **5 · Optimization** | ✅ Complete | Expected-marks planning, Emergency Mode, multi-course optimization |
 | **6 · Study operating system** | ✅ Complete | Semester queues, reviews, cheat sheets, calendar/focus, PWA |
-| **v0.50 · Beta hardening** | 🟣 Current | Security, data controls, failure states, production readiness |
+| **v0.50 · Beta hardening** | ✅ Complete | Security, data controls, failure states, production readiness |
+| **v0.51 · Desktop beta** | 🟣 Current | Windows installer, portable app, desktop distribution pipeline |
 
 \*An external ANN/vector backend remains intentionally scale-driven rather than a beta requirement.
 
-### What comes after v0.50?
+### What comes after v0.51?
 
-The v0.5x line prioritizes **real-user feedback, regressions, reliability, compatibility and security** over throwing more feature surface into the product.
+The v0.5x line prioritizes **desktop beta feedback, regressions, reliability, compatibility and security** over throwing more feature surface into the product.
 
 ---
 
@@ -356,6 +378,6 @@ StudyOS exists to answer that question continuously.
 
 <br />
 
-**v0.50.0 Beta · Study smarter under real constraints.**
+**v0.51.0 Desktop Beta · Study smarter under real constraints.**
 
 </div>
