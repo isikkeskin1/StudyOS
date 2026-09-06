@@ -15,6 +15,7 @@ from app.models.diagnostics import (
     DiagnosticSession,
     TopicMastery,
 )
+from app.models.exam_day import ExamDayAnswer, ExamDayQuestion, ExamDaySession
 from app.models.exam_intelligence import ExamQuestion, ExamQuestionTopic, ExamTopicStat
 from app.models.tutor_practice import TutorPracticeAttempt, TutorPracticeItem
 from app.services.mastery_history import rebuild_course_mastery_history
@@ -285,6 +286,33 @@ def recompute_course_mastery(db: Session, course_id: str) -> list[TopicMastery]:
             previous = latest_evidence.get(mapping.topic_id)
             if previous is None or response_time > previous:
                 latest_evidence[mapping.topic_id] = response_time
+
+    exam_day_rows = db.execute(
+        select(ExamDayAnswer, ExamDayQuestion, ExamDaySession)
+        .join(
+            ExamDayQuestion,
+            ExamDayQuestion.id == ExamDayAnswer.exam_day_question_id,
+        )
+        .join(ExamDaySession, ExamDaySession.id == ExamDayAnswer.session_id)
+        .where(
+            ExamDaySession.course_id == course_id,
+            ExamDaySession.status == "submitted",
+            ExamDayAnswer.score.is_not(None),
+            ExamDayQuestion.primary_topic_id.is_not(None),
+        )
+    ).all()
+    for answer, question, _session in exam_day_rows:
+        if question.primary_topic_id is None or answer.score is None:
+            continue
+        weight = 1.15 * (0.75 + 0.25 * answer.confidence)
+        row = evidence[question.primary_topic_id]
+        row["weight"] += weight
+        row["success"] += weight * answer.score
+        row["count"] += 1.0
+        answer_time = _as_utc(answer.updated_at)
+        previous = latest_evidence.get(question.primary_topic_id)
+        if previous is None or answer_time > previous:
+            latest_evidence[question.primary_topic_id] = answer_time
 
     practice_rows = db.execute(
         select(TutorPracticeAttempt, TutorPracticeItem)

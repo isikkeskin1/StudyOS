@@ -20,6 +20,7 @@ from app.models.emergency_schedule import (
     EmergencyStudyScheduleBlock,
     EmergencyStudyScheduleRevision,
 )
+from app.models.exam_day import ExamDayAnswer, ExamDayQuestion, ExamDaySession
 from app.models.exam_intelligence import (
     ExamAnalysis,
     ExamQuestion,
@@ -73,6 +74,9 @@ __all__ = [
     "DocumentAnalysis",
     "DocumentChunk",
     "DocumentUnit",
+    "ExamDayAnswer",
+    "ExamDayQuestion",
+    "ExamDaySession",
     "EmergencyStudySchedule",
     "EmergencyStudyScheduleBlock",
     "EmergencyStudyScheduleRevision",

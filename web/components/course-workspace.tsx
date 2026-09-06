@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
+import { ExamDayPanel } from "@/components/exam-day-panel";
+
 import type {
   CheatSheet,
   CourseIntelligence,
@@ -21,7 +23,7 @@ import type {
 } from "@/lib/workspace-types";
 import type { Course, CourseDocument, CourseSetup } from "@/lib/setup-types";
 
-type Tab = "overview" | "topics" | "sources" | "exam" | "tutor" | "mistakes" | "forecast" | "cheats";
+type Tab = "overview" | "topics" | "sources" | "exam" | "mock" | "tutor" | "mistakes" | "forecast" | "cheats";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...init, cache: "no-store" });
@@ -399,6 +401,7 @@ export function CourseWorkspace({ courseId }: { courseId: string }) {
             ["topics", "Topics & mastery"],
             ["sources", "Sources"],
             ["exam", "Diagnostic exam"],
+            ["mock", "Exam day"],
             ["tutor", "Tutor & practice"],
             ["mistakes", "Mistakes"],
             ["forecast", "Forecast"],
@@ -717,6 +720,10 @@ export function CourseWorkspace({ courseId }: { courseId: string }) {
               </div>
             )}
           </section>
+        )}
+
+        {tab === "mock" && (
+          <ExamDayPanel courseId={courseId} onStudyStateChanged={() => void load()} />
         )}
 
         {tab === "tutor" && (
