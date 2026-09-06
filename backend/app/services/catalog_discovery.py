@@ -142,7 +142,11 @@ def _validate_public_url(url: str, allowed_hosts: set[str] | None = None) -> str
     try:
         addresses = {
             item[4][0]
-            for item in socket.getaddrinfo(host, parsed.port or 443, type=socket.SOCK_STREAM)
+            for item in socket.getaddrinfo(
+                host,
+                parsed.port or (443 if parsed.scheme == "https" else 80),
+                type=socket.SOCK_STREAM,
+            )
         }
     except OSError as exc:
         raise DiscoveryError(f"Could not resolve source host: {host}") from exc
@@ -378,8 +382,10 @@ def discover_catalog_sources(
 
 
 def _safe_filename(source: CatalogSource, extension: str) -> str:
-    stem = source.title or Path(urlparse(source.url).path).stem or source.source_kind
-    cleaned = _SAFE_FILENAME_RE.sub("-", stem).strip("-._")[:120] or "course-source"
+    candidate = source.title or Path(urlparse(source.url).path).name or source.source_kind
+    if candidate.lower().endswith(extension):
+        candidate = candidate[: -len(extension)]
+    cleaned = _SAFE_FILENAME_RE.sub("-", candidate).strip("-._")[:120] or "course-source"
     return f"{cleaned}{extension}"
 
 
