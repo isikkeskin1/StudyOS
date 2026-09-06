@@ -58,6 +58,24 @@ export function SetupWizard({ onReady }: { onReady: () => void }) {
 
   const createCourse = async (event: FormEvent) => {
     event.preventDefault();
+    const parsedMax = Number(maxGrade);
+    const parsedTarget = targetGrade ? Number(targetGrade) : null;
+    if (!name.trim()) {
+      setError("Enter a course name.");
+      return;
+    }
+    if (!Number.isFinite(parsedMax) || parsedMax <= 0) {
+      setError("Grade scale must be greater than zero.");
+      return;
+    }
+    if (
+      parsedTarget !== null
+      && (!Number.isFinite(parsedTarget) || parsedTarget < 0 || parsedTarget > parsedMax)
+    ) {
+      setError("Target grade must be between zero and the grade scale.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -67,8 +85,8 @@ export function SetupWizard({ onReady }: { onReady: () => void }) {
         body: JSON.stringify({
           name: name.trim(),
           exam_date: examDate || null,
-          target_grade: targetGrade ? Number(targetGrade) : null,
-          max_grade: Number(maxGrade),
+          target_grade: parsedTarget,
+          max_grade: parsedMax,
         }),
       });
       setCourse(created);
@@ -141,6 +159,17 @@ export function SetupWizard({ onReady }: { onReady: () => void }) {
 
   const createPlan = async () => {
     if (!course) return;
+    const hours = Number(availableHours);
+    const minutes = Number(blockMinutes);
+    if (!Number.isFinite(hours) || hours < 0.5 || hours > 336) {
+      setError("Available study time must be between 0.5 and 336 hours.");
+      return;
+    }
+    if (![30, 45, 60, 90].includes(minutes)) {
+      setError("Choose a supported focus block length.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -148,8 +177,8 @@ export function SetupWizard({ onReady }: { onReady: () => void }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          available_hours: Number(availableHours),
-          block_minutes: Number(blockMinutes),
+          available_hours: hours,
+          block_minutes: minutes,
           courses: [{ course_id: course.id, use_stored_mastery: true }],
         }),
       });
