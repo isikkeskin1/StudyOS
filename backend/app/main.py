@@ -48,13 +48,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
                 Path(database_path).parent.mkdir(parents=True, exist_ok=True)
         resolved_settings.data_dir.mkdir(parents=True, exist_ok=True)
-        Base.metadata.create_all(engine)
+        if resolved_settings.environment != "production":
+            Base.metadata.create_all(engine)
         yield
         engine.dispose()
 
     application = FastAPI(
         title=resolved_settings.app_name,
-        version="0.43.0",
+        version="0.44.0",
         description="Backend API for StudyOS.",
         lifespan=lifespan,
     )

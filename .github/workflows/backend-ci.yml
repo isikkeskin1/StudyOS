@@ -28,5 +28,10 @@ jobs:
       - name: Lint
         run: ruff check .
 
+      - name: Migration smoke test
+        env:
+          STUDYOS_DATABASE_URL: sqlite:///./migration-smoke.db
+        run: alembic upgrade head
+
       - name: Test
         run: pytest
