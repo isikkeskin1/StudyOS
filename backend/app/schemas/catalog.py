@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CatalogCourseCreate(BaseModel):
@@ -62,3 +62,15 @@ class CatalogSourceRead(BaseModel):
 
 class CatalogSourceStatusUpdate(BaseModel):
     status: str = Field(pattern="^(approved|rejected|candidate)$")
+
+
+class CatalogAssignmentRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if "@" not in normalized:
+            raise ValueError("Enter a valid account email")
+        return normalized
