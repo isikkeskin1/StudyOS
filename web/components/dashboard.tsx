@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { AccountSettings } from "@/components/account-settings";
 import { CourseManager } from "@/components/course-manager";
 import { GlobalSearch } from "@/components/global-search";
 
@@ -72,9 +73,11 @@ function activityLabel(value: string) {
 export function Dashboard({
   userEmail,
   onSignOut,
+  onAccountDeleted,
 }: {
   userEmail: string | null;
   onSignOut: () => void;
+  onAccountDeleted: () => void;
 }) {
   const [days, setDays] = useState<WindowDays>(30);
   const [courseId, setCourseId] = useState("all");
@@ -89,6 +92,7 @@ export function Dashboard({
   const [actionBusy, setActionBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -245,6 +249,9 @@ export function Dashboard({
             </button>
             <button className="ghost-button" onClick={() => void load()} disabled={loading}>
               {loading ? "Syncing…" : "Refresh"}
+            </button>
+            <button className="ghost-button" onClick={() => setAccountOpen(true)}>
+              Account
             </button>
             <button className="ghost-button" onClick={onSignOut}>
               Sign out
@@ -495,6 +502,12 @@ export function Dashboard({
         open={managerOpen}
         onClose={() => setManagerOpen(false)}
         onChanged={() => void load()}
+      />
+      <AccountSettings
+        open={accountOpen}
+        email={userEmail}
+        onClose={() => setAccountOpen(false)}
+        onDeleted={onAccountDeleted}
       />
     </div>
   );
