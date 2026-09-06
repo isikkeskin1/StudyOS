@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tempfile import NamedTemporaryFile
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -29,6 +30,16 @@ def liveness(request: Request) -> dict[str, str]:
     }
 
 
+def _storage_ready(request: Request) -> bool:
+    data_dir = request.app.state.settings.data_dir
+    try:
+        with NamedTemporaryFile(dir=data_dir, prefix=".studyos-ready-", delete=True):
+            pass
+    except OSError:
+        return False
+    return True
+
+
 @router.get("/health/ready")
 def readiness(
     request: Request,
@@ -42,10 +53,17 @@ def readiness(
             detail="Database is not ready",
         ) from exc
 
+    if not _storage_ready(request):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Upload storage is not ready",
+        )
+
     return {
         "status": "ready",
         "service": request.app.title,
         "version": request.app.version,
         "environment": request.app.state.settings.environment,
         "database": "ready",
+        "storage": "ready",
     }
