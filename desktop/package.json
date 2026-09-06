@@ -61,7 +61,8 @@
           ]
         }
       ],
-      "artifactName": "StudyOS-${version}-Windows-${arch}.${ext}"
+      "artifactName": "StudyOS-${version}-Windows-${arch}.${ext}",
+      "icon": "../web/public/icons/icon-512.png"
     },
     "nsis": {
       "oneClick": false,
