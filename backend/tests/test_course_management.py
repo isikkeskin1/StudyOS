@@ -93,3 +93,23 @@ def test_deleting_source_marks_analysis_stale(client: TestClient) -> None:
     ready = client.get(f"/api/v1/courses/{course_id}/setup").json()
     assert ready["analysis_stale"] is False
     assert ready["ready_for_planning"] is True
+
+
+def test_course_deletion_removes_owned_records_and_file(client: TestClient, tmp_path) -> None:
+    course_id = _create_course(client)
+    uploaded = client.post(
+        f"/api/v1/courses/{course_id}/documents",
+        files={"file": ("delete-course.txt", b"course source", "text/plain")},
+    )
+    assert uploaded.status_code == 201
+    document_id = uploaded.json()["id"]
+    stored = tmp_path / "uploads" / course_id
+    assert stored.exists()
+
+    deleted = client.delete(f"/api/v1/courses/{course_id}")
+    assert deleted.status_code == 204
+    assert client.get(f"/api/v1/courses/{course_id}").status_code == 404
+    assert client.get(
+        f"/api/v1/courses/{course_id}/documents/{document_id}"
+    ).status_code == 404
+    assert not any(stored.iterdir()) if stored.exists() else True
