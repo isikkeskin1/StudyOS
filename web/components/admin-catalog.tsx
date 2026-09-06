@@ -77,6 +77,8 @@ export function AdminCatalog({
   const [description, setDescription] = useState("");
   const [assignEmail, setAssignEmail] = useState("");
   const [seedUrls, setSeedUrls] = useState("");
+  const [programCode, setProgramCode] = useState("");
+  const [cohortYear, setCohortYear] = useState("");
   const [maxDepth, setMaxDepth] = useState("2");
   const [maxSources, setMaxSources] = useState("80");
   const [creating, setCreating] = useState(false);
@@ -180,6 +182,31 @@ export function AdminCatalog({
       setDescription("");
       await loadCourses(created.id);
       setNotice("Institutional master course created.");
+    });
+  };
+
+  const loadOfficialSeeds = () => {
+    if (!selected) return;
+    void run(async () => {
+      const result = await api<{
+        institution_code: string;
+        urls: string[];
+        notes: string[];
+      }>(
+        `/api/v1/admin/catalog/courses/${selected.id}/suggest-seeds`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            program_code: programCode.trim() || null,
+            cohort_year: cohortYear ? Number(cohortYear) : null,
+          }),
+        },
+      );
+      setSeedUrls(result.urls.join("\n"));
+      setNotice(
+        `Loaded ${result.urls.length} official ${result.institution_code} seed${result.urls.length === 1 ? "" : "s"}.`,
+      );
     });
   };
 
@@ -439,6 +466,39 @@ export function AdminCatalog({
                     Add public course or teaching-portal URLs, one per line.
                     StudyOS only follows those seeded hosts and blocks private-network targets.
                   </p>
+                  {selected.institution_code?.toUpperCase() === "POLITO" && (
+                    <div className="polito-seed-helper">
+                      <div className="setup-row">
+                        <label>
+                          Degree program code
+                          <input
+                            value={programCode}
+                            onChange={(event) => setProgramCode(event.target.value)}
+                            placeholder="555"
+                          />
+                        </label>
+                        <label>
+                          Cohort year
+                          <input
+                            type="number"
+                            min="2000"
+                            max="2100"
+                            value={cohortYear}
+                            onChange={(event) => setCohortYear(event.target.value)}
+                            placeholder="2026"
+                          />
+                        </label>
+                      </div>
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        disabled={busy || !selected.course_code}
+                        onClick={loadOfficialSeeds}
+                      >
+                        Load official Polito seeds
+                      </button>
+                    </div>
+                  )}
                   <label>
                     Seed URLs
                     <textarea
