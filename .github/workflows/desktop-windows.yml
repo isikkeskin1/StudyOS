@@ -58,7 +58,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e backend pyinstaller
-          pyinstaller --noconfirm --clean --onedir --name StudyOSBackend --paths backend --distpath desktop/build/backend --workpath desktop/build/pyinstaller-work --specpath desktop/build desktop/backend_launcher.py
+          pyinstaller --noconfirm --clean --onedir --name StudyOSBackend --paths backend --add-data "backend/alembic;alembic" --distpath desktop/build/backend --workpath desktop/build/pyinstaller-work --specpath desktop/build desktop/backend_launcher.py
           if (!(Test-Path "desktop/build/backend/StudyOSBackend/StudyOSBackend.exe")) {
             throw "Missing bundled StudyOS backend executable"
           }
