@@ -9,7 +9,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY web ./
 ARG STUDYOS_BACKEND_URL=http://backend:8000
-ENV STUDYOS_BACKEND_URL=${STUDYOS_BACKEND_URL}
+ARG STUDYOS_ENV=production
+ENV STUDYOS_BACKEND_URL=${STUDYOS_BACKEND_URL} \
+    STUDYOS_ENV=${STUDYOS_ENV}
 RUN npm run build
 
 FROM node:22-alpine AS runner
