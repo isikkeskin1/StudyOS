@@ -8,6 +8,7 @@ All notable StudyOS beta changes are documented here.
 
 - Desktop startup now upgrades legacy local SQLite databases through bundled Alembic migrations before serving the app.
 - Windows packaging now includes the migration scripts required by the bundled backend.
+- Next.js is updated from 15.5.0 to the patched 15.5.24 Maintenance-LTS release.
 - Release validation now tests an actual legacy desktop database and verifies it reaches the current schema.
 
 ### Fixed
