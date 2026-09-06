@@ -179,12 +179,14 @@ def test_reprocessing_document_cleans_orphaned_embeddings(client: TestClient) ->
 
     with client.app.state.session_factory() as db:
         before = embedding_index_status(db, course_id, provider)
-        assert before.orphaned_embeddings == old_count
+        # Reprocessing replaces document chunks. Enforced foreign keys cascade-delete
+        # embeddings for the replaced chunks immediately, leaving only fresh misses.
+        assert before.orphaned_embeddings == 0
         assert before.missing_chunks == before.total_chunks
 
         refreshed = sync_course_embedding_index(db, course_id, provider)
         assert refreshed.status == "ready"
-        assert refreshed.deleted_orphans == old_count
+        assert refreshed.deleted_orphans == 0
         assert refreshed.orphaned_embeddings == 0
 
 
