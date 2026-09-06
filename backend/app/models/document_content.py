@@ -35,6 +35,15 @@ class DocumentAnalysis(Base):
     unit_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     chunk_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     extracted_characters: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    empty_unit_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    extraction_quality: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    text_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    duplicate_of_document_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     needs_ocr: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     processed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

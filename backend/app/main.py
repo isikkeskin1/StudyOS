@@ -28,6 +28,7 @@ from app.api.push_notifications import router as push_notifications_router
 from app.api.review_session import router as review_session_router
 from app.api.reviews import router as reviews_router
 from app.api.semester_dashboard import router as semester_dashboard_router
+from app.api.search import router as search_router
 from app.api.semester_queue import router as semester_queue_router
 from app.api.tutor import router as tutor_router
 from app.api.tutor_benchmark import router as tutor_benchmark_router
@@ -76,7 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application = FastAPI(
         title=resolved_settings.app_name,
-        version="0.47.0",
+        version="0.48.0",
         description="Backend API for StudyOS.",
         lifespan=lifespan,
     )
@@ -99,6 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(calendar_subscription_router, prefix=resolved_settings.api_prefix)
     application.include_router(push_notifications_router, prefix=resolved_settings.api_prefix)
     application.include_router(analytics_router, prefix=resolved_settings.api_prefix)
+    application.include_router(search_router, prefix=resolved_settings.api_prefix)
     application.include_router(diagnostics_router, prefix=resolved_settings.api_prefix)
     application.include_router(exam_day_router, prefix=resolved_settings.api_prefix)
     application.include_router(mistakes_router, prefix=resolved_settings.api_prefix)
