@@ -94,6 +94,32 @@ jobs:
           STUDYOS_BACKEND_URL: http://127.0.0.1:9
         run: npm run build
 
+      - name: Stage production web runtime
+        shell: pwsh
+        run: |
+          $stage = "desktop/build/web"
+          Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $stage | Out-Null
+
+          Copy-Item "web/.next/standalone/*" $stage -Recurse -Force
+          New-Item -ItemType Directory -Path "$stage/.next/static" -Force | Out-Null
+          Copy-Item "web/.next/static/*" "$stage/.next/static" -Recurse -Force
+          Copy-Item "web/public" "$stage/public" -Recurse -Force
+
+          Copy-Item "web/package.json" "$stage/package.json" -Force
+          Copy-Item "web/package-lock.json" "$stage/package-lock.json" -Force
+
+          Push-Location $stage
+          npm ci --omit=dev --no-audit --no-fund
+          Pop-Location
+
+          if (!(Test-Path "$stage/server.js")) {
+            throw "Missing staged Next.js server.js"
+          }
+          if (!(Test-Path "$stage/node_modules/next/package.json")) {
+            throw "Missing staged Next.js runtime dependency"
+          }
+
       - name: Install desktop dependencies
         working-directory: desktop
         run: npm install --no-audit --no-fund
@@ -104,8 +130,11 @@ jobs:
         run: |
           node --check main.cjs
           node --check preload.cjs
-          if (!(Test-Path "../web/.next/standalone/server.js")) {
-            throw "Missing Next.js standalone server bundle"
+          if (!(Test-Path "build/web/server.js")) {
+            throw "Missing staged Next.js server bundle"
+          }
+          if (!(Test-Path "build/web/node_modules/next/package.json")) {
+            throw "Missing staged Next.js runtime dependency"
           }
           if (!(Test-Path "build/backend/StudyOSBackend.exe")) {
             throw "Missing bundled StudyOS backend executable"
