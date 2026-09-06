@@ -137,6 +137,13 @@ def test_admin_can_publish_polito_course_and_user_can_enroll(tmp_path: Path) -> 
             assert assigned.status_code == 201
             assigned_course_id = assigned.json()["id"]
 
+            assigned_by_email = admin.post(
+                f"/api/v1/admin/catalog/courses/{catalog['id']}/assign",
+                json={"email": "assigned@example.com"},
+            )
+            assert assigned_by_email.status_code == 201
+            assert assigned_by_email.json()["name"] == "Physics I"
+
             assigned_courses = assigned_user.get("/api/v1/courses")
             assert assigned_courses.status_code == 200
             assert any(
