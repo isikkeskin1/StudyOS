@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -20,6 +21,11 @@ class RegisterRequest(BaseModel):
 
 class LoginRequest(RegisterRequest):
     pass
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str = Field(min_length=8, max_length=256)
+    confirmation: Literal["DELETE"]
 
 
 class UserRead(BaseModel):
