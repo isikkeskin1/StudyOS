@@ -24,6 +24,7 @@ class Settings(BaseModel):
     push_poll_seconds: int = Field(default=300, ge=60, le=3600)
     auth_rate_limit_attempts: int = Field(default=10, ge=2, le=100)
     auth_rate_limit_window_seconds: int = Field(default=60, ge=10, le=3600)
+    admin_emails: tuple[str, ...] = ()
 
     tutor_provider: Literal["local", "openai"] = "local"
     tutor_embedding_provider: Literal["none", "openai"] = "none"
@@ -89,6 +90,11 @@ def get_settings() -> Settings:
         auth_rate_limit_attempts=int(os.getenv("STUDYOS_AUTH_RATE_LIMIT_ATTEMPTS", "10")),
         auth_rate_limit_window_seconds=int(
             os.getenv("STUDYOS_AUTH_RATE_LIMIT_WINDOW_SECONDS", "60")
+        ),
+        admin_emails=tuple(
+            email.strip().lower()
+            for email in os.getenv("STUDYOS_ADMIN_EMAILS", "").split(",")
+            if email.strip()
         ),
         tutor_provider=os.getenv("STUDYOS_TUTOR_PROVIDER", "local").lower(),
         tutor_embedding_provider=os.getenv(
