@@ -94,6 +94,37 @@ jobs:
               connection.close()
           '@ | python - $dbPath
 
+          $verifyScript = Join-Path $legacyRoot "verify-migration.py"
+          @'
+          import sqlite3
+          import sys
+
+          connection = sqlite3.connect(sys.argv[1])
+          try:
+              columns = {
+                  row[1]
+                  for row in connection.execute("PRAGMA table_info(users)").fetchall()
+              }
+              tables = {
+                  row[0]
+                  for row in connection.execute(
+                      "SELECT name FROM sqlite_master WHERE type='table'"
+                  ).fetchall()
+              }
+              required_tables = {
+                  "alembic_version",
+                  "catalog_courses",
+                  "catalog_sources",
+              }
+              if "is_admin" not in columns:
+                  raise SystemExit("users.is_admin was not migrated")
+              missing = required_tables - tables
+              if missing:
+                  raise SystemExit(f"Missing migrated tables: {sorted(missing)}")
+          finally:
+              connection.close()
+          '@ | Set-Content -Path $verifyScript -Encoding UTF8
+
           $env:STUDYOS_ENV = "desktop"
           $env:STUDYOS_DATABASE_URL = "sqlite:///$($dbPath -replace '\\','/')"
           $env:STUDYOS_DATA_DIR = $uploadPath
@@ -119,35 +150,10 @@ jobs:
               throw "Bundled backend never became ready after legacy database migration"
             }
 
-            @'
-            import sqlite3
-            import sys
-
-            connection = sqlite3.connect(sys.argv[1])
-            try:
-                columns = {
-                    row[1]
-                    for row in connection.execute("PRAGMA table_info(users)").fetchall()
-                }
-                tables = {
-                    row[0]
-                    for row in connection.execute(
-                        "SELECT name FROM sqlite_master WHERE type='table'"
-                    ).fetchall()
-                }
-                required_tables = {
-                    "alembic_version",
-                    "catalog_courses",
-                    "catalog_sources",
-                }
-                if "is_admin" not in columns:
-                    raise SystemExit("users.is_admin was not migrated")
-                missing = required_tables - tables
-                if missing:
-                    raise SystemExit(f"Missing migrated tables: {sorted(missing)}")
-            finally:
-                connection.close()
-            '@ | python - $dbPath
+            python $verifyScript $dbPath
+            if ($LASTEXITCODE -ne 0) {
+              throw "Legacy database migration verification failed"
+            }
           } finally {
             if (-not $backend.HasExited) {
               Stop-Process -Id $backend.Id -Force
