@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.core.config import Settings
 from app.main import create_app
+from app.models.auth import AuthSession
 
 
 def _app(tmp_path: Path):
@@ -200,3 +203,26 @@ def test_account_deletion_removes_login_and_uploaded_files(tmp_path: Path) -> No
 
         login = client.post("/api/v1/auth/login", json=credentials)
         assert login.status_code == 401
+
+
+def test_expired_session_is_removed_and_cookie_cleared(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    with TestClient(app) as client:
+        assert client.post(
+            "/api/v1/auth/register",
+            json={"email": "expired@example.com", "password": "expired-password"},
+        ).status_code == 201
+
+        with app.state.session_factory() as db:
+            session = db.scalar(select(AuthSession))
+            assert session is not None
+            session.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+            session_id = session.id
+            db.commit()
+
+        response = client.get("/api/v1/auth/me")
+        assert response.status_code == 401
+        assert "studyos_session" not in client.cookies
+
+        with app.state.session_factory() as db:
+            assert db.get(AuthSession, session_id) is None
