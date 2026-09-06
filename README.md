@@ -420,18 +420,19 @@ FastAPI exposes interactive docs at `/docs` while the server is running.
 
 ### Phase 6 — Study operating system
 - [x] persistent semester-wide study queue
-- [x] semester command-center API
-- [x] spaced-repetition workflow
-- [ ] cheat-sheet generation
-- [ ] calendar/focus integration
-- [ ] analytics UI
-- [ ] PWA/notifications
+- [x] semester command-center API and analytics UI
+- [x] spaced-repetition and review workflow
+- [x] source-grounded cheat-sheet generation
+- [x] calendar/focus integration
+- [x] PWA, offline shell, and notifications
+- [x] account-scoped authentication and data controls
+- [x] beta security and production hardening
 
 ## Tech stack
 
-Python 3.12+, FastAPI, Pydantic, SQLAlchemy 2, SQLite, pypdf, python-docx, python-pptx, OpenAI SDK, Pytest, Ruff, and GitHub Actions.
+Python 3.12+, FastAPI, Pydantic, SQLAlchemy 2, PostgreSQL/SQLite, pypdf, python-docx, python-pptx, OpenAI SDK, Pytest, Ruff, Docker Compose, GitHub Actions, and a Next.js/TypeScript client.
 
-Planned infrastructure includes PostgreSQL, Redis/background workers, an external ANN/vector backend only when benchmarked scale justifies it, Docker, and a Next.js/TypeScript client.
+The current production topology uses PostgreSQL, a FastAPI API container, a non-root Next.js web container, persistent upload storage, and the push worker. A distributed rate limiter and an external ANN/vector backend remain scale-driven future infrastructure rather than beta requirements.
 
 ## Local development
 
@@ -445,5 +446,17 @@ ruff check .
 pytest
 ```
 
-The next milestone is **source-grounded cheat-sheet generation**: compile course
-formulas, methods, and recurring mistakes into a compact exam reference with citations.
+## Production deployment checklist
+
+1. Copy the backend environment example and set a long random `POSTGRES_PASSWORD`.
+2. Set `STUDYOS_ENV=production`, production URLs/proxy settings, and any enabled provider credentials.
+3. Configure `STUDYOS_FORWARDED_ALLOW_IPS` to the actual trusted reverse proxy addresses; do not use a public wildcard outside the private Compose topology.
+4. Keep VAPID keys as a valid pair if push notifications are enabled.
+5. Run `docker compose config --quiet`, then `docker compose up -d --build`.
+6. Require both `/api/v1/health/live` and `/api/v1/health/ready` to be healthy before routing beta traffic.
+7. Verify browser security headers, sign-up/login, first-course onboarding, upload/processing, study flow, export, and account deletion.
+8. Run backend CI, web CI, and the deployment/browser smoke suite before tagging a release.
+
+## Beta posture
+
+v0.50.0 is the beta hardening milestone. Subsequent v0.5x releases should prioritize real-user feedback, regressions, security fixes, compatibility, and operational reliability over large new feature surfaces. The detailed v0.50 release audit lives in `docs/releases/v0.50.0-beta-audit.md`.
