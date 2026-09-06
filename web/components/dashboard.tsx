@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { CourseManager } from "@/components/course-manager";
+
 import type {
   AnalyticsCourse,
   AnalyticsDashboard,
@@ -79,6 +81,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [managerOpen, setManagerOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -229,6 +232,9 @@ export function Dashboard() {
                 </option>
               ))}
             </select>
+            <button className="ghost-button" onClick={() => setManagerOpen(true)}>
+              Manage courses
+            </button>
             <button className="ghost-button" onClick={() => void load()} disabled={loading}>
               {loading ? "Syncing…" : "Refresh"}
             </button>
@@ -474,6 +480,11 @@ export function Dashboard() {
           </>
         )}
       </main>
+      <CourseManager
+        open={managerOpen}
+        onClose={() => setManagerOpen(false)}
+        onChanged={() => void load()}
+      />
     </div>
   );
 }

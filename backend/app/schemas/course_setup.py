@@ -16,5 +16,6 @@ class CourseSetupRead(BaseModel):
     processed_document_count: int
     failed_document_count: int
     course_analyzed: bool
+    analysis_stale: bool
     ready_for_planning: bool
     next_step: Literal["upload_documents", "process_documents", "analyze_course", "ready"]

@@ -22,6 +22,7 @@ class CourseSetupStatus:
     processed_document_count: int
     failed_document_count: int
     course_analyzed: bool
+    analysis_stale: bool
     ready_for_planning: bool
     next_step: str
 
@@ -41,13 +42,18 @@ def course_setup_status(db: Session, course: Course) -> CourseSetupStatus:
             Document.status == "failed",
         )
     ) or 0
-    analyzed = db.get(CourseAnalysis, course.id) is not None
+    analysis = db.get(CourseAnalysis, course.id)
+    analyzed = analysis is not None
+    analysis_stale = bool(
+        analysis is not None
+        and analysis.analyzed_document_count != processed_document_count
+    )
 
     if document_count == 0:
         next_step = "upload_documents"
     elif processed_document_count < document_count:
         next_step = "process_documents"
-    elif not analyzed:
+    elif not analyzed or analysis_stale:
         next_step = "analyze_course"
     else:
         next_step = "ready"
@@ -62,6 +68,7 @@ def course_setup_status(db: Session, course: Course) -> CourseSetupStatus:
         processed_document_count=processed_document_count,
         failed_document_count=failed_document_count,
         course_analyzed=analyzed,
+        analysis_stale=analysis_stale,
         ready_for_planning=next_step == "ready",
         next_step=next_step,
     )
