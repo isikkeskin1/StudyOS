@@ -267,16 +267,6 @@ jobs:
             throw "No desktop release assets were produced"
           }
           gh release upload "$env:RELEASE_TAG" @($assets.FullName) --clobber
-) {
-            throw "Release tag must look like v0.52.0 or v0.52.0-beta.1"
-          }
-          npm version "$version" --no-git-tag-version
-          Write-Host "Building StudyOS Desktop $version"
-
-      - name: Set up Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
 
       - name: Set up Python
         uses: actions/setup-python@v7
