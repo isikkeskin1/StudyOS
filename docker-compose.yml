@@ -4,9 +4,7 @@ services:
     environment:
       POSTGRES_DB: studyos
       POSTGRES_USER: studyos
-      POSTGRES_PASSWORD: studyos
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-studyos}
     volumes:
       - studyos_postgres:/var/lib/postgresql/data
     healthcheck:
@@ -14,6 +12,58 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      STUDYOS_ENV: production
+      STUDYOS_DATABASE_URL: postgresql+psycopg://studyos:${POSTGRES_PASSWORD:-studyos}@postgres:5432/studyos
+      STUDYOS_DATA_DIR: /data/uploads
+      STUDYOS_LOG_LEVEL: ${STUDYOS_LOG_LEVEL:-INFO}
+      STUDYOS_SENTRY_DSN: ${STUDYOS_SENTRY_DSN:-}
+      STUDYOS_SENTRY_TRACES_SAMPLE_RATE: ${STUDYOS_SENTRY_TRACES_SAMPLE_RATE:-0}
+      STUDYOS_RELEASE: ${STUDYOS_RELEASE:-0.46.0}
+      STUDYOS_TUTOR_PROVIDER: ${STUDYOS_TUTOR_PROVIDER:-local}
+      STUDYOS_TUTOR_EMBEDDING_PROVIDER: ${STUDYOS_TUTOR_EMBEDDING_PROVIDER:-none}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - studyos_uploads:/data/uploads
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args:
+        STUDYOS_BACKEND_URL: http://backend:8000
+    environment:
+      STUDYOS_BACKEND_URL: http://backend:8000
+      NEXT_TELEMETRY_DISABLED: "1"
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${STUDYOS_WEB_PORT:-3000}:3000"
+    restart: unless-stopped
 
 volumes:
   studyos_postgres:
+  studyos_uploads:

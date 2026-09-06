@@ -35,3 +35,6 @@ jobs:
 
       - name: Test
         run: pytest
+
+      - name: Build backend container
+        run: docker build -f Dockerfile ..
