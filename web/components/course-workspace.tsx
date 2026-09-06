@@ -34,7 +34,9 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     try {
       const body = (await response.json()) as { detail?: string };
       if (body.detail) detail = body.detail;
-    } catch {}
+    } catch {
+      // Keep the HTTP status fallback when the response body is not JSON.
+    }
     throw new Error(detail);
   }
   if (response.status === 204) return undefined as T;
