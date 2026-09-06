@@ -161,6 +161,18 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run dist:win
 
+      - name: Verify desktop update metadata
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist/latest.yml")) {
+            throw "Missing latest.yml required for StudyOS automatic updates"
+          }
+          $setupBlockmap = Get-ChildItem "dist/*Setup.exe.blockmap" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $setupBlockmap) {
+            throw "Missing NSIS installer blockmap required for differential updates"
+          }
+
       - name: Verify packaged web runtime
         working-directory: desktop
         shell: pwsh
