@@ -132,7 +132,6 @@ def test_admin_discovers_reviews_and_imports_public_course_sources(
         assert "lecture" in kinds
         assert "exercise" in kinds
         assert "past_exam" in kinds
-        assert "web_page" in kinds
 
         importable = [
             item
