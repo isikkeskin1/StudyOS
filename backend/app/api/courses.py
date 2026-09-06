@@ -112,6 +112,25 @@ def get_course(course_id: str, db: Annotated[Session, Depends(get_db)]) -> Cours
     return _get_course(db, course_id)
 
 
+@router.delete("/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_course(
+    course_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    course = _get_course(db, course_id)
+    storage_paths = [Path(document.storage_path) for document in course.documents]
+    db.delete(course)
+    db.commit()
+    for storage_path in storage_paths:
+        storage_path.unlink(missing_ok=True)
+    course_dir = storage_paths[0].parent if storage_paths else None
+    if course_dir is not None:
+        try:
+            course_dir.rmdir()
+        except OSError:
+            pass
+
+
 @router.post(
     "/{course_id}/documents",
     response_model=DocumentRead,
