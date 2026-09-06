@@ -15,6 +15,11 @@ from app.schemas.exam_day import (
     ExamDayResultRead,
     ExamDaySessionRead,
 )
+from app.services.exam_analysis import (
+    CourseTopicsRequiredError,
+    NoExamDocumentsError,
+    analyze_exams,
+)
 from app.services.exam_day import (
     ExamDayStateError,
     ExamDayUnavailable,
@@ -23,11 +28,6 @@ from app.services.exam_day import (
     read_exam_day_result,
     submit_exam_day,
     update_exam_day_answer,
-)
-from app.services.exam_analysis import (
-    CourseTopicsRequiredError,
-    NoExamDocumentsError,
-    analyze_exams,
 )
 
 router = APIRouter(prefix="/courses/{course_id}/exam-day", tags=["exam day"])
