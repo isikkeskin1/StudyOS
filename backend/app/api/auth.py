@@ -22,6 +22,7 @@ from app.services.account_data import delete_user_data, export_user_data
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 SESSION_DAYS = 30
+_DUMMY_PASSWORD_HASH = hash_password("studyos-dummy-auth-check")
 
 
 def _user_read(user: User) -> UserRead:
@@ -99,7 +100,9 @@ def login(
     db: Annotated[Session, Depends(get_db)],
 ) -> AuthRead:
     user = db.scalar(select(User).where(User.email == payload.email))
-    if user is None or not verify_password(payload.password, user.password_hash):
+    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
+    password_valid = verify_password(payload.password, password_hash)
+    if user is None or not password_valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
