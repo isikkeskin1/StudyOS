@@ -4,9 +4,15 @@ StudyOS is an evidence-driven academic operating system that turns uploaded cour
 
 > **Upload your course. Set your target grade. Let StudyOS determine the most efficient path to get there.**
 
-## Current milestone — spaced-repetition workflow
+## Current milestone — v0.50 beta release hardening
 
-The backend is now at **v0.33.0**.
+StudyOS backend and web are now at **v0.50.0**. This milestone freezes feature growth and
+focuses on beta-readiness: account-scoped data ownership, export/deletion controls,
+destructive-action confirmation, stronger onboarding validation, enforced SQLite foreign
+keys in development/tests, auth abuse throttling, secure browser/API headers, production
+secret defaults, writable-storage readiness checks, and deployment/browser smoke coverage.
+
+## Spaced-repetition workflow
 
 Due reviews now launch persistent, single-question review sessions. Selection uses the
 existing calibrated retention queue and its topic priority. An optional `topic_id`
