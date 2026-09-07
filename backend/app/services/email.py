@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import smtplib
 from email.message import EmailMessage
 
 import httpx
 
 from app.core.config import Settings
+
+logger = logging.getLogger(__name__)
 
 _BREVO_SEND_URL = "https://api.brevo.com/v3/smtp/email"
 
@@ -35,6 +38,11 @@ def _send_via_brevo_api(settings: Settings, message: EmailMessage) -> None:
 
     with httpx.Client(timeout=10.0) as client:
         response = client.post(_BREVO_SEND_URL, headers=headers, json=payload)
+        if response.is_error:
+            logger.error(
+                "Brevo transactional email failed with HTTP %s",
+                response.status_code,
+            )
         response.raise_for_status()
 
 
