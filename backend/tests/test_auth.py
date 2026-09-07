@@ -226,3 +226,79 @@ def test_expired_session_is_removed_and_cookie_cleared(tmp_path: Path) -> None:
 
         with app.state.session_factory() as db:
             assert db.get(AuthSession, session_id) is None
+
+
+def test_production_style_registration_requires_email_verification(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    sent: dict[str, str] = {}
+
+    def fake_send(settings, *, recipient: str, code: str) -> None:
+        sent["recipient"] = recipient
+        sent["code"] = code
+
+    monkeypatch.setattr("app.api.auth.send_email_verification_code", fake_send)
+    settings = Settings(
+        database_url=f"sqlite:///{tmp_path / 'verified-auth.db'}",
+        data_dir=tmp_path / "uploads",
+        max_upload_mb=1,
+        require_email_verification=True,
+        smtp_host="smtp.example.test",
+        smtp_from_email="support@studyos.courses",
+    )
+    app = create_app(settings)
+
+    with TestClient(app) as client:
+        registered = client.post(
+            "/api/v1/auth/register",
+            json={"email": "verify@example.com", "password": "verify-password"},
+        )
+        assert registered.status_code == 201
+        assert "studyos_session" not in client.cookies
+        assert sent["recipient"] == "verify@example.com"
+        assert len(sent["code"]) == 6
+
+        blocked = client.post(
+            "/api/v1/auth/login",
+            json={"email": "verify@example.com", "password": "verify-password"},
+        )
+        assert blocked.status_code == 403
+        assert blocked.json()["detail"] == "Email verification required"
+
+        wrong = client.post(
+            "/api/v1/auth/email-verification/confirm",
+            json={"email": "verify@example.com", "code": "000000"},
+        )
+        assert wrong.status_code == 400
+
+        verified = client.post(
+            "/api/v1/auth/email-verification/confirm",
+            json={"email": "verify@example.com", "code": sent["code"]},
+        )
+        assert verified.status_code == 200
+        assert verified.json()["user"]["email_verified"] is True
+        assert "studyos_session" in client.cookies
+        assert client.get("/api/v1/auth/me").status_code == 200
+
+
+def test_logout_all_revokes_every_session(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    credentials = {
+        "email": "multi-device@example.com",
+        "password": "multi-device-password",
+    }
+
+    with TestClient(app) as first, TestClient(app) as second:
+        assert first.post("/api/v1/auth/register", json=credentials).status_code == 201
+        assert second.post("/api/v1/auth/login", json=credentials).status_code == 200
+
+        sessions = second.get("/api/v1/auth/sessions")
+        assert sessions.status_code == 200
+        assert len(sessions.json()) == 2
+        assert sum(1 for item in sessions.json() if item["current"]) == 1
+
+        logout_all = second.post("/api/v1/auth/logout-all")
+        assert logout_all.status_code == 204
+        assert first.get("/api/v1/auth/me").status_code == 401
+        assert second.get("/api/v1/auth/me").status_code == 401
