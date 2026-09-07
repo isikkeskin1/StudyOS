@@ -113,8 +113,7 @@ def get_settings() -> Settings:
             if email.strip()
         ),
         require_email_verification=os.getenv(
-            "STUDYOS_REQUIRE_EMAIL_VERIFICATION",
-            "true" if os.getenv("STUDYOS_ENV", "development").lower() == "production" else "false",
+            "STUDYOS_REQUIRE_EMAIL_VERIFICATION", "false"
         ).lower() not in {"0", "false", "no"},
         email_verification_code_minutes=int(
             os.getenv("STUDYOS_EMAIL_VERIFICATION_CODE_MINUTES", "15")
