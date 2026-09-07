@@ -27,6 +27,9 @@ jobs:
       POSTGRES_PASSWORD: smoke-password
       STUDYOS_WEB_PORT: "3000"
       STUDYOS_RELEASE: ci-smoke
+      # Smoke uses disposable local accounts and has no email-provider secrets.
+      # Production Compose keeps verification enabled by default.
+      STUDYOS_REQUIRE_EMAIL_VERIFICATION: "false"
 
     steps:
       - name: Checkout
