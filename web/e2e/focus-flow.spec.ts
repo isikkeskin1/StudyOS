@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// Exercise the new timer against real session endpoints, including a reload and
+// Exercise the Today-first focus surface against real session endpoints, including a reload and
 // a client clock that reaches zero without mutating the server-owned session.
 test("focus countdown survives reload and never auto-completes", async ({ page }, testInfo) => {
   const registered = await page.request.post("/api/v1/auth/register", {
@@ -41,11 +41,12 @@ test("focus countdown survives reload and never auto-completes", async ({ page }
 
   await page.clock.install();
   await page.goto("/");
-  await page.getByRole("button", { name: "Start focus block" }).click();
+  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
+  await page.getByRole("button", { name: /Start session/ }).click();
   await expect(page.getByText("Time remaining", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText("Time remaining", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Complete", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Complete session", exact: true })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   expect(overflow).toBe(false);
   await page.screenshot({ path: testInfo.outputPath("focus-active.png"), fullPage: true, animations: "disabled" });
@@ -64,7 +65,7 @@ test("focus countdown survives reload and never auto-completes", async ({ page }
   );
   await page.getByRole("button", { name: "Skip", exact: true }).click();
   expect((await skipped).status()).toBe(200);
-  await expect(page.getByRole("button", { name: "Complete", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Complete session", exact: true })).toHaveCount(0);
   const after = await page.request.get(`/api/v1/semester-queues/${queue.id}/focus-sessions`, auth);
   expect((await after.json() as Array<{ id: string; status: string }>).find((session) => session.id === active?.id)?.status).toBe("skipped");
 });

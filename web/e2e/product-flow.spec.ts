@@ -10,7 +10,7 @@ async function expectNoHorizontalOverflow(page: import("@playwright/test").Page)
   expect(overflow.body).toBeLessThanOrEqual(overflow.viewport + 1);
 }
 
-test("account, setup, dashboard, workspace, and search stay usable", async ({
+test("account, setup, cockpit, workspace, and search stay usable", async ({
   page,
 }, testInfo) => {
   const suffix = `${testInfo.project.name}-${Date.now()}`;
@@ -45,11 +45,12 @@ test("account, setup, dashboard, workspace, and search stay usable", async ({
   await expectNoHorizontalOverflow(page);
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Let’s make progress." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await expect(page.getByRole("heading", { name: "Your courses" })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("dashboard.png"), fullPage: true, animations: "disabled" });
+  await expect(page.getByRole("heading", { name: "Course momentum" })).toBeVisible();
+  await expect(page.getByText(courseName, { exact: true }).first()).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("study-cockpit.png"), fullPage: true, animations: "disabled" });
 
   await page.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");
   const search = page.getByPlaceholder(
@@ -65,7 +66,7 @@ test("account, setup, dashboard, workspace, and search stay usable", async ({
   await expect(page.getByText(courseName, { exact: true }).first()).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await page.screenshot({ path: testInfo.outputPath("course-workspace.png"), fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: testInfo.outputPath("course-workbench.png"), fullPage: true, animations: "disabled" });
   await page.getByRole("button", { name: "Search" }).first().click();
   await search.fill(courseName);
   await expect(page.getByText(courseName, { exact: true }).first()).toBeVisible();
