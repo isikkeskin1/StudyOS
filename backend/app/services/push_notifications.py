@@ -4,7 +4,6 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from pywebpush import WebPushException, webpush
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -19,6 +18,12 @@ class PushSignal:
     title: str
     body: str
     url: str = "/#overview"
+
+
+class PushDeliveryError(RuntimeError):
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def build_push_signals(db: Session) -> list[PushSignal]:
@@ -117,25 +122,37 @@ def _send(
 ) -> None:
     if settings.vapid_private_key is None:
         raise RuntimeError("VAPID private key is not configured")
-    webpush(
-        subscription_info={
-            "endpoint": subscription.endpoint,
-            "keys": {
-                "p256dh": subscription.p256dh,
-                "auth": subscription.auth,
+
+    # The desktop runtime does not enable Web Push, so keep this transport optional.
+    # Production web deployments still install pywebpush through backend dependencies.
+    try:
+        from pywebpush import WebPushException, webpush
+    except ImportError as exc:  # pragma: no cover - packaging-specific path
+        raise RuntimeError("Web Push transport is not installed") from exc
+
+    try:
+        webpush(
+            subscription_info={
+                "endpoint": subscription.endpoint,
+                "keys": {
+                    "p256dh": subscription.p256dh,
+                    "auth": subscription.auth,
+                },
             },
-        },
-        data=json.dumps(
-            {
-                "title": signal.title,
-                "body": signal.body,
-                "tag": signal.key,
-                "url": signal.url,
-            }
-        ),
-        vapid_private_key=settings.vapid_private_key.get_secret_value(),
-        vapid_claims={"sub": settings.vapid_subject},
-    )
+            data=json.dumps(
+                {
+                    "title": signal.title,
+                    "body": signal.body,
+                    "tag": signal.key,
+                    "url": signal.url,
+                }
+            ),
+            vapid_private_key=settings.vapid_private_key.get_secret_value(),
+            vapid_claims={"sub": settings.vapid_subject},
+        )
+    except WebPushException as exc:
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+        raise PushDeliveryError(str(exc), status_code=status_code) from exc
 
 
 def dispatch_push_signals(
@@ -174,9 +191,8 @@ def dispatch_push_signals(
             attempted += 1
             try:
                 _send(subscription, signal, settings)
-            except WebPushException as exc:
-                status_code = getattr(getattr(exc, "response", None), "status_code", None)
-                if status_code in {404, 410}:
+            except PushDeliveryError as exc:
+                if exc.status_code in {404, 410}:
                     subscription.enabled = False
                     disabled += 1
                     db.commit()
