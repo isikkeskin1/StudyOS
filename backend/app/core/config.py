@@ -30,6 +30,7 @@ class Settings(BaseModel):
     email_verification_max_attempts: int = Field(default=5, ge=3, le=10)
     password_reset_code_minutes: int = Field(default=10, ge=5, le=60)
     password_reset_max_attempts: int = Field(default=5, ge=3, le=10)
+    brevo_api_key: SecretStr | None = None
     smtp_host: str | None = None
     smtp_port: int = Field(default=587, ge=1, le=65535)
     smtp_username: str | None = None
@@ -62,6 +63,14 @@ class Settings(BaseModel):
         return self.smtp_host is not None and self.smtp_from_email is not None
 
     @property
+    def brevo_api_enabled(self) -> bool:
+        return self.brevo_api_key is not None and self.smtp_from_email is not None
+
+    @property
+    def email_enabled(self) -> bool:
+        return self.brevo_api_enabled or self.smtp_enabled
+
+    @property
     def push_enabled(self) -> bool:
         return self.vapid_public_key is not None and self.vapid_private_key is not None
 
@@ -84,6 +93,7 @@ def get_settings() -> Settings:
     sentry_dsn = os.getenv("STUDYOS_SENTRY_DSN")
     vapid_private_key = os.getenv("STUDYOS_VAPID_PRIVATE_KEY")
     smtp_password = os.getenv("STUDYOS_SMTP_PASSWORD")
+    brevo_api_key = os.getenv("STUDYOS_BREVO_API_KEY")
     return Settings(
         environment=os.getenv("STUDYOS_ENV", "development").lower(),
         database_url=os.getenv("STUDYOS_DATABASE_URL", "sqlite:///./.studyos/studyos.db"),
@@ -127,6 +137,7 @@ def get_settings() -> Settings:
         password_reset_max_attempts=int(
             os.getenv("STUDYOS_PASSWORD_RESET_MAX_ATTEMPTS", "5")
         ),
+        brevo_api_key=SecretStr(brevo_api_key) if brevo_api_key else None,
         smtp_host=os.getenv("STUDYOS_SMTP_HOST") or None,
         smtp_port=int(os.getenv("STUDYOS_SMTP_PORT", "587")),
         smtp_username=os.getenv("STUDYOS_SMTP_USERNAME") or None,
