@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import secrets
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
-from io import BytesIO
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
