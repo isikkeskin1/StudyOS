@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import models  # noqa: F401
+from app.services import portability_policy  # noqa: F401
 from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
 from app.api.calendar_focus import router as calendar_focus_router
