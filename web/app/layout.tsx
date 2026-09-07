@@ -5,6 +5,7 @@ import { PwaController } from "@/components/pwa-controller";
 import "./globals.css";
 import "./product-ui.css";
 import "./workspace-v055.css";
+import "./spotify-dock.css";
 
 export const metadata: Metadata = {
   title: "StudyOS",
