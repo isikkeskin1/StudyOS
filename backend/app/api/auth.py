@@ -147,7 +147,7 @@ def register(
     db: Annotated[Session, Depends(get_db)],
 ) -> AuthRead | MessageRead:
     settings = request.app.state.settings
-    if settings.require_email_verification and not settings.smtp_enabled:
+    if settings.require_email_verification and not settings.email_enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Account verification email is not configured",
@@ -185,7 +185,7 @@ def request_email_verification(
     db: Annotated[Session, Depends(get_db)],
 ) -> MessageRead:
     settings = request.app.state.settings
-    if not settings.smtp_enabled:
+    if not settings.email_enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Account verification email is not configured",
@@ -296,7 +296,7 @@ def request_password_reset(
     db: Annotated[Session, Depends(get_db)],
 ) -> MessageRead:
     settings = request.app.state.settings
-    if not settings.smtp_enabled:
+    if not settings.email_enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Password reset email is not configured",
