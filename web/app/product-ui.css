@@ -1,0 +1,527 @@
+/*
+ * StudyOS product UI reset
+ *
+ * The original beta visual system leaned too hard on rounded cards, neon micro-labels,
+ * gradients, and oversized dashboard spacing. This layer intentionally pulls the app
+ * back toward a dense desktop workspace: flatter surfaces, quieter hierarchy, tighter
+ * radii, fewer decorative effects, and accent color reserved for state/actions.
+ */
+
+:root {
+  --bg: #0b0d10;
+  --panel: #111419;
+  --panel-2: #15191f;
+  --line: #2a3038;
+  --line-soft: #20262d;
+  --text: #eef1f4;
+  --muted: #9aa3ad;
+  --muted-2: #69737e;
+  --accent: #83d6ad;
+  --accent-strong: #68c89a;
+  --blue: #8fb5ea;
+  --warn: #e8bc75;
+  --danger: #e58a90;
+  --sidebar: #0d1014;
+  --radius: 8px;
+  --shadow: none;
+}
+
+html,
+body {
+  background: var(--bg) !important;
+}
+
+body {
+  background-image: none !important;
+  font-family: Inter, "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* Typography */
+.eyebrow,
+.setup-step,
+.setup-form label,
+.setup-row label,
+.resume-box > span,
+.setup-summary span,
+.metric-card p,
+.action-stats span,
+.section-head > span,
+.grade-row span,
+.course-stats span,
+.confidence,
+.target-status,
+.pill {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.eyebrow {
+  margin-bottom: 6px;
+  color: var(--muted) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+h1 {
+  font-size: clamp(27px, 2.4vw, 36px) !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.03em !important;
+}
+
+h2 {
+  font-size: 18px !important;
+  letter-spacing: -0.018em !important;
+}
+
+h3 {
+  letter-spacing: -0.012em !important;
+}
+
+/* Navigation */
+.sidebar {
+  width: 220px !important;
+  padding: 18px 14px !important;
+  background: var(--sidebar) !important;
+}
+
+.brand {
+  gap: 10px !important;
+  padding: 2px 6px !important;
+}
+
+.brand-mark {
+  width: 31px !important;
+  height: 31px !important;
+  border: 1px solid #303842 !important;
+  border-radius: 6px !important;
+  background: #151a20 !important;
+  color: #dce4ea !important;
+  font-size: 13px;
+  box-shadow: none !important;
+}
+
+.brand small {
+  margin-top: 1px !important;
+  color: var(--muted-2) !important;
+  font-size: 10px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.side-nav {
+  gap: 2px !important;
+  margin-top: 28px !important;
+}
+
+.side-nav a {
+  gap: 9px !important;
+  padding: 9px 9px !important;
+  border-radius: 5px !important;
+  font-size: 12px !important;
+}
+
+.side-nav a span {
+  width: 18px;
+  color: #59636e !important;
+  font-size: 9px !important;
+  letter-spacing: 0 !important;
+}
+
+.side-nav a:hover,
+.side-nav a.active {
+  background: #151a20 !important;
+}
+
+.side-nav a.active {
+  box-shadow: inset 2px 0 0 var(--accent-strong);
+}
+
+.side-nav a.active span {
+  color: var(--muted-2) !important;
+}
+
+.sidebar-foot {
+  padding: 12px 7px !important;
+}
+
+.status-dot,
+.health-dot,
+.live-dot {
+  box-shadow: none !important;
+}
+
+.main-content {
+  width: min(1500px, calc(100% - 220px)) !important;
+  margin-left: 220px !important;
+  padding: 24px clamp(20px, 3vw, 42px) 56px !important;
+}
+
+.topbar {
+  align-items: center !important;
+  margin-bottom: 18px !important;
+}
+
+.topbar .muted {
+  font-size: 12px !important;
+}
+
+/* Controls */
+select,
+input,
+textarea,
+.ghost-button,
+.primary-button,
+.danger-button,
+.manager-close,
+.admin-source-actions button {
+  border-radius: 6px !important;
+}
+
+select,
+.ghost-button,
+.primary-button,
+.danger-button {
+  min-height: 36px !important;
+}
+
+.ghost-button {
+  padding: 0 12px !important;
+  background: #111419 !important;
+  color: #aeb6bf !important;
+}
+
+.ghost-button:hover:not(:disabled) {
+  border-color: #414a55 !important;
+  background: #171b21 !important;
+  color: #f1f3f5 !important;
+}
+
+.primary-button {
+  border-color: #78c69f !important;
+  background: #78c69f !important;
+  color: #0b1711 !important;
+  font-weight: 650 !important;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #8bd3af !important;
+}
+
+.danger-button {
+  background: transparent !important;
+}
+
+/* Core dashboard surfaces */
+.metric-card,
+.panel,
+.course-card,
+.setup-card,
+.manager-panel,
+.manager-section,
+.workspace-metrics article,
+.workspace-panel,
+.workspace-actions-card,
+.admin-source-card {
+  background: var(--panel) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.metric-card,
+.panel,
+.course-card {
+  border-color: var(--line-soft) !important;
+  border-radius: 8px !important;
+}
+
+.metric-grid,
+.hero-grid,
+.course-grid,
+.risk-grid {
+  gap: 8px !important;
+}
+
+.metric-card {
+  min-height: 106px !important;
+  padding: 15px 16px !important;
+}
+
+.metric-card p {
+  margin-bottom: 8px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+.metric-card strong {
+  margin-bottom: 5px !important;
+  font-size: 24px !important;
+  letter-spacing: -0.03em !important;
+}
+
+.metric-primary {
+  border-color: #2b3832 !important;
+}
+
+.metric-primary strong {
+  color: var(--text) !important;
+}
+
+.panel {
+  padding: 18px !important;
+}
+
+.next-action-panel {
+  min-height: 270px !important;
+  background: var(--panel) !important;
+}
+
+.pill,
+.confidence,
+.target-status,
+.workspace-statuses span {
+  border: 1px solid var(--line) !important;
+  border-radius: 4px !important;
+  background: #15191f !important;
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+}
+
+.pill.in_progress,
+.pill.approved,
+.pill.imported,
+.confidence.high,
+.target-status.at_target,
+.workspace-good {
+  border-color: #315344 !important;
+  background: #132019 !important;
+  color: #9ad6b8 !important;
+}
+
+.action-stats {
+  gap: 6px !important;
+}
+
+.action-stats div,
+.setup-summary div {
+  padding: 11px 12px !important;
+  border-radius: 6px !important;
+  background: #0e1115 !important;
+}
+
+.focus-running {
+  border-radius: 6px !important;
+  background: #101a15 !important;
+}
+
+.queue-progress,
+.readiness-track,
+.risk-meter,
+.setup-progress {
+  border-radius: 2px !important;
+}
+
+.queue-progress > span,
+.readiness-fill,
+.risk-meter span,
+.setup-progress span,
+.bar-track span {
+  background: var(--accent-strong) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.window-toggle {
+  padding: 2px !important;
+  border-radius: 6px !important;
+  background: #0e1115 !important;
+}
+
+.window-toggle button {
+  border-radius: 4px !important;
+  font-weight: 600 !important;
+}
+
+.window-toggle button.active {
+  background: #222830 !important;
+}
+
+.activity-chart {
+  height: 190px !important;
+}
+
+.bar-track {
+  border-radius: 3px !important;
+  background: #0f1216 !important;
+}
+
+.section-head {
+  margin-top: 26px !important;
+}
+
+.course-card {
+  padding: 17px !important;
+}
+
+/* Setup / modal surfaces */
+.setup-card {
+  border-radius: 10px !important;
+  padding: clamp(22px, 4vw, 36px) !important;
+}
+
+.drop-zone {
+  min-height: 150px !important;
+  border-radius: 7px !important;
+  background: #0e1115 !important;
+}
+
+.drop-zone:hover {
+  background: #111814 !important;
+}
+
+.manager-backdrop {
+  background: rgba(3, 5, 8, 0.78) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+.manager-panel {
+  border-radius: 10px !important;
+}
+
+.manager-header {
+  padding: 17px 18px 14px !important;
+}
+
+.manager-detail {
+  padding: 18px 20px 24px !important;
+}
+
+.manager-add,
+.manager-course {
+  border-radius: 5px !important;
+}
+
+.manager-course:hover,
+.manager-course.active {
+  background: #15191f !important;
+}
+
+.admin-source-card {
+  border-radius: 6px !important;
+}
+
+/* Course workspace */
+.workspace-sidebar {
+  background: #0d1014 !important;
+  border-right-color: var(--line-soft) !important;
+}
+
+.workspace-main {
+  background: var(--bg) !important;
+}
+
+.workspace-topbar {
+  border-bottom-color: var(--line-soft) !important;
+}
+
+.workspace-course-label,
+.workspace-search {
+  border-color: var(--line-soft) !important;
+}
+
+.workspace-nav button {
+  border-radius: 5px !important;
+  font-size: 12px !important;
+}
+
+.workspace-nav button.active,
+.workspace-nav button:hover {
+  background: #151a20 !important;
+}
+
+.workspace-metrics {
+  gap: 8px !important;
+}
+
+.workspace-metrics article {
+  border-radius: 7px !important;
+  border-color: var(--line-soft) !important;
+  padding: 14px !important;
+}
+
+.workspace-two-col {
+  gap: 8px !important;
+}
+
+.workspace-risk-list button,
+.topic-row {
+  border-radius: 5px !important;
+  background: #0e1115 !important;
+}
+
+/* Diagnostic / exam UI: prioritize the question instead of decorative framing. */
+.diagnostic-panel {
+  padding: 18px !important;
+}
+
+.diagnostic-question {
+  margin-top: 14px !important;
+}
+
+.diagnostic-question-text {
+  padding: 15px 16px !important;
+  border-radius: 6px !important;
+  background: #0e1115 !important;
+  line-height: 1.65 !important;
+}
+
+.diagnostic-answer-form textarea {
+  border-radius: 6px !important;
+  background: #0e1115 !important;
+}
+
+.diagnostic-progress,
+.diagnostic-meta {
+  border-radius: 4px !important;
+}
+
+/* No decorative glow/shadow anywhere in the normal product UI. */
+.metric-card,
+.panel,
+.course-card,
+.setup-card,
+.manager-panel,
+.workspace-panel,
+.workspace-metrics article,
+.brand-mark,
+.status-dot,
+.health-dot,
+.live-dot,
+.bar-track span,
+.target-marker {
+  box-shadow: none !important;
+}
+
+@media (max-width: 1100px) {
+  .sidebar {
+    width: 190px !important;
+  }
+
+  .main-content {
+    width: calc(100% - 190px) !important;
+    margin-left: 190px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    width: 100% !important;
+    padding: 11px 13px !important;
+  }
+
+  .main-content {
+    width: 100% !important;
+    margin-left: 0 !important;
+    padding: 18px 13px 44px !important;
+  }
+}
