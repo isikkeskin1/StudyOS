@@ -57,5 +57,20 @@ def test_spotify_callback_is_public_for_desktop_pairing(tmp_path: Path) -> None:
     app = create_app(_settings(tmp_path))
     with TestClient(app, follow_redirects=False) as client:
         response = client.get("/api/v1/integrations/spotify/callback")
+        assert response.status_code == 200
+        assert "Spotify connection could not be completed" in response.text
+        assert "close this tab and return to the StudyOS app" in response.text
+
+
+def test_spotify_callback_returns_signed_in_web_user_to_workspace(tmp_path: Path) -> None:
+    app = create_app(_settings(tmp_path))
+    with TestClient(app, follow_redirects=False) as client:
+        registered = client.post(
+            "/api/v1/auth/register",
+            json={"email": "web-music@example.com", "password": "music-password"},
+        )
+        assert registered.status_code == 201
+
+        response = client.get("/api/v1/integrations/spotify/callback")
         assert response.status_code == 303
         assert response.headers["location"] == "/?spotify=invalid"
