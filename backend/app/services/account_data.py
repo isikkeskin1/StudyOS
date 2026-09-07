@@ -8,7 +8,7 @@ from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
 from uuid import uuid4
-from zipfile import BadZipFile, ZIP_DEFLATED, ZipFile
+from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile
 
 from sqlalchemy import Date, DateTime, String, Table, and_, delete, insert, or_, select
 from sqlalchemy.orm import Session
@@ -234,7 +234,11 @@ def _coerce_import_value(column, value: Any) -> Any:
         return None
     if isinstance(column.type, DateTime) and isinstance(value, str):
         return datetime.fromisoformat(value)
-    if isinstance(column.type, Date) and not isinstance(column.type, DateTime) and isinstance(value, str):
+    if (
+        isinstance(column.type, Date)
+        and not isinstance(column.type, DateTime)
+        and isinstance(value, str)
+    ):
         return date.fromisoformat(value)
     return value
 
@@ -454,7 +458,10 @@ def import_migration_bundle(
                             raise MigrationBundleError(
                                 f"Migration source file {archive_path} is missing"
                             ) from exc
-                        with bundle.open(source_info) as input_file, destination.open("wb") as output:
+                        with (
+                            bundle.open(source_info) as input_file,
+                            destination.open("wb") as output,
+                        ):
                             while chunk := input_file.read(1024 * 1024):
                                 size += len(chunk)
                                 if size > _MIGRATION_MAX_UNCOMPRESSED_BYTES:
