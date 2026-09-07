@@ -49,7 +49,9 @@ test("account, setup, cockpit, workspace, and search stay usable", async ({
   await expectNoHorizontalOverflow(page);
 
   await expect(page.getByRole("heading", { name: "Course momentum" })).toBeVisible();
-  await expect(page.getByText(courseName, { exact: true }).first()).toBeVisible();
+  await expect(
+    page.locator(".course-ledger .ledger-row").filter({ hasText: courseName }).first(),
+  ).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("study-cockpit.png"), fullPage: true, animations: "disabled" });
 
   await page.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");
@@ -58,18 +60,23 @@ test("account, setup, cockpit, workspace, and search stay usable", async ({
   );
   await expect(search).toBeVisible();
   await search.fill(courseName);
-  await expect(page.getByText(courseName, { exact: true }).first()).toBeVisible();
+  await expect(
+    page.locator(".global-search-results a").filter({ hasText: courseName }).first(),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
 
   await page.goto(`/courses/${course.id}`);
-  await expect(page.getByText("Current course", { exact: true })).toBeVisible();
-  await expect(page.getByText(courseName, { exact: true }).first()).toBeVisible();
+  const currentCourse = page.locator(".workspace-course-label");
+  await expect(currentCourse.getByText("Current course", { exact: true })).toBeVisible();
+  await expect(currentCourse.getByText(courseName, { exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await page.screenshot({ path: testInfo.outputPath("course-workbench.png"), fullPage: true, animations: "disabled" });
   await page.getByRole("button", { name: "Search" }).first().click();
   await search.fill(courseName);
-  await expect(page.getByText(courseName, { exact: true }).first()).toBeVisible();
+  await expect(
+    page.locator(".global-search-results a").filter({ hasText: courseName }).first(),
+  ).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
