@@ -38,6 +38,11 @@ class Settings(BaseModel):
     smtp_from_email: str | None = None
     smtp_use_tls: bool = True
 
+    integration_secret: SecretStr | None = None
+    spotify_client_id: str | None = None
+    spotify_client_secret: SecretStr | None = None
+    spotify_redirect_uri: str = "https://studyos.courses/api/v1/integrations/spotify/callback"
+
     tutor_provider: Literal["local", "openai"] = "local"
     tutor_embedding_provider: Literal["none", "openai"] = "none"
     openai_api_key: SecretStr | None = None
@@ -74,6 +79,14 @@ class Settings(BaseModel):
     def push_enabled(self) -> bool:
         return self.vapid_public_key is not None and self.vapid_private_key is not None
 
+    @property
+    def spotify_configured(self) -> bool:
+        return (
+            self.spotify_client_id is not None
+            and self.spotify_client_secret is not None
+            and self.integration_secret is not None
+        )
+
     @model_validator(mode="after")
     def validate_runtime(self) -> Settings:
         if self.environment == "production" and self.database_url.startswith("sqlite"):
@@ -94,6 +107,8 @@ def get_settings() -> Settings:
     vapid_private_key = os.getenv("STUDYOS_VAPID_PRIVATE_KEY")
     smtp_password = os.getenv("STUDYOS_SMTP_PASSWORD")
     brevo_api_key = os.getenv("STUDYOS_BREVO_API_KEY")
+    integration_secret = os.getenv("STUDYOS_INTEGRATION_SECRET")
+    spotify_client_secret = os.getenv("STUDYOS_SPOTIFY_CLIENT_SECRET")
     return Settings(
         environment=os.getenv("STUDYOS_ENV", "development").lower(),
         database_url=os.getenv("STUDYOS_DATABASE_URL", "sqlite:///./.studyos/studyos.db"),
@@ -143,7 +158,19 @@ def get_settings() -> Settings:
         smtp_username=os.getenv("STUDYOS_SMTP_USERNAME") or None,
         smtp_password=SecretStr(smtp_password) if smtp_password else None,
         smtp_from_email=os.getenv("STUDYOS_SMTP_FROM_EMAIL") or None,
-        smtp_use_tls=os.getenv("STUDYOS_SMTP_USE_TLS", "true").lower() not in {"0", "false", "no"},
+        smtp_use_tls=os.getenv("STUDYOS_SMTP_USE_TLS", "true").lower()
+        not in {"0", "false", "no"},
+        integration_secret=(
+            SecretStr(integration_secret) if integration_secret else None
+        ),
+        spotify_client_id=os.getenv("STUDYOS_SPOTIFY_CLIENT_ID") or None,
+        spotify_client_secret=(
+            SecretStr(spotify_client_secret) if spotify_client_secret else None
+        ),
+        spotify_redirect_uri=os.getenv(
+            "STUDYOS_SPOTIFY_REDIRECT_URI",
+            "https://studyos.courses/api/v1/integrations/spotify/callback",
+        ),
         tutor_provider=os.getenv("STUDYOS_TUTOR_PROVIDER", "local").lower(),
         tutor_embedding_provider=os.getenv(
             "STUDYOS_TUTOR_EMBEDDING_PROVIDER", "none"
