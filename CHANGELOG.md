@@ -2,6 +2,39 @@
 
 All notable StudyOS beta changes are documented here.
 
+## [0.55.0] - 2026-09-08
+
+### Added
+
+- A Today-first Study Cockpit centered on the next executable study session instead of a card-grid dashboard.
+- Dense Course Momentum, Study Rhythm and Review Queue surfaces for targets, evidence, focus history and mistake burden.
+- Optional Spotify OAuth integration with encrypted server-side token storage, current-track metadata and playback controls.
+- Spotify connection management under Account & integrations.
+- A collapsible Spotify study player that follows connected users into course workspaces.
+- Desktop Spotify pairing that opens the system browser and waits for centralized account authorization.
+
+### Changed
+
+- Course workspaces now use the same restrained academic workbench language as the semester cockpit.
+- Setup, course management, institutional catalog, search, account settings and authentication surfaces were redesigned to match v0.55.
+- Dashboard information is presented as evidence ledgers and contextual rails rather than generic KPI cards.
+- Desktop Spotify pairing polls for up to two minutes instead of assuming authorization completes in a few seconds.
+- Backend, web, desktop, service worker and deployment release metadata are aligned to v0.55.0.
+- Docker Compose now forwards email-verification and Spotify integration configuration explicitly.
+
+### Security & privacy
+
+- Spotify OAuth access and refresh tokens are encrypted at rest with the StudyOS integration secret.
+- Spotify OAuth uses expiring, one-time state associated with the authenticated StudyOS account.
+- Spotify credentials and transient OAuth state are excluded from account exports and migration bundles.
+- Spotify client credentials remain server-side and are never bundled into the browser or Windows application.
+
+### Fixed
+
+- Spotify database migration is upgrade-safe for both clean installs and existing databases whose baseline metadata already contains integration tables.
+- External Spotify album artwork no longer relies on a raw Next.js image element that could fail frontend lint/build gates.
+- Compose deployments can now actually receive the Spotify provider variables required by the backend integration.
+
 ## [0.54.1] - 2026-09-07
 
 ### Added
