@@ -79,7 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application = FastAPI(
         title=resolved_settings.app_name,
-        version="0.54.0",
+        version="0.54.1",
         description="Backend API for StudyOS.",
         lifespan=lifespan,
     )
