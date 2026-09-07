@@ -199,7 +199,7 @@ def test_migration_bundle_includes_state_and_source_files(tmp_path: Path) -> Non
             manifest = json.loads(bundle.read("manifest.json"))
 
         assert account["tables"]["courses"][0]["name"] == "Migration Physics"
-        assert account["source_files_included"] is False
+        assert account["source_files_included"] is True
         assert manifest["format"] == "studyos-cloud-migration-v1"
         assert manifest["source_files"][0]["included"] is True
 
@@ -207,6 +207,8 @@ def test_migration_bundle_includes_state_and_source_files(tmp_path: Path) -> Non
         assert b"password_hash" not in serialized
         assert b"token_hash" not in serialized
         assert b"storage_path" not in serialized
+        assert b"password_reset_codes" not in serialized
+        assert b"email_verification_codes" not in serialized
 
 
 def test_migration_bundle_round_trip_into_fresh_account(tmp_path: Path) -> None:
