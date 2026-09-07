@@ -8,7 +8,7 @@
 
 <br />
 
-![Version](https://img.shields.io/badge/version-v0.54.0-7C3AED?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-v0.54.1-7C3AED?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-BETA-F59E0B?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs&logoColor=white)
@@ -385,6 +385,6 @@ StudyOS exists to answer that question continuously.
 
 <br />
 
-**v0.54.0 Desktop Beta · Work gets smarter.**
+**v0.54.1 Desktop Beta · Work gets smarter.**
 
 </div>
