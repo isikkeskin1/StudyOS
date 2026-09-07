@@ -228,6 +228,9 @@ function configPath() {
 }
 
 function readConfig() {
+  if (process.env.STUDYOS_FORCE_LOCAL_BACKEND === "1") {
+    return { backendUrl: "" };
+  }
   const envUrl = process.env.STUDYOS_BACKEND_URL?.trim();
   if (envUrl) return { backendUrl: envUrl };
   try {
