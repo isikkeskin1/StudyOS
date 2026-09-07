@@ -110,7 +110,7 @@ def spotify_connect(
     return SpotifyAuthorizeRead(authorize_url=authorize_url)
 
 
-@router.get("/callback", include_in_schema=False)
+@router.get("/callback", include_in_schema=False, response_model=None)
 def spotify_callback(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
