@@ -61,6 +61,94 @@
   margin-top: 8px;
 }
 
+.course-spotify-float {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 45;
+  width: min(310px, calc(100vw - 44px));
+  padding: 17px 18px 15px;
+  border: 1px solid #2c332f;
+  border-radius: 10px;
+  background: #111514f2;
+  box-shadow: 0 22px 70px #0008;
+  backdrop-filter: blur(18px);
+}
+
+.course-spotify-float .spotify-dock {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.course-spotify-float .spotify-dock-head {
+  padding-right: 24px;
+}
+
+.course-spotify-float .spotify-track {
+  margin-top: 14px;
+}
+
+.course-spotify-float .spotify-disconnect {
+  display: none;
+}
+
+.course-spotify-float .spotify-controls {
+  justify-content: flex-start;
+}
+
+.course-spotify-collapse {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #65706a;
+  font-size: 16px;
+}
+
+.course-spotify-collapse:hover {
+  background: #ffffff06;
+  color: #cbd3ce;
+}
+
+.course-spotify-pill {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 45;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid #2c332f;
+  border-radius: 999px;
+  background: #111514ee;
+  color: #aab5af;
+  box-shadow: 0 14px 45px #0007;
+  backdrop-filter: blur(18px);
+  font-size: 10px;
+}
+
+.course-spotify-pill:hover {
+  border-color: #415048;
+  color: #dfe6e2;
+}
+
+.course-spotify-pill .ui-icon {
+  width: 14px;
+  height: 14px;
+  color: #1db954;
+}
+
 @media (max-width: 680px) {
   .account-integrations {
     padding: 22px 17px;
@@ -79,5 +167,16 @@
 
   .account-settings-panel .spotify-connect-card .spotify-connect {
     width: 100%;
+  }
+
+  .course-spotify-float {
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: calc(100vw - 24px);
+  }
+
+  .course-spotify-pill {
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
   }
 }
