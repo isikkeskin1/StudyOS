@@ -59,8 +59,12 @@ test("focus countdown survives reload and never auto-completes", async ({ page }
   const active = sessions.find((session) => session.status === "active");
   expect(active).toBeDefined();
 
+  const skipped = page.waitForResponse((response) =>
+    response.url().endsWith(`/focus-sessions/${active?.id}/skip`) && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Skip", exact: true }).click();
-  await expect(page.getByText("Time remaining", { exact: true })).toHaveCount(0);
+  expect((await skipped).status()).toBe(200);
+  await expect(page.getByRole("button", { name: "Complete", exact: true })).toHaveCount(0);
   const after = await page.request.get(`/api/v1/semester-queues/${queue.id}/focus-sessions`, auth);
   expect((await after.json() as Array<{ id: string; status: string }>).find((session) => session.id === active?.id)?.status).toBe("skipped");
 });
