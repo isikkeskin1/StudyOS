@@ -26,7 +26,12 @@ _DUMMY_PASSWORD_HASH = hash_password("studyos-dummy-auth-check")
 
 
 def _user_read(user: User) -> UserRead:
-    return UserRead(id=user.id, email=user.email, created_at=user.created_at)
+    return UserRead(
+        id=user.id,
+        email=user.email,
+        is_admin=user.is_admin,
+        created_at=user.created_at,
+    )
 
 
 def _current_user(request: Request, db: Session) -> User:
@@ -79,7 +84,11 @@ def register(
     response: Response,
     db: Annotated[Session, Depends(get_db)],
 ) -> AuthRead:
-    user = User(email=payload.email, password_hash=hash_password(payload.password))
+    user = User(
+        email=payload.email,
+        password_hash=hash_password(payload.password),
+        is_admin=payload.email in request.app.state.settings.admin_emails,
+    )
     db.add(user)
     try:
         db.flush()
@@ -107,6 +116,11 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+    should_be_admin = user.email in request.app.state.settings.admin_emails
+    if should_be_admin != user.is_admin:
+        user.is_admin = should_be_admin
+        db.commit()
+        db.refresh(user)
     return _issue_session(db, user, request, response)
 
 
