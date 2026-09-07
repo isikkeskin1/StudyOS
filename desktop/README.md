@@ -9,9 +9,11 @@ output, starts it on a private loopback port, and places a tiny local reverse pr
 of it.
 
 - UI/static requests -> bundled Next.js server
-- `/api/*` and `/calendar/*` -> bundled local FastAPI backend by default
-- local academic state -> SQLite + uploads under Electron's per-user AppData
-- optional cloud mode -> configured hosted StudyOS backend
+- `/api/*` and `/calendar/*` -> StudyOS Cloud for fresh installs
+- existing local workspaces remain on the bundled FastAPI backend until explicitly migrated
+- fresh-install academic state -> centralized StudyOS Cloud account + PostgreSQL-backed API
+- legacy/local academic state -> SQLite + uploads under Electron's per-user AppData until migration
+- reversible local/cloud switching preserves the old local workspace as a rollback path
 - Browser renderer -> sandboxed Electron window with Node integration disabled
 
 This preserves StudyOS' existing same-origin browser behavior and gives normal users a
