@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
 from pathlib import Path
+from zipfile import ZipFile
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -160,6 +163,50 @@ def test_account_export_is_scoped_and_redacts_credentials(tmp_path: Path) -> Non
         assert "password_hash" not in serialized
         assert "token_hash" not in serialized
         assert "storage_path" not in serialized
+
+
+def test_migration_bundle_includes_state_and_source_files(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    with TestClient(app) as client:
+        assert client.post(
+            "/api/v1/auth/register",
+            json={"email": "migrate@example.com", "password": "migration-password"},
+        ).status_code == 201
+        course = client.post(
+            "/api/v1/courses",
+            json={"name": "Migration Physics", "target_grade": 25, "max_grade": 30},
+        ).json()
+        uploaded = client.post(
+            f"/api/v1/courses/{course['id']}/documents",
+            files={"file": ("migration-notes.txt", b"portable source notes", "text/plain")},
+        )
+        assert uploaded.status_code == 201
+        document_id = uploaded.json()["id"]
+
+        response = client.get("/api/v1/auth/migration-bundle")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/zip"
+        assert "attachment;" in response.headers["content-disposition"]
+
+        with ZipFile(BytesIO(response.content)) as bundle:
+            names = set(bundle.namelist())
+            assert "account.json" in names
+            assert "manifest.json" in names
+            assert f"files/{document_id}.txt" in names
+            assert bundle.read(f"files/{document_id}.txt") == b"portable source notes"
+
+            account = json.loads(bundle.read("account.json"))
+            manifest = json.loads(bundle.read("manifest.json"))
+
+        assert account["tables"]["courses"][0]["name"] == "Migration Physics"
+        assert account["source_files_included"] is False
+        assert manifest["format"] == "studyos-cloud-migration-v1"
+        assert manifest["source_files"][0]["included"] is True
+
+        serialized = response.content.lower()
+        assert b"password_hash" not in serialized
+        assert b"token_hash" not in serialized
+        assert b"storage_path" not in serialized
 
 
 def test_account_deletion_removes_login_and_uploaded_files(tmp_path: Path) -> None:
