@@ -3,9 +3,10 @@ from __future__ import annotations
 import secrets
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
+from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -27,7 +28,13 @@ from app.schemas.auth import (
     SessionRead,
     UserRead,
 )
-from app.services.account_data import delete_user_data, export_migration_bundle, export_user_data
+from app.services.account_data import (
+    MigrationBundleError,
+    delete_user_data,
+    export_migration_bundle,
+    export_user_data,
+    import_migration_bundle,
+)
 from app.services.email import send_email_verification_code, send_password_reset_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -454,6 +461,32 @@ def migration_bundle(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/migration-bundle/import")
+def import_account_migration_bundle(
+    request: Request,
+    file: Annotated[UploadFile, File()],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, int]:
+    user = _current_user(request, db)
+    if not file.filename or not file.filename.lower().endswith(".zip"):
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Upload a StudyOS migration ZIP",
+        )
+    try:
+        return import_migration_bundle(
+            db,
+            user,
+            file.file,
+            data_dir=Path(request.app.state.settings.data_dir),
+        )
+    except MigrationBundleError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get("/export")
