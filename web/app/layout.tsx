@@ -6,6 +6,7 @@ import "./globals.css";
 import "./product-ui.css";
 import "./workspace-v055.css";
 import "./course-workspace-v055.css";
+import "./surfaces-v055.css";
 import "./spotify-dock.css";
 
 export const metadata: Metadata = {
