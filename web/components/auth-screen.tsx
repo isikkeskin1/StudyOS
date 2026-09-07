@@ -8,6 +8,7 @@ export type AuthUser = {
   id: string;
   email: string;
   is_admin: boolean;
+  email_verified: boolean;
   created_at: string;
 };
 
@@ -16,7 +17,11 @@ type AuthPayload = {
   expires_at: string;
 };
 
-type AuthMode = "login" | "register" | "forgot" | "reset";
+type MessagePayload = {
+  message: string;
+};
+
+type AuthMode = "login" | "register" | "verify" | "forgot" | "reset";
 
 async function postJson<T>(path: string, payload: unknown): Promise<T> {
   const response = await fetch(path, {
@@ -50,6 +55,23 @@ export function AuthScreen({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const resendVerification = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await postJson<MessagePayload>("/api/v1/auth/email-verification/request", {
+        email: email.trim(),
+      });
+      setNotice(result.message);
+      setMode("verify");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not send a new code.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -57,15 +79,16 @@ export function AuthScreen({
     setNotice(null);
     try {
       if (mode === "forgot") {
-        const result = await postJson<{ message: string }>("/api/v1/auth/password-reset/request", {
+        const result = await postJson<MessagePayload>("/api/v1/auth/password-reset/request", {
           email: email.trim(),
         });
         setNotice(result.message);
         setMode("reset");
         return;
       }
+
       if (mode === "reset") {
-        const result = await postJson<{ message: string }>("/api/v1/auth/password-reset/confirm", {
+        const result = await postJson<MessagePayload>("/api/v1/auth/password-reset/confirm", {
           email: email.trim(),
           code,
           password,
@@ -76,13 +99,54 @@ export function AuthScreen({
         setMode("login");
         return;
       }
-      const result = await postJson<AuthPayload>(
-        mode === "login" ? "/api/v1/auth/login" : "/api/v1/auth/register",
-        { email: email.trim(), password },
-      );
+
+      if (mode === "verify") {
+        const result = await postJson<AuthPayload>("/api/v1/auth/email-verification/confirm", {
+          email: email.trim(),
+          code,
+        });
+        onAuthenticated(result.user);
+        return;
+      }
+
+      if (mode === "register") {
+        const result = await postJson<AuthPayload | MessagePayload>("/api/v1/auth/register", {
+          email: email.trim(),
+          password,
+        });
+        if ("user" in result) {
+          onAuthenticated(result.user);
+        } else {
+          setNotice(result.message);
+          setCode("");
+          setMode("verify");
+        }
+        return;
+      }
+
+      const result = await postJson<AuthPayload>("/api/v1/auth/login", {
+        email: email.trim(),
+        password,
+      });
       onAuthenticated(result.user);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Authentication failed.");
+      const message = caught instanceof Error ? caught.message : "Authentication failed.";
+      if (mode === "login" && message === "Email verification required") {
+        try {
+          const result = await postJson<MessagePayload>(
+            "/api/v1/auth/email-verification/request",
+            { email: email.trim() },
+          );
+          setNotice(result.message);
+          setCode("");
+          setMode("verify");
+          return;
+        } catch (resendError) {
+          setError(resendError instanceof Error ? resendError.message : message);
+          return;
+        }
+      }
+      setError(message);
     } finally {
       setBusy(false);
     }
@@ -91,8 +155,24 @@ export function AuthScreen({
   const title =
     mode === "login" ? "Continue your semester."
       : mode === "register" ? "Build your study system."
-        : mode === "forgot" ? "Recover your account."
-          : "Enter your reset code.";
+        : mode === "verify" ? "Verify your email."
+          : mode === "forgot" ? "Recover your account."
+            : "Enter your reset code.";
+
+  const eyebrow =
+    mode === "login" ? "Welcome back"
+      : mode === "register" ? "Create account"
+        : mode === "verify" ? "One last step"
+          : "Account recovery";
+
+  const copy =
+    mode === "verify"
+      ? "Enter the 6-digit code we sent to your email to activate your StudyOS account."
+      : mode === "forgot"
+        ? "Enter your account email and we’ll send you a 6-digit verification code."
+        : mode === "reset"
+          ? "Enter the code from your email and choose a new password."
+          : "Your courses, practice, and progress. Right where you left them.";
 
   return (
     <main className="auth-shell">
@@ -106,22 +186,16 @@ export function AuthScreen({
         </div>
         <span className="auth-story-foot"><UiIcon name="shield" />Your workspace. Your pace.</span>
       </aside>
+
       <section className="auth-card">
         <div className="brand auth-brand">
           <BrandMark />
           <span><strong>StudyOS</strong><small>Your academic operating system</small></span>
         </div>
-        <p className="eyebrow">
-          {mode === "login" ? "Welcome back" : mode === "register" ? "Create account" : "Account recovery"}
-        </p>
+
+        <p className="eyebrow">{eyebrow}</p>
         <h1>{title}</h1>
-        <p className="auth-copy">
-          {mode === "forgot"
-            ? "Enter your account email and we’ll send you a 6-digit verification code."
-            : mode === "reset"
-              ? "Enter the code from your email and choose a new password."
-              : "Your courses, practice, and progress. Right where you left them."}
-        </p>
+        <p className="auth-copy">{copy}</p>
 
         {error && <div className="error-banner" role="alert"><span>{error}</span></div>}
         {notice && <div className="error-banner" role="status"><span>{notice}</span></div>}
@@ -136,11 +210,11 @@ export function AuthScreen({
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
-              disabled={mode === "reset"}
+              disabled={mode === "verify" || mode === "reset"}
             />
           </label>
 
-          {mode === "reset" && (
+          {(mode === "verify" || mode === "reset") && (
             <label>
               Verification code
               <input
@@ -154,6 +228,7 @@ export function AuthScreen({
                 value={code}
                 onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="000000"
+                autoFocus
               />
             </label>
           )}
@@ -194,12 +269,20 @@ export function AuthScreen({
                 ? "Sign in"
                 : mode === "register"
                   ? "Create account"
-                  : mode === "forgot"
-                    ? "Send reset code"
-                    : "Reset password"}
+                  : mode === "verify"
+                    ? "Verify email"
+                    : mode === "forgot"
+                      ? "Send reset code"
+                      : "Reset password"}
             <UiIcon name="arrow" />
           </button>
         </form>
+
+        {mode === "verify" && (
+          <button className="auth-switch" type="button" disabled={busy} onClick={resendVerification}>
+            Didn’t get a code? Send another
+          </button>
+        )}
 
         <button
           className="auth-switch"
