@@ -8,7 +8,7 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY web ./
-ARG STUDYOS_BACKEND_URL=http://backend:8000
+ARG STUDYOS_BACKEND_URL=http://backend.railway.internal:8080
 ARG STUDYOS_ENV=production
 ENV STUDYOS_BACKEND_URL=${STUDYOS_BACKEND_URL} \
     STUDYOS_ENV=${STUDYOS_ENV}
