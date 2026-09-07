@@ -6,6 +6,9 @@ contextBridge.exposeInMainWorld("studyosDesktop", {
   useLocalBackend: () => ipcRenderer.invoke("studyos:use-local-backend"),
   saveBackendUrl: (backendUrl) =>
     ipcRenderer.invoke("studyos:save-backend", backendUrl),
+  getRuntimeInfo: () => ipcRenderer.invoke("studyos:get-runtime-info"),
+  switchToCloud: () => ipcRenderer.invoke("studyos:switch-to-cloud"),
+  switchToLocal: () => ipcRenderer.invoke("studyos:switch-to-local"),
 
   onStartupProgress: (callback) => {
     const handler = (_event, message) => callback(message);
