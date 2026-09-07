@@ -87,6 +87,15 @@ jobs:
           STUDYOS_E2E_BASE_URL: http://127.0.0.1:3000
         run: npm run e2e
 
+      - name: Save browser screenshots and failure traces
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: studyos-browser-review
+          path: web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Show logs on failure
         if: failure()
         run: docker compose logs --no-color

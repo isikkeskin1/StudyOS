@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandMark, UiIcon } from "@/components/ui-icon";
+
 import { FormEvent, useState } from "react";
 
 export type AuthUser = {
@@ -68,18 +70,28 @@ export function AuthScreen({
 
   return (
     <main className="auth-shell">
+      <aside className="auth-story">
+        <div className="brand"><BrandMark /><span><strong>StudyOS.</strong><small>A clearer way to study</small></span></div>
+        <div className="auth-story-content">
+          <p className="eyebrow">Less overwhelm. More understanding.</p>
+          <h2>Your ambition.<br />A clearer <em>path.</em></h2>
+          <p>Turn your course materials into a plan. Practice what matters. Walk into your next exam prepared.</p>
+          <div className="study-orbit" aria-hidden="true"><div className="orbit-ring orbit-one" /><div className="orbit-ring orbit-two" /><div className="orbit-core"><BrandMark /></div><span className="orbit-chip orbit-sources"><UiIcon name="sources" />Your materials</span><span className="orbit-chip orbit-plan"><UiIcon name="target" />A focused plan</span><span className="orbit-chip orbit-progress"><UiIcon name="activity" />Real progress</span></div>
+        </div>
+        <span className="auth-story-foot"><UiIcon name="shield" />Your workspace. Your pace.</span>
+      </aside>
       <section className="auth-card">
         <div className="brand auth-brand">
-          <span className="brand-mark">S</span>
+          <BrandMark />
           <span><strong>StudyOS</strong><small>Your academic operating system</small></span>
         </div>
         <p className="eyebrow">{mode === "login" ? "Welcome back" : "Create account"}</p>
         <h1>{mode === "login" ? "Continue your semester." : "Build your study system."}</h1>
         <p className="auth-copy">
-          Your courses, plans, mastery evidence, mock exams, and analytics stay isolated to your account.
+          Your courses, practice, and progress. Right where you left them.
         </p>
 
-        {error && <div className="error-banner"><span>{error}</span></div>}
+        {error && <div className="error-banner" role="alert"><span>{error}</span></div>}
 
         <form className="auth-form" onSubmit={submit}>
           <label>
@@ -106,7 +118,7 @@ export function AuthScreen({
             />
           </label>
           <button className="primary-button auth-submit" disabled={busy}>
-            {busy ? "Working…" : mode === "login" ? "Sign in" : "Create account"}
+            {busy ? "Working…" : mode === "login" ? "Sign in" : "Create account"}<UiIcon name="arrow" />
           </button>
         </form>
 
