@@ -23,6 +23,8 @@ let lastStartupError = "";
 let updateCheckTimer = null;
 let updateReadyVersion = null;
 
+const CLOUD_BACKEND_URL = "https://backend-production-33d6e.up.railway.app";
+
 function desktopLogPath() {
   return process.env.STUDYOS_DESKTOP_LOG_PATH?.trim()
     || path.join(app.getPath("userData"), "logs", "desktop.log");
@@ -243,9 +245,7 @@ function readConfig() {
       return { backendUrl: "" };
     }
     return {
-      backendUrl: app.isPackaged
-        ? "https://backend-production-33d6e.up.railway.app"
-        : "",
+      backendUrl: app.isPackaged ? CLOUD_BACKEND_URL : "",
     };
   }
 }
@@ -499,6 +499,7 @@ function createAppWindow(appOrigin) {
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -565,6 +566,47 @@ function createSetupWindow(error) {
   });
   void setupWindow.loadFile(path.join(__dirname, "setup.html"));
 }
+
+ipcMain.handle("studyos:get-runtime-info", (event) => {
+  const senderUrl = event.senderFrame?.url || "";
+  if (!senderUrl.startsWith("http://127.0.0.1:")) {
+    throw new Error("Invalid runtime information request.");
+  }
+  const config = readConfig();
+  const legacyDatabase = path.join(app.getPath("userData"), "data", "studyos.db");
+  return {
+    mode: config.backendUrl ? "cloud" : "local",
+    backendUrl: config.backendUrl || null,
+    hasLocalWorkspace: fs.existsSync(legacyDatabase),
+  };
+});
+
+ipcMain.handle("studyos:switch-to-cloud", async (event) => {
+  const senderUrl = event.senderFrame?.url || "";
+  if (!senderUrl.startsWith("http://127.0.0.1:")) {
+    throw new Error("Invalid cloud switch request.");
+  }
+  await probeBackend(CLOUD_BACKEND_URL);
+  saveConfig(CLOUD_BACKEND_URL);
+  app.relaunch();
+  app.exit(0);
+  return true;
+});
+
+ipcMain.handle("studyos:switch-to-local", (event) => {
+  const senderUrl = event.senderFrame?.url || "";
+  if (!senderUrl.startsWith("http://127.0.0.1:")) {
+    throw new Error("Invalid local switch request.");
+  }
+  try {
+    fs.unlinkSync(configPath());
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  app.relaunch();
+  app.exit(0);
+  return true;
+});
 
 ipcMain.handle("studyos:get-startup-error", () => ({
   message: lastStartupError,
