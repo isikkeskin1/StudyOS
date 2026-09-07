@@ -5,9 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AccountSettings } from "@/components/account-settings";
 import { AdminCatalog } from "@/components/admin-catalog";
 import { CourseManager } from "@/components/course-manager";
-import { BrandMark, UiIcon, type IconName } from "@/components/ui-icon";
 import { FocusTimer } from "@/components/focus-timer";
 import { GlobalSearch } from "@/components/global-search";
+import { SpotifyDock } from "@/components/spotify-dock";
+import { BrandMark, UiIcon, type IconName } from "@/components/ui-icon";
 
 import type {
   AnalyticsCourse,
@@ -23,7 +24,7 @@ type WindowDays = (typeof WINDOWS)[number];
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
     cache: "no-store",
   });
 
@@ -56,9 +57,9 @@ function formatPercent(value: number | null, digits = 0) {
 function statusLabel(status: AnalyticsCourse["target_status"]) {
   switch (status) {
     case "at_target":
-      return "At target";
+      return "On target";
     case "below_target":
-      return "Below target";
+      return "Gap to close";
     case "unmeasured":
       return "Needs evidence";
     default:
@@ -71,6 +72,14 @@ function activityLabel(value: string) {
     month: "short",
     day: "numeric",
   });
+}
+
+function dayHeading() {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  }).format(new Date());
 }
 
 export function Dashboard({
@@ -137,11 +146,13 @@ export function Dashboard({
 
   useEffect(() => {
     const updateSection = () => {
-      const sections = ["overview", "activity", "courses", "risks"];
-      const current = sections.filter((id) => {
-        const element = document.getElementById(id);
-        return element && element.getBoundingClientRect().top <= window.innerHeight * 0.4;
-      }).at(-1);
+      const sections = ["overview", "courses", "activity", "risks"];
+      const current = sections
+        .filter((id) => {
+          const element = document.getElementById(id);
+          return element && element.getBoundingClientRect().top <= window.innerHeight * 0.42;
+        })
+        .at(-1);
       setActiveSection(current ?? "overview");
     };
     window.addEventListener("scroll", updateSection, { passive: true });
@@ -164,13 +175,22 @@ export function Dashboard({
         })),
       )
       .sort((a, b) => b.mistake_burden - a.mistake_burden)
-      .slice(0, 6);
+      .slice(0, 5);
   }, [analytics]);
 
   const maxFocus = useMemo(() => {
     if (!analytics?.activity.length) return 1;
     return Math.max(1, ...analytics.activity.map((day) => day.focus_minutes));
   }, [analytics]);
+
+  const nearestExam = useMemo(() => {
+    if (!semester) return null;
+    return semester.courses
+      .filter((course) => course.days_until_exam !== null && course.days_until_exam >= 0)
+      .sort((a, b) => (a.days_until_exam ?? 9999) - (b.days_until_exam ?? 9999))[0] ?? null;
+  }, [semester]);
+
+  const activity = useMemo(() => analytics?.activity.slice(-14) ?? [], [analytics]);
 
   const focusAction = async (kind: "start" | "complete" | "skip") => {
     if (!semester?.selected_queue_id) return;
@@ -220,316 +240,249 @@ export function Dashboard({
   };
 
   return (
-    <div className="app-shell">
+    <div className="app-shell study-cockpit">
       <a className="skip-link" href="#main-content">Skip to content</a>
-      <aside className="sidebar">
+
+      <aside className="sidebar cockpit-sidebar">
         <a className="brand" href="#overview" aria-label="StudyOS home">
           <BrandMark />
-          <span><strong>StudyOS<span className="brand-period">.</span></strong><small>Your study workspace</small></span>
+          <span><strong>StudyOS<span className="brand-period">.</span></strong><small>Study workspace</small></span>
         </a>
+
         <div className="sidebar-search"><GlobalSearch /></div>
+
         <p className="nav-label">Workspace</p>
         <nav className="side-nav" aria-label="Dashboard sections">
-          {([["overview", "Overview"], ["activity", "Activity"], ["courses", "Courses"], ["risks", "Needs attention"]] as const).map(([id, label]) => (
-            <a key={id} className={activeSection === id ? "active" : ""} aria-current={activeSection === id ? "location" : undefined} href={`#${id}`} onClick={() => setActiveSection(id)}>
-              <UiIcon name={id as IconName} /><span className="nav-text">{label}</span>
+          {([
+            ["overview", "Today", "overview"],
+            ["courses", "Courses", "courses"],
+            ["activity", "Progress", "activity"],
+            ["risks", "Review", "risks"],
+          ] as const).map(([id, label, icon]) => (
+            <a
+              key={id}
+              className={activeSection === id ? "active" : ""}
+              aria-current={activeSection === id ? "location" : undefined}
+              href={`#${id}`}
+              onClick={() => setActiveSection(id)}
+            >
+              <UiIcon name={icon as IconName} />
+              <span className="nav-text">{label}</span>
               {id === "courses" && semester && <small className="nav-count">{semester.course_count}</small>}
+              {id === "risks" && semester && semester.due_review_count > 0 && <small className="nav-count attention">{semester.due_review_count}</small>}
             </a>
           ))}
         </nav>
+
         <div className="sidebar-tools">
-          <p className="nav-label">Tools</p>
-          <button onClick={() => setManagerOpen(true)}><UiIcon name="plus" />Manage courses</button>
-          {isAdmin && <button onClick={() => setAdminOpen(true)}><UiIcon name="shield" />Admin catalog</button>}
-          <button onClick={() => setAccountOpen(true)}><UiIcon name="settings" />Account</button>
-          <button onClick={onSignOut}><UiIcon name="logout" />Sign out</button>
+          <p className="nav-label">Actions</p>
+          <button onClick={() => setManagerOpen(true)}><UiIcon name="plus" />Add or manage courses</button>
+          {isAdmin && <button onClick={() => setAdminOpen(true)}><UiIcon name="shield" />Institution catalog</button>}
+          <button onClick={() => setAccountOpen(true)}><UiIcon name="settings" />Account & integrations</button>
         </div>
-        <div className="sidebar-note"><UiIcon name="layers" /><strong>A little progress, every day.</strong><span>Your next session is a good place to start.</span></div>
+
         <div className="sidebar-foot account-foot">
           <span className="account-avatar">{(userEmail?.[0] ?? "S").toUpperCase()}</span>
-          <div><strong>{userEmail ?? "Signed in"}</strong><small><span className="status-dot" />Private workspace</small></div>
+          <div><strong>{userEmail ?? "Signed in"}</strong><small><span className="status-dot" />Cloud synced</small></div>
+          <button className="account-logout" onClick={onSignOut} aria-label="Sign out"><UiIcon name="logout" /></button>
         </div>
       </aside>
 
-      <main className="main-content" id="main-content" tabIndex={-1}>
-        <div className="dashboard-context"><span>Workspace <span>/</span> Overview</span><span className="context-status"><span className="status-dot" />{loading ? "Syncing your workspace" : error ? "Sync interrupted" : "Up to date"}</span></div>
-        <section className="topbar" id="overview">
+      <main className="main-content cockpit-main" id="main-content" tabIndex={-1}>
+        <div className="cockpit-toolbar">
+          <span>{loading ? "Syncing" : error ? "Sync interrupted" : "Synced"}<i className={error ? "sync-dot warn" : "sync-dot"} /></span>
           <div>
-            <p className="eyebrow">Your semester, in focus</p>
-            <h1>Let’s make progress.</h1>
-            <p className="muted">Pick up where you left off. Make your next session count.</p>
-          </div>
-          <div className="topbar-actions">
-            <select aria-label="Filter analytics by course" value={courseId} onChange={(event) => setCourseId(event.target.value)}>
+            <select aria-label="Filter dashboard by course" value={courseId} onChange={(event) => setCourseId(event.target.value)}>
               <option value="all">All courses</option>
               {semester?.courses.map((course) => <option key={course.course_id} value={course.course_id}>{course.course_name}</option>)}
             </select>
-            <button className="ghost-button icon-button" aria-label="Refresh dashboard" title="Refresh dashboard" onClick={() => void load()} disabled={loading}><UiIcon name="refresh" className={loading ? "is-spinning" : ""} /></button>
+            <button className="ghost-button icon-button" aria-label="Refresh" onClick={() => void load()} disabled={loading}><UiIcon name="refresh" className={loading ? "is-spinning" : ""} /></button>
           </div>
-        </section>
+        </div>
 
-        {error && (
-          <div className="error-banner" role="alert">
-            <span>{error}</span>
-            <button onClick={() => void load()}>Retry</button>
-          </div>
-        )}
+        {error && <div className="error-banner" role="alert"><span>{error}</span><button onClick={() => void load()}>Retry</button></div>}
 
         {!analytics || !semester ? (
-          <div className="loading-grid" aria-label="Loading dashboard">
-            {Array.from({ length: 8 }).map((_, index) => <div className="skeleton" key={index} />)}
-          </div>
+          <div className="cockpit-loading"><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></div>
         ) : (
-          <>
-            <section className="metric-grid" aria-label="Key metrics">
-              <article className="metric-card metric-primary">
-                <p><UiIcon name="clock" />Focused study</p>
-                <strong>{formatMinutes(analytics.summary.focus_minutes)}</strong>
-                <span>{formatPercent(analytics.summary.focus_completion_rate)} completion rate</span>
-              </article>
-              <article className="metric-card">
-                <p><UiIcon name="check" />Answer quality</p>
-                <strong>{formatPercent(analytics.summary.average_answer_score)}</strong>
-                <span>{analytics.summary.answer_count} graded answers</span>
-              </article>
-              <article className="metric-card">
-                <p><UiIcon name="layers" />Due reviews</p>
-                <strong>{semester.due_review_count}</strong>
-                <span>{semester.upcoming_exam_count} upcoming exams</span>
-              </article>
-              <article className="metric-card">
-                <p><UiIcon name="target" />Below target</p>
-                <strong>{analytics.summary.below_target_count}</strong>
-                <span>{analytics.summary.at_target_count} courses at target</span>
-              </article>
-            </section>
+          <div className="cockpit-layout">
+            <div className="cockpit-workspace">
+              <section className="today-header" id="overview">
+                <span className="today-date">{dayHeading()}</span>
+                <h1>Today</h1>
+                <div className="today-signals" aria-label="Current study signals">
+                  <span><strong>{formatMinutes(analytics.summary.focus_minutes)}</strong> focused · {days}d</span>
+                  <span><strong>{semester.due_review_count}</strong> reviews due</span>
+                  <span><strong>{formatPercent(analytics.summary.average_answer_score)}</strong> answer quality</span>
+                  <span><strong>{analytics.summary.below_target_count}</strong> below target</span>
+                </div>
+              </section>
 
-            <section className="hero-grid">
-              <article className="panel next-action-panel">
-                <div className="focus-content">
-                <div className="panel-head">
-                  <div>
-                    <p className="eyebrow">Up next · Focus session</p>
-                    <h2>{semester.next_action?.topic_name ?? "Your next step starts here"}</h2>
+              <section className={`today-focus ${activeFocus ? "is-active" : ""}`}>
+                <div className="today-focus-copy">
+                  <div className="focus-kicker">
+                    <span className={activeFocus ? "live-pulse" : "focus-index"}>{activeFocus ? "" : "01"}</span>
+                    <span>{activeFocus ? "In session" : semester.next_action ? "Next session" : "Setup"}</span>
                   </div>
-                  {semester.next_action && (
-                    <span className={`pill ${semester.next_action.status}`}>
-                      {semester.next_action.status.replace("_", " ")}
-                    </span>
+
+                  {semester.next_action ? (
+                    <>
+                      <span className="focus-course-name">{semester.next_action.course_name}</span>
+                      <h2>{semester.next_action.topic_name}</h2>
+                      <div className="focus-meta">
+                        <span>{semester.next_action.planned_minutes} min</span>
+                        <span>+{semester.next_action.expected_mark_gain.toFixed(2)} expected marks</span>
+                        <span>{semester.next_action.status.replace("_", " ")}</span>
+                      </div>
+
+                      {activeFocus ? (
+                        <div className="focus-actions">
+                          <button className="primary-button" disabled={actionBusy} onClick={() => void focusAction("complete")}><UiIcon name="check" />Complete session</button>
+                          <button className="quiet-action" disabled={actionBusy} onClick={() => void focusAction("skip")}>Skip</button>
+                        </div>
+                      ) : (
+                        <button className="focus-launch" disabled={actionBusy || selectedQueue?.needs_refresh} onClick={() => void focusAction("start")}>
+                          <span><UiIcon name="play" /></span>
+                          <div><strong>{selectedQueue?.needs_refresh ? "Refresh plan first" : "Start session"}</strong><small>{semester.next_action.planned_minutes} minutes · distraction-free mode</small></div>
+                          <UiIcon name="arrow" />
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span className="focus-course-name">{semester.course_count ? "Courses need planning" : "No courses yet"}</span>
+                      <h2>{selectedQueue?.needs_refresh ? "Your study queue needs a refresh." : "Build the first real study block."}</h2>
+                      <p className="focus-setup-copy">{selectedQueue?.needs_refresh ? selectedQueue.refresh_reasons.join(" · ") : "Add course evidence, set a target, and StudyOS will choose the highest-value next block."}</p>
+                      {selectedQueue?.needs_refresh ? (
+                        <button className="primary-button" disabled={actionBusy} onClick={() => void refreshQueue()}>Refresh plan</button>
+                      ) : (
+                        <button className="primary-button" onClick={() => setManagerOpen(true)}><UiIcon name="plus" />Set up courses</button>
+                      )}
+                    </>
                   )}
                 </div>
-
-                {semester.next_action ? (
-                  <>
-                    <p className="next-course">{semester.next_action.course_name}</p>
-                    <div className="action-stats">
-                      <div><span>Block</span><strong>{semester.next_action.planned_minutes} min</strong></div>
-                      <div><span>Expected gain</span><strong>+{semester.next_action.expected_mark_gain.toFixed(2)}</strong></div>
-                      <div><span>Session type</span><strong>Deep focus</strong></div>
-                    </div>
-                    {activeFocus ? (
-                      <div className="focus-running">
-                        <div>
-                          <span className="live-dot" /> Focus active until {new Date(activeFocus.target_end_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </div>
-                        <div className="button-row">
-                          <button className="primary-button" disabled={actionBusy} onClick={() => void focusAction("complete")}>Complete</button>
-                          <button className="danger-button" disabled={actionBusy} onClick={() => void focusAction("skip")}>Skip</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button className="primary-button full" disabled={actionBusy || selectedQueue?.needs_refresh} onClick={() => void focusAction("start")}>
-                        <UiIcon name="play" />{selectedQueue?.needs_refresh ? "Refresh queue first" : actionBusy ? "Starting…" : "Start focus block"}<UiIcon name="arrow" />
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <div className="empty-state">
-                    <strong>{selectedQueue?.needs_refresh ? "Queue needs a refresh" : "Ready when you are"}</strong>
-                    <span>{selectedQueue?.needs_refresh ? selectedQueue.refresh_reasons.join(" · ") : "Add your course materials and build a study plan to find the best place to start."}</span>
-                    {!selectedQueue && <button className="primary-button" onClick={() => setManagerOpen(true)}><UiIcon name="plus" />Build your study plan</button>}
-                    {selectedQueue?.needs_refresh && (
-                      <button className="primary-button" disabled={actionBusy} onClick={() => void refreshQueue()}>Refresh queue</button>
-                    )}
-                  </div>
+                {(semester.next_action || activeFocus) && (
+                  <div className="today-focus-timer"><FocusTimer session={activeFocus} minutes={activeFocus?.planned_minutes ?? semester.next_action?.planned_minutes ?? 0} /></div>
                 )}
-                </div>
-                {(semester.next_action || activeFocus) && <FocusTimer session={activeFocus} minutes={activeFocus?.planned_minutes ?? semester.next_action?.planned_minutes ?? 0} />}
-              </article>
+              </section>
 
-              <article className="panel queue-panel">
-                <div className="panel-head compact">
-                  <div>
-                    <p className="eyebrow">Study plan</p>
-                    <h2>{selectedQueue ? "Your session budget" : "Room to get started"}</h2>
-                  </div>
-                  <span className={`health-dot ${selectedQueue?.needs_refresh ? "warn" : "good"}`} />
+              <section className="workspace-section course-momentum" id="courses">
+                <div className="workspace-section-head">
+                  <div><span className="section-number">02</span><div><h2>Course momentum</h2><p>Current evidence against each target.</p></div></div>
+                  <button className="text-action" onClick={() => setManagerOpen(true)}>Manage courses <UiIcon name="arrow" /></button>
                 </div>
-                {selectedQueue ? (
-                  <>
-                    <div className="queue-stat"><span>Completed</span><strong>{formatMinutes(selectedQueue.completed_study_minutes)}</strong></div>
-                    <div className="queue-stat"><span>Remaining budget</span><strong>{formatMinutes(selectedQueue.remaining_available_minutes)}</strong></div>
-                    <div className="queue-stat"><span>Planned work</span><strong>{formatMinutes(selectedQueue.planned_minutes)}</strong></div>
-                    <div className="queue-progress">
-                      <span style={{ width: `${Math.min(100, (selectedQueue.completed_study_minutes / Math.max(1, selectedQueue.completed_study_minutes + selectedQueue.planned_minutes)) * 100)}%` }} />
-                    </div>
-                    <p className="queue-caption">{selectedQueue.needs_refresh ? `Refresh required: ${selectedQueue.refresh_reasons.join(", ")}` : "Your plan is up to date."}</p>
-                  </>
-                ) : (
-                  <p className="muted">Your planned sessions and completed study time will appear here.</p>
-                )}
-              </article>
-            </section>
 
-            <section className="panel activity-panel" id="activity">
-              <div className="panel-head">
-                <div>
-                  <p className="eyebrow">Your consistency</p>
-                  <h2>Focused study activity</h2>
-                </div>
-                <div className="window-toggle" aria-label="Analytics window">
-                  {WINDOWS.map((windowDays) => (
-                    <button key={windowDays} aria-pressed={days === windowDays} className={days === windowDays ? "active" : ""} onClick={() => setDays(windowDays)}>
-                      {windowDays}D
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="chart-scroll">
-                <div className="activity-chart" style={{ minWidth: `${Math.max(620, analytics.activity.length * 34)}px` }}>
-                  {analytics.activity.map((day, index) => {
-                    const height = Math.max(4, (day.focus_minutes / maxFocus) * 100);
-                    const answers = day.diagnostic_responses + day.practice_attempts;
+                <div className="course-ledger">
+                  {analytics.courses.length === 0 ? (
+                    <div className="ledger-empty"><strong>No course evidence yet.</strong><span>Add a course to start building an academic record.</span><button onClick={() => setManagerOpen(true)}>Add course</button></div>
+                  ) : analytics.courses.map((course, index) => {
+                    const readiness = Math.max(0, Math.min(1, course.normalized_current_grade ?? 0));
+                    const target = Math.max(0, Math.min(1, course.normalized_target_grade ?? 0));
+                    const semesterCourse = semester.courses.find((item) => item.course_id === course.course_id);
                     return (
-                      <div className="bar-column" key={day.date} title={`${activityLabel(day.date)} — ${day.focus_minutes} focus min, ${answers} answers`}>
-                        <div className="bar-track"><span style={{ height: `${day.focus_minutes === 0 ? 0 : height}%`, animationDelay: `${Math.min(index, 20) * 18}ms` }} /></div>
-                        <small>{activityLabel(day.date)}</small>
-                      </div>
+                      <a className="ledger-row" href={`/courses/${course.course_id}`} key={course.course_id}>
+                        <span className={`ledger-symbol course-color-${index % 4}`}>{String(index + 1).padStart(2, "0")}</span>
+                        <div className="ledger-course">
+                          <div><strong>{course.course_name}</strong><span>{course.measured_topic_count}/{course.topic_count} topics measured</span></div>
+                          <div className="ledger-progress"><span style={{ width: `${readiness * 100}%` }} />{course.target_grade !== null && <i style={{ left: `${target * 100}%` }} />}</div>
+                        </div>
+                        <div className="ledger-grade"><span>Estimate</span><strong>{course.current_estimated_grade === null ? "—" : course.current_estimated_grade.toFixed(1)}{course.current_estimated_grade !== null && <small>/{course.max_grade}</small>}</strong></div>
+                        <div className="ledger-grade"><span>Target</span><strong>{course.target_grade === null ? "—" : course.target_grade.toFixed(1)}{course.target_grade !== null && <small>/{course.max_grade}</small>}</strong></div>
+                        <div className="ledger-evidence"><span>{formatPercent(course.current_mean_mastery)} mastery</span><span>{formatMinutes(course.focus_minutes)} focus</span></div>
+                        <div className="ledger-deadline"><span>{semesterCourse?.days_until_exam === null || semesterCourse?.days_until_exam === undefined ? "No exam date" : semesterCourse.days_until_exam === 0 ? "Exam today" : `${semesterCourse.days_until_exam}d to exam`}</span><b className={`ledger-status ${course.target_status}`}>{statusLabel(course.target_status)}</b></div>
+                        <UiIcon name="arrow" />
+                      </a>
                     );
                   })}
                 </div>
-              </div>
-              <div className="chart-legend">
-                <span><i className="legend-focus" /> Focus minutes</span>
-                <span>{analytics.summary.mastery_updates} mastery updates</span>
-                <span>{analytics.summary.forecast_snapshots} forecasts</span>
-                <span>Timezone: {analytics.timezone}</span>
-              </div>
-            </section>
+              </section>
 
-            <section className="section-head" id="courses">
-              <div>
-                <p className="eyebrow">Readiness</p>
-                <h2>Your courses</h2>
-              </div>
-              <span>{analytics.courses.length} shown</span>
-            </section>
-
-            <section className="course-grid">
-              {analytics.courses.length === 0 && <div className="panel course-empty"><UiIcon name="courses" /><h3>{courseId === "all" ? "A home for every course" : "No course data in this view"}</h3><p className="muted">{courseId === "all" ? "Add your first course to keep your materials, practice, and progress together." : "Choose all courses or refresh to try again."}</p><button className="primary-button" onClick={() => courseId === "all" ? setManagerOpen(true) : setCourseId("all")}>{courseId === "all" ? "Add a course" : "Show all courses"}<UiIcon name="arrow" /></button></div>}
-              {analytics.courses.map((course, index) => {
-                const readiness = Math.max(0, Math.min(1, course.normalized_current_grade ?? 0));
-                const target = Math.max(0, Math.min(1, course.normalized_target_grade ?? 0));
-                return (
-                  <article className="course-card" key={course.course_id} style={{ animationDelay: `${Math.min(index, 6) * 55}ms` }}>
-                    <div className="course-top">
-                      <span className={`course-symbol course-color-${index % 4}`}><UiIcon name="courses" /></span>
-                      <div>
-                        <span className={`confidence ${course.confidence}`}>{course.confidence}</span>
-                        <h3>{course.course_name}</h3>
-                      </div>
-                      <span className={`target-status ${course.target_status}`}>{statusLabel(course.target_status)}</span>
-                    </div>
-                    <div className="grade-row">
-                      <div>
-                        <span>Estimated grade</span>
-                        <strong>{course.current_estimated_grade === null ? "—" : `${course.current_estimated_grade.toFixed(1)} / ${course.max_grade}`}</strong>
-                      </div>
-                      <div>
-                        <span>Target</span>
-                        <strong>{course.target_grade === null ? "—" : `${course.target_grade.toFixed(1)} / ${course.max_grade}`}</strong>
-                      </div>
-                    </div>
-                    <div className="readiness-track" aria-label={`${course.course_name} normalized grade progress`}>
-                      {course.target_grade !== null && <span className="target-marker" style={{ left: `${target * 100}%` }} />}
-                      <span className="readiness-fill" style={{ width: `${readiness * 100}%` }} />
-                    </div>
-                    <div className="course-stats">
-                      <div><span>Mastery</span><strong>{formatPercent(course.current_mean_mastery)}</strong></div>
-                      <div><span>Answers</span><strong>{formatPercent(course.average_answer_score)}</strong></div>
-                      <div><span>Focus</span><strong>{formatMinutes(course.focus_minutes)}</strong></div>
-                    </div>
-                    <div className="course-foot">
-                      <span>{course.measured_topic_count}/{course.topic_count} topics measured</span>
-                      <a className="course-open" href={`/courses/${course.course_id}`}>Open workspace <UiIcon name="arrow" /></a>
-                    </div>
-                  </article>
-                );
-              })}
-            </section>
-
-            <section className="risk-grid" id="risks">
-              <article className="panel">
-                <div className="panel-head">
-                  <div>
-                    <p className="eyebrow">Worth another look</p>
-                    <h2>Needs attention</h2>
+              <section className="workspace-section progress-section" id="activity">
+                <div className="workspace-section-head">
+                  <div><span className="section-number">03</span><div><h2>Study rhythm</h2><p>Focused minutes, not vanity activity.</p></div></div>
+                  <div className="window-toggle" aria-label="Analytics window">
+                    {WINDOWS.map((windowDays) => <button key={windowDays} aria-pressed={days === windowDays} className={days === windowDays ? "active" : ""} onClick={() => setDays(windowDays)}>{windowDays}D</button>)}
                   </div>
                 </div>
+
+                {analytics.summary.focus_minutes === 0 ? (
+                  <div className="rhythm-empty"><span className="rhythm-line" /><div><strong>No focus history yet.</strong><span>Your completed sessions will build the timeline here.</span></div></div>
+                ) : (
+                  <div className="rhythm-chart">
+                    {activity.map((day) => {
+                      const height = Math.max(5, (day.focus_minutes / maxFocus) * 100);
+                      return <div className="rhythm-day" key={day.date} title={`${activityLabel(day.date)} · ${day.focus_minutes} focused minutes`}><span><i style={{ height: `${day.focus_minutes ? height : 0}%` }} /></span><small>{activityLabel(day.date)}</small></div>;
+                    })}
+                  </div>
+                )}
+                <div className="rhythm-footer"><span>{analytics.summary.focus_sessions_completed} sessions completed</span><span>{analytics.summary.mastery_updates} mastery updates</span><span>{analytics.summary.forecast_snapshots} forecasts</span><span>{analytics.timezone}</span></div>
+              </section>
+
+              <section className="workspace-section review-section" id="risks">
+                <div className="workspace-section-head">
+                  <div><span className="section-number">04</span><div><h2>Review queue</h2><p>Where the evidence says to look again.</p></div></div>
+                  <span className="review-count">{riskRows.length} signals</span>
+                </div>
                 {riskRows.length ? (
-                  <div className="risk-list">
-                    {riskRows.map((risk) => (
-                      <div className="risk-row" key={`${risk.courseName}-${risk.topic_id}`}>
-                        <div>
-                          <strong>{risk.topic_name}</strong>
-                          <span>{risk.courseName} · {risk.dominant_categories.join(" · ") || "uncategorized"}</span>
-                        </div>
-                        <div className="risk-meter"><span style={{ width: `${risk.mistake_burden * 100}%` }} /></div>
+                  <div className="review-ledger">
+                    {riskRows.map((risk, index) => (
+                      <div className="review-row" key={`${risk.courseName}-${risk.topic_id}`}>
+                        <span>{String(index + 1).padStart(2, "0")}</span>
+                        <div><strong>{risk.topic_name}</strong><small>{risk.courseName} · {risk.dominant_categories.join(" · ") || "uncategorized"}</small></div>
+                        <div className="review-burden"><i style={{ width: `${Math.min(100, risk.mistake_burden * 100)}%` }} /></div>
                         <b>{formatPercent(risk.mistake_burden)}</b>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <p className="muted">No classified mistake hotspots yet.</p>
-                )}
-              </article>
+                ) : <div className="review-clear"><UiIcon name="check" /><div><strong>No mistake hotspots yet.</strong><span>As you practice, repeated errors will surface here automatically.</span></div></div>}
+              </section>
+            </div>
 
-              <article className="panel evidence-panel">
-                <div className="panel-head">
-                  <div>
-                    <p className="eyebrow">Recent progress</p>
-                    <h2>What changed</h2>
-                  </div>
-                </div>
-                <div className="evidence-list">
-                  <div><span>Mastery updates</span><strong>{analytics.summary.mastery_updates}</strong></div>
-                  <div><span>Forecast snapshots</span><strong>{analytics.summary.forecast_snapshots}</strong></div>
-                  <div><span>Completed focus</span><strong>{analytics.summary.focus_sessions_completed}</strong></div>
-                  <div><span>Skipped focus</span><strong>{analytics.summary.focus_sessions_skipped}</strong></div>
-                </div>
-                <p className="fine-print">Analytics are read-only projections from StudyOS evidence. Estimated grades and target probabilities are planning signals, not guaranteed outcomes.</p>
-              </article>
-            </section>
-          </>
+            <aside className="cockpit-rail" aria-label="Study context">
+              <section className="rail-block rail-now">
+                <span className="rail-label">Now</span>
+                {activeFocus ? (
+                  <><strong>{semester.next_action?.topic_name ?? "Focus session"}</strong><span>{semester.next_action?.course_name}</span><small>Active until {new Date(activeFocus.target_end_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small></>
+                ) : semester.next_action ? (
+                  <><strong>{semester.next_action.topic_name}</strong><span>{semester.next_action.course_name}</span><small>{semester.next_action.planned_minutes} min · +{semester.next_action.expected_mark_gain.toFixed(2)} marks</small></>
+                ) : (
+                  <><strong>No session queued</strong><span>Build or refresh your study plan.</span></>
+                )}
+              </section>
+
+              <section className="rail-block rail-week">
+                <span className="rail-label">Current window</span>
+                <div><span>Focused</span><strong>{formatMinutes(analytics.summary.focus_minutes)}</strong></div>
+                <div><span>Answer quality</span><strong>{formatPercent(analytics.summary.average_answer_score)}</strong></div>
+                <div><span>Reviews due</span><strong>{semester.due_review_count}</strong></div>
+                <div><span>At target</span><strong>{analytics.summary.at_target_count}/{analytics.summary.course_count}</strong></div>
+              </section>
+
+              <section className="rail-block rail-deadline">
+                <span className="rail-label">Nearest exam</span>
+                {nearestExam ? (
+                  <><strong>{nearestExam.course_name}</strong><span>{nearestExam.days_until_exam === 0 ? "Today" : `${nearestExam.days_until_exam} days`}</span><small>{nearestExam.target_grade === null ? "No target set" : `Target ${nearestExam.target_grade}/${nearestExam.max_grade}`}</small></>
+                ) : <><strong>No dated exams</strong><span>Add exam dates to make planning pressure-aware.</span></>}
+              </section>
+
+              <SpotifyDock />
+
+              {selectedQueue && (
+                <section className="rail-block rail-plan">
+                  <span className="rail-label">Study plan</span>
+                  <div className="rail-plan-progress"><span style={{ width: `${Math.min(100, (selectedQueue.completed_study_minutes / Math.max(1, selectedQueue.completed_study_minutes + selectedQueue.planned_minutes)) * 100)}%` }} /></div>
+                  <div><span>Completed</span><strong>{formatMinutes(selectedQueue.completed_study_minutes)}</strong></div>
+                  <div><span>Planned</span><strong>{formatMinutes(selectedQueue.planned_minutes)}</strong></div>
+                </section>
+              )}
+            </aside>
+          </div>
         )}
       </main>
-      <AdminCatalog
-        open={adminOpen}
-        onClose={() => setAdminOpen(false)}
-        onChanged={() => void load()}
-      />
-      <CourseManager
-        open={managerOpen}
-        onClose={() => setManagerOpen(false)}
-        onChanged={() => void load()}
-      />
-      <AccountSettings
-        open={accountOpen}
-        email={userEmail}
-        onClose={() => setAccountOpen(false)}
-        onDeleted={onAccountDeleted}
-        onSignedOut={onSignOut}
-      />
+
+      <AdminCatalog open={adminOpen} onClose={() => setAdminOpen(false)} onChanged={() => void load()} />
+      <CourseManager open={managerOpen} onClose={() => setManagerOpen(false)} onChanged={() => void load()} />
+      <AccountSettings open={accountOpen} email={userEmail} onClose={() => setAccountOpen(false)} onDeleted={onAccountDeleted} onSignedOut={onSignOut} />
     </div>
   );
 }
