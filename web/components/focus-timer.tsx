@@ -27,6 +27,25 @@ export function FocusTimer({ session, minutes }: { session: FocusSession | null;
         <circle className="dial-progress" cx="90" cy="90" r="78" pathLength="100" strokeDasharray="100" strokeDashoffset={100 - progress * 100} />
       </svg>
       <div><span className="focus-dial-label">{label}</span><strong role="timer" aria-label={`${label}: ${Math.floor(seconds / 60)} minutes ${seconds % 60} seconds`}>{Math.floor(seconds / 60).toString().padStart(2, "0")}<span>:</span>{(seconds % 60).toString().padStart(2, "0")}</strong><small>{session ? "One thing at a time." : "Make room for deep work."}</small></div>
+      <style jsx global>{`
+        @media (max-width: 760px) {
+          .today-focus.is-active {
+            flex-direction: column;
+          }
+
+          .today-focus.is-active .today-focus-timer {
+            display: grid;
+            width: 100%;
+            min-height: 190px;
+            border-left: 0;
+            border-top: 1px solid #303633;
+          }
+
+          .today-focus.is-active .today-focus-timer .focus-dial {
+            width: 150px;
+          }
+        }
+      `}</style>
     </div>
   );
 }
