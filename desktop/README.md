@@ -17,6 +17,11 @@ of it.
 This preserves StudyOS' existing same-origin browser behavior and gives normal users a
 double-click local desktop experience without requiring Python, Node, Docker, or a server URL.
 
+The local sidecar intentionally excludes cloud-only transports where possible. OpenAI,
+Sentry, and Web Push are loaded dynamically by hosted deployments and are not required for
+the default local desktop runtime. Keeping those optional dependency trees out of the
+packaged sidecar reduces installer file count while preserving fast `onedir` startup.
+
 ## First launch
 
 The packaged app starts its bundled FastAPI sidecar on a private loopback port and creates a
@@ -30,7 +35,6 @@ plain HTTP remains available only for `localhost` / `127.0.0.1`.
 
 For local Electron development, build the Next.js standalone bundle first. Packaged Windows
 builds also require `desktop/build/backend/StudyOSBackend.exe`, which CI creates with PyInstaller.
-
 
 ```powershell
 cd web
