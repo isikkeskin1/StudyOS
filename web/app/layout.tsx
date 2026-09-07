@@ -4,6 +4,7 @@ import { PwaController } from "@/components/pwa-controller";
 
 import "./globals.css";
 import "./product-ui.css";
+import "./workspace-v055.css";
 
 export const metadata: Metadata = {
   title: "StudyOS",
@@ -28,7 +29,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0b0d10",
+  themeColor: "#0d0f10",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
