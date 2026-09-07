@@ -19,6 +19,12 @@ from app.models.course import Course
 
 _REDACTED_COLUMN_FRAGMENTS = ("password", "secret", "token")
 _REDACTED_COLUMNS = {"auth", "p256dh", "storage_path"}
+_EXPORT_EXCLUDED_TABLES = {
+    "users",
+    "auth_sessions",
+    "password_reset_codes",
+    "email_verification_codes",
+}
 _MIGRATION_EXCLUDED_TABLES = {
     "users",
     "auth_sessions",
@@ -135,7 +141,7 @@ def export_user_data(db: Session, user: User) -> dict[str, Any]:
     exported_tables: dict[str, list[dict[str, Any]]] = {}
 
     for table_name, rows in sorted(owned.items()):
-        if table_name in {"users", "auth_sessions"}:
+        if table_name in _EXPORT_EXCLUDED_TABLES:
             continue
         exported_rows = []
         for row in rows:
@@ -164,6 +170,7 @@ def export_user_data(db: Session, user: User) -> dict[str, Any]:
 def export_migration_bundle(db: Session, user: User) -> bytes:
     owned = _collect_owned_rows(db, user.id)
     payload = export_user_data(db, user)
+    payload["source_files_included"] = True
     manifest: list[dict[str, Any]] = []
     archive = BytesIO()
 
