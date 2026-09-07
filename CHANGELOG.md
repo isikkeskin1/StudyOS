@@ -2,6 +2,28 @@
 
 All notable StudyOS beta changes are documented here.
 
+## [0.54.1] - 2026-09-07
+
+### Added
+
+- StudyOS Cloud account rollout for web and Windows desktop.
+- Verified email signup, password recovery codes, active-session controls and revoke-all.
+- Safe local-to-cloud workspace migration bundles with uploaded source files.
+- Reversible desktop switching between preserved local workspaces and StudyOS Cloud.
+
+### Fixed
+
+- Packaged desktop CI is isolated from production Cloud accounts.
+- Railway web routing now matches the custom-domain target port.
+- Account settings no longer repeatedly reload active sessions while actions are running.
+- Successful cloud migrations reopen the restored workspace automatically.
+
+### Security
+
+- Recovery and email-verification state is excluded from account exports.
+- Migration ZIPs enforce archive-path, file-count, size and SHA-256 integrity checks.
+- Migration import is transaction-safe and limited to fresh cloud accounts.
+
 ## [0.54.0] - 2026-09-07
 
 ### Added
