@@ -341,21 +341,31 @@ export function AccountSettings({
             >
               {busy === "migration" ? "Packaging…" : "Create migration bundle"}
             </button>
-            <button
-              className="ghost-button"
-              type="button"
-              disabled={Boolean(busy)}
-              onClick={() => migrationInputRef.current?.click()}
-            >
-              {busy === "import" ? "Importing…" : "Import migration bundle"}
-            </button>
-            <input
-              ref={migrationInputRef}
-              type="file"
-              accept=".zip,application/zip"
-              hidden
-              onChange={(event) => void importMigrationBundle(event)}
-            />
+            {desktopRuntime?.mode !== "local" && (
+              <>
+                <button
+                  className="ghost-button"
+                  type="button"
+                  disabled={Boolean(busy)}
+                  onClick={() => migrationInputRef.current?.click()}
+                >
+                  {busy === "import" ? "Importing…" : "Import migration bundle"}
+                </button>
+                <input
+                  ref={migrationInputRef}
+                  type="file"
+                  accept=".zip,application/zip"
+                  hidden
+                  onChange={(event) => void importMigrationBundle(event)}
+                />
+              </>
+            )}
+            {desktopRuntime?.mode === "local" && (
+              <p>
+                Download the bundle first, switch this desktop to Cloud, sign in, then import
+                the bundle into the fresh cloud account.
+              </p>
+            )}
             {desktopRuntime?.mode === "local" && (
               <button
                 className="primary-button"
