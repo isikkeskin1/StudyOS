@@ -36,7 +36,9 @@ export function AccountSettings({
 }: AccountSettingsProps) {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [busy, setBusy] = useState<"export" | "delete" | "sessions" | "logout-all" | null>(null);
+  const [busy, setBusy] = useState<
+    "export" | "migration" | "delete" | "sessions" | "logout-all" | null
+  >(null);
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -110,6 +112,32 @@ export function AccountSettings({
       onSignedOut();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not sign out all sessions.");
+      setBusy(null);
+    }
+  };
+
+  const downloadMigrationBundle = async () => {
+    setBusy("migration");
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/v1/auth/migration-bundle", { cache: "no-store" });
+      if (!response.ok) throw new Error(await apiError(response));
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const filenameMatch = disposition.match(/filename="([^"]+)"/);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filenameMatch?.[1] ?? "studyos-cloud-migration.zip";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setNotice("Your portable StudyOS migration bundle is ready.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not prepare migration bundle.");
+    } finally {
       setBusy(null);
     }
   };
@@ -195,6 +223,25 @@ export function AccountSettings({
             onClick={() => void logoutEverywhere()}
           >
             {busy === "logout-all" ? "Signing out…" : "Sign out everywhere"}
+          </button>
+        </section>
+
+        <section className="account-settings-section">
+          <div>
+            <span className="account-settings-label">Move to StudyOS Cloud</span>
+            <h3>Create a migration bundle</h3>
+            <p>
+              Packages your StudyOS account state and uploaded course source files into one
+              portable ZIP. Passwords, sessions, provider secrets, and local file paths are excluded.
+            </p>
+          </div>
+          <button
+            className="ghost-button"
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => void downloadMigrationBundle()}
+          >
+            {busy === "migration" ? "Packaging…" : "Create migration bundle"}
           </button>
         </section>
 
