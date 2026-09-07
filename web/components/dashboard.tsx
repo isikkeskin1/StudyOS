@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AccountSettings } from "@/components/account-settings";
 import { AdminCatalog } from "@/components/admin-catalog";
 import { CourseManager } from "@/components/course-manager";
+import { BrandMark, UiIcon, type IconName } from "@/components/ui-icon";
+import { FocusTimer } from "@/components/focus-timer";
 import { GlobalSearch } from "@/components/global-search";
 
 import type {
@@ -82,6 +84,7 @@ export function Dashboard({
   onSignOut: () => void;
   onAccountDeleted: () => void;
 }) {
+  const [activeSection, setActiveSection] = useState("overview");
   const [days, setDays] = useState<WindowDays>(30);
   const [courseId, setCourseId] = useState("all");
   const [timezone] = useState(() => {
@@ -131,6 +134,20 @@ export function Dashboard({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const updateSection = () => {
+      const sections = ["overview", "activity", "courses", "risks"];
+      const current = sections.filter((id) => {
+        const element = document.getElementById(id);
+        return element && element.getBoundingClientRect().top <= window.innerHeight * 0.4;
+      }).at(-1);
+      setActiveSection(current ?? "overview");
+    };
+    window.addEventListener("scroll", updateSection, { passive: true });
+    updateSection();
+    return () => window.removeEventListener("scroll", updateSection);
+  }, [analytics]);
 
   const selectedQueue = useMemo(() => {
     if (!semester?.selected_queue_id) return null;
@@ -204,67 +221,50 @@ export function Dashboard({
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">Skip to content</a>
       <aside className="sidebar">
         <a className="brand" href="#overview" aria-label="StudyOS home">
-          <span className="brand-mark">S</span>
-          <span>
-            <strong>StudyOS</strong>
-            <small>Command center</small>
-          </span>
+          <BrandMark />
+          <span><strong>StudyOS<span className="brand-period">.</span></strong><small>Your study workspace</small></span>
         </a>
+        <div className="sidebar-search"><GlobalSearch /></div>
+        <p className="nav-label">Workspace</p>
         <nav className="side-nav" aria-label="Dashboard sections">
-          <a className="active" href="#overview"><span>01</span> Overview</a>
-          <a href="#activity"><span>02</span> Activity</a>
-          <a href="#courses"><span>03</span> Courses</a>
-          <a href="#risks"><span>04</span> Risks</a>
+          {([["overview", "Overview"], ["activity", "Activity"], ["courses", "Courses"], ["risks", "Needs attention"]] as const).map(([id, label]) => (
+            <a key={id} className={activeSection === id ? "active" : ""} aria-current={activeSection === id ? "location" : undefined} href={`#${id}`} onClick={() => setActiveSection(id)}>
+              <UiIcon name={id as IconName} /><span className="nav-text">{label}</span>
+              {id === "courses" && semester && <small className="nav-count">{semester.course_count}</small>}
+            </a>
+          ))}
         </nav>
+        <div className="sidebar-tools">
+          <p className="nav-label">Tools</p>
+          <button onClick={() => setManagerOpen(true)}><UiIcon name="plus" />Manage courses</button>
+          {isAdmin && <button onClick={() => setAdminOpen(true)}><UiIcon name="shield" />Admin catalog</button>}
+          <button onClick={() => setAccountOpen(true)}><UiIcon name="settings" />Account</button>
+          <button onClick={onSignOut}><UiIcon name="logout" />Sign out</button>
+        </div>
+        <div className="sidebar-note"><UiIcon name="layers" /><strong>A little progress, every day.</strong><span>Your next session is a good place to start.</span></div>
         <div className="sidebar-foot account-foot">
-          <span className="status-dot" />
-          <div>
-            <strong>{userEmail ?? "Signed in"}</strong>
-            <small>Private workspace</small>
-          </div>
+          <span className="account-avatar">{(userEmail?.[0] ?? "S").toUpperCase()}</span>
+          <div><strong>{userEmail ?? "Signed in"}</strong><small><span className="status-dot" />Private workspace</small></div>
         </div>
       </aside>
 
-      <main className="main-content">
+      <main className="main-content" id="main-content" tabIndex={-1}>
+        <div className="dashboard-context"><span>Workspace <span>/</span> Overview</span><span className="context-status"><span className="status-dot" />{loading ? "Syncing your workspace" : error ? "Sync interrupted" : "Up to date"}</span></div>
         <section className="topbar" id="overview">
           <div>
-            <p className="eyebrow">Study operating system</p>
-            <h1>Semester command center</h1>
-            <p className="muted">One view for urgency, progress, execution, and evidence.</p>
+            <p className="eyebrow">Your semester, in focus</p>
+            <h1>Let’s make progress.</h1>
+            <p className="muted">Pick up where you left off. Make your next session count.</p>
           </div>
           <div className="topbar-actions">
-            <GlobalSearch />
-            <select
-              aria-label="Filter analytics by course"
-              value={courseId}
-              onChange={(event) => setCourseId(event.target.value)}
-            >
+            <select aria-label="Filter analytics by course" value={courseId} onChange={(event) => setCourseId(event.target.value)}>
               <option value="all">All courses</option>
-              {semester?.courses.map((course) => (
-                <option key={course.course_id} value={course.course_id}>
-                  {course.course_name}
-                </option>
-              ))}
+              {semester?.courses.map((course) => <option key={course.course_id} value={course.course_id}>{course.course_name}</option>)}
             </select>
-            <button className="ghost-button" onClick={() => setManagerOpen(true)}>
-              Manage courses
-            </button>
-            {isAdmin && (
-              <button className="ghost-button admin-button" onClick={() => setAdminOpen(true)}>
-                Admin catalog
-              </button>
-            )}
-            <button className="ghost-button" onClick={() => void load()} disabled={loading}>
-              {loading ? "Syncing…" : "Refresh"}
-            </button>
-            <button className="ghost-button" onClick={() => setAccountOpen(true)}>
-              Account
-            </button>
-            <button className="ghost-button" onClick={onSignOut}>
-              Sign out
-            </button>
+            <button className="ghost-button icon-button" aria-label="Refresh dashboard" title="Refresh dashboard" onClick={() => void load()} disabled={loading}><UiIcon name="refresh" className={loading ? "is-spinning" : ""} /></button>
           </div>
         </section>
 
@@ -283,22 +283,22 @@ export function Dashboard({
           <>
             <section className="metric-grid" aria-label="Key metrics">
               <article className="metric-card metric-primary">
-                <p>Focused study</p>
+                <p><UiIcon name="clock" />Focused study</p>
                 <strong>{formatMinutes(analytics.summary.focus_minutes)}</strong>
                 <span>{formatPercent(analytics.summary.focus_completion_rate)} completion rate</span>
               </article>
               <article className="metric-card">
-                <p>Answer quality</p>
+                <p><UiIcon name="check" />Answer quality</p>
                 <strong>{formatPercent(analytics.summary.average_answer_score)}</strong>
                 <span>{analytics.summary.answer_count} graded answers</span>
               </article>
               <article className="metric-card">
-                <p>Due reviews</p>
+                <p><UiIcon name="layers" />Due reviews</p>
                 <strong>{semester.due_review_count}</strong>
                 <span>{semester.upcoming_exam_count} upcoming exams</span>
               </article>
               <article className="metric-card">
-                <p>Target pressure</p>
+                <p><UiIcon name="target" />Below target</p>
                 <strong>{analytics.summary.below_target_count}</strong>
                 <span>{analytics.summary.at_target_count} courses at target</span>
               </article>
@@ -306,10 +306,11 @@ export function Dashboard({
 
             <section className="hero-grid">
               <article className="panel next-action-panel">
+                <div className="focus-content">
                 <div className="panel-head">
                   <div>
-                    <p className="eyebrow">Next best action</p>
-                    <h2>{semester.next_action?.topic_name ?? "No executable block"}</h2>
+                    <p className="eyebrow">Up next · Focus session</p>
+                    <h2>{semester.next_action?.topic_name ?? "Your next step starts here"}</h2>
                   </div>
                   {semester.next_action && (
                     <span className={`pill ${semester.next_action.status}`}>
@@ -324,7 +325,7 @@ export function Dashboard({
                     <div className="action-stats">
                       <div><span>Block</span><strong>{semester.next_action.planned_minutes} min</strong></div>
                       <div><span>Expected gain</span><strong>+{semester.next_action.expected_mark_gain.toFixed(2)}</strong></div>
-                      <div><span>Utility</span><strong>{semester.next_action.utility_score.toFixed(3)}</strong></div>
+                      <div><span>Session type</span><strong>Deep focus</strong></div>
                     </div>
                     {activeFocus ? (
                       <div className="focus-running">
@@ -338,26 +339,29 @@ export function Dashboard({
                       </div>
                     ) : (
                       <button className="primary-button full" disabled={actionBusy || selectedQueue?.needs_refresh} onClick={() => void focusAction("start")}>
-                        {selectedQueue?.needs_refresh ? "Refresh queue first" : actionBusy ? "Starting…" : "Start focus block"}
+                        <UiIcon name="play" />{selectedQueue?.needs_refresh ? "Refresh queue first" : actionBusy ? "Starting…" : "Start focus block"}<UiIcon name="arrow" />
                       </button>
                     )}
                   </>
                 ) : (
                   <div className="empty-state">
-                    <strong>{selectedQueue?.needs_refresh ? "Queue needs a refresh" : "Nothing queued right now"}</strong>
-                    <span>{selectedQueue?.needs_refresh ? selectedQueue.refresh_reasons.join(" · ") : "Create or refresh a semester queue to generate the next action."}</span>
+                    <strong>{selectedQueue?.needs_refresh ? "Queue needs a refresh" : "Ready when you are"}</strong>
+                    <span>{selectedQueue?.needs_refresh ? selectedQueue.refresh_reasons.join(" · ") : "Add your course materials and build a study plan to find the best place to start."}</span>
+                    {!selectedQueue && <button className="primary-button" onClick={() => setManagerOpen(true)}><UiIcon name="plus" />Build your study plan</button>}
                     {selectedQueue?.needs_refresh && (
                       <button className="primary-button" disabled={actionBusy} onClick={() => void refreshQueue()}>Refresh queue</button>
                     )}
                   </div>
                 )}
+                </div>
+                {(semester.next_action || activeFocus) && <FocusTimer session={activeFocus} minutes={activeFocus?.planned_minutes ?? semester.next_action?.planned_minutes ?? 0} />}
               </article>
 
               <article className="panel queue-panel">
                 <div className="panel-head compact">
                   <div>
-                    <p className="eyebrow">Queue health</p>
-                    <h2>{selectedQueue ? `Revision ${selectedQueue.revision}` : "No active queue"}</h2>
+                    <p className="eyebrow">Study plan</p>
+                    <h2>{selectedQueue ? "Your session budget" : "Room to get started"}</h2>
                   </div>
                   <span className={`health-dot ${selectedQueue?.needs_refresh ? "warn" : "good"}`} />
                 </div>
@@ -369,10 +373,10 @@ export function Dashboard({
                     <div className="queue-progress">
                       <span style={{ width: `${Math.min(100, (selectedQueue.completed_study_minutes / Math.max(1, selectedQueue.completed_study_minutes + selectedQueue.planned_minutes)) * 100)}%` }} />
                     </div>
-                    <p className="queue-caption">{selectedQueue.needs_refresh ? `Refresh required: ${selectedQueue.refresh_reasons.join(", ")}` : "Queue is current and executable."}</p>
+                    <p className="queue-caption">{selectedQueue.needs_refresh ? `Refresh required: ${selectedQueue.refresh_reasons.join(", ")}` : "Your plan is up to date."}</p>
                   </>
                 ) : (
-                  <p className="muted">The optimizer has not created a semester queue yet.</p>
+                  <p className="muted">Your planned sessions and completed study time will appear here.</p>
                 )}
               </article>
             </section>
@@ -380,12 +384,12 @@ export function Dashboard({
             <section className="panel activity-panel" id="activity">
               <div className="panel-head">
                 <div>
-                  <p className="eyebrow">Execution history</p>
+                  <p className="eyebrow">Your consistency</p>
                   <h2>Focused study activity</h2>
                 </div>
                 <div className="window-toggle" aria-label="Analytics window">
                   {WINDOWS.map((windowDays) => (
-                    <button key={windowDays} className={days === windowDays ? "active" : ""} onClick={() => setDays(windowDays)}>
+                    <button key={windowDays} aria-pressed={days === windowDays} className={days === windowDays ? "active" : ""} onClick={() => setDays(windowDays)}>
                       {windowDays}D
                     </button>
                   ))}
@@ -393,12 +397,12 @@ export function Dashboard({
               </div>
               <div className="chart-scroll">
                 <div className="activity-chart" style={{ minWidth: `${Math.max(620, analytics.activity.length * 34)}px` }}>
-                  {analytics.activity.map((day) => {
+                  {analytics.activity.map((day, index) => {
                     const height = Math.max(4, (day.focus_minutes / maxFocus) * 100);
                     const answers = day.diagnostic_responses + day.practice_attempts;
                     return (
                       <div className="bar-column" key={day.date} title={`${activityLabel(day.date)} — ${day.focus_minutes} focus min, ${answers} answers`}>
-                        <div className="bar-track"><span style={{ height: `${height}%` }} /></div>
+                        <div className="bar-track"><span style={{ height: `${day.focus_minutes === 0 ? 0 : height}%`, animationDelay: `${Math.min(index, 20) * 18}ms` }} /></div>
                         <small>{activityLabel(day.date)}</small>
                       </div>
                     );
@@ -416,18 +420,20 @@ export function Dashboard({
             <section className="section-head" id="courses">
               <div>
                 <p className="eyebrow">Readiness</p>
-                <h2>Course portfolio</h2>
+                <h2>Your courses</h2>
               </div>
               <span>{analytics.courses.length} shown</span>
             </section>
 
             <section className="course-grid">
-              {analytics.courses.map((course) => {
+              {analytics.courses.length === 0 && <div className="panel course-empty"><UiIcon name="courses" /><h3>{courseId === "all" ? "A home for every course" : "No course data in this view"}</h3><p className="muted">{courseId === "all" ? "Add your first course to keep your materials, practice, and progress together." : "Choose all courses or refresh to try again."}</p><button className="primary-button" onClick={() => courseId === "all" ? setManagerOpen(true) : setCourseId("all")}>{courseId === "all" ? "Add a course" : "Show all courses"}<UiIcon name="arrow" /></button></div>}
+              {analytics.courses.map((course, index) => {
                 const readiness = Math.max(0, Math.min(1, course.normalized_current_grade ?? 0));
                 const target = Math.max(0, Math.min(1, course.normalized_target_grade ?? 0));
                 return (
-                  <article className="course-card" key={course.course_id}>
+                  <article className="course-card" key={course.course_id} style={{ animationDelay: `${Math.min(index, 6) * 55}ms` }}>
                     <div className="course-top">
+                      <span className={`course-symbol course-color-${index % 4}`}><UiIcon name="courses" /></span>
                       <div>
                         <span className={`confidence ${course.confidence}`}>{course.confidence}</span>
                         <h3>{course.course_name}</h3>
@@ -455,7 +461,7 @@ export function Dashboard({
                     </div>
                     <div className="course-foot">
                       <span>{course.measured_topic_count}/{course.topic_count} topics measured</span>
-                      <a className="course-open" href={`/courses/${course.course_id}`}>Open workspace →</a>
+                      <a className="course-open" href={`/courses/${course.course_id}`}>Open workspace <UiIcon name="arrow" /></a>
                     </div>
                   </article>
                 );
@@ -466,8 +472,8 @@ export function Dashboard({
               <article className="panel">
                 <div className="panel-head">
                   <div>
-                    <p className="eyebrow">Mistake intelligence</p>
-                    <h2>Highest-risk topics</h2>
+                    <p className="eyebrow">Worth another look</p>
+                    <h2>Needs attention</h2>
                   </div>
                 </div>
                 {riskRows.length ? (
@@ -491,7 +497,7 @@ export function Dashboard({
               <article className="panel evidence-panel">
                 <div className="panel-head">
                   <div>
-                    <p className="eyebrow">Evidence pulse</p>
+                    <p className="eyebrow">Recent progress</p>
                     <h2>What changed</h2>
                   </div>
                 </div>

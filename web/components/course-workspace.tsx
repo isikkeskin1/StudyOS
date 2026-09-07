@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandMark, UiIcon, type IconName } from "@/components/ui-icon";
+
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -408,9 +410,10 @@ export function CourseWorkspace({ courseId }: { courseId: string }) {
 
   return (
     <div className="workspace-app">
+      <a className="skip-link" href="#course-content">Skip to content</a>
       <aside className="workspace-sidebar">
         <Link href="/" className="brand workspace-brand">
-          <span className="brand-mark">S</span>
+          <BrandMark />
           <span><strong>StudyOS</strong><small>Course workspace</small></span>
         </Link>
         <div className="workspace-search">
@@ -421,7 +424,7 @@ export function CourseWorkspace({ courseId }: { courseId: string }) {
           <strong>{course.name}</strong>
           <small>{formatDate(course.exam_date)}</small>
         </div>
-        <nav className="workspace-nav">
+        <nav className="workspace-nav" aria-label="Course sections">
           {([
             ["overview", "Overview"],
             ["topics", "Topics & mastery"],
@@ -433,15 +436,15 @@ export function CourseWorkspace({ courseId }: { courseId: string }) {
             ["forecast", "Forecast"],
             ["cheats", "Cheat sheets"],
           ] as Array<[Tab, string]>).map(([key, label]) => (
-            <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>
-              {label}
+            <button key={key} aria-current={tab === key ? "page" : undefined} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>
+              <UiIcon name={({ overview: "overview", topics: "layers", sources: "sources", exam: "target", mock: "clock", tutor: "tutor", mistakes: "risks", forecast: "activity", cheats: "courses" } as Record<Tab, IconName>)[key]} />{label}
             </button>
           ))}
         </nav>
         <Link href="/" className="workspace-back">← Semester command center</Link>
       </aside>
 
-      <main className="workspace-main">
+      <main className="workspace-main" id="course-content" tabIndex={-1}>
         <header className="workspace-topbar">
           <div>
             <p className="eyebrow">Course workspace</p>
