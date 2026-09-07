@@ -47,22 +47,28 @@ export function SpotifyDock() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadStatus = useCallback(async () => {
+  const loadStatus = useCallback(async (): Promise<SpotifyStatus | null> => {
     try {
-      const response = await fetch("/api/v1/integrations/spotify/status", { cache: "no-store" });
-      if (!response.ok) return;
+      const response = await fetch("/api/v1/integrations/spotify/status", {
+        cache: "no-store",
+      });
+      if (!response.ok) return null;
       const next = (await response.json()) as SpotifyStatus;
       setStatus(next);
       if (!next.connected) setPlayer(null);
+      return next;
     } catch {
       // Music is optional. Never make the StudyOS workspace fail because Spotify is unavailable.
+      return null;
     }
   }, []);
 
   const loadPlayer = useCallback(async () => {
     if (!status?.connected) return;
     try {
-      const response = await fetch("/api/v1/integrations/spotify/player", { cache: "no-store" });
+      const response = await fetch("/api/v1/integrations/spotify/player", {
+        cache: "no-store",
+      });
       if (response.status === 204) {
         setPlayer(null);
         return;
@@ -89,17 +95,40 @@ export function SpotifyDock() {
     return () => window.clearInterval(timer);
   }, [loadPlayer, status?.connected]);
 
+  const waitForDesktopConnection = useCallback(async () => {
+    const deadline = Date.now() + 120_000;
+
+    const poll = async () => {
+      const next = await loadStatus();
+      if (next?.connected) {
+        setBusy(false);
+        setError(null);
+        return;
+      }
+      if (Date.now() >= deadline) {
+        setBusy(false);
+        setError("Spotify is still waiting for authorization. You can try Connect again.");
+        return;
+      }
+      window.setTimeout(() => void poll(), 2500);
+    };
+
+    window.setTimeout(() => void poll(), 1800);
+  }, [loadStatus]);
+
   const connect = async () => {
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/v1/integrations/spotify/connect", { method: "POST" });
+      const response = await fetch("/api/v1/integrations/spotify/connect", {
+        method: "POST",
+      });
       if (!response.ok) throw new Error(await readError(response));
       const body = (await response.json()) as { authorize_url: string };
       const desktop = "studyosDesktop" in window;
       if (desktop) {
         window.open(body.authorize_url, "_blank", "noopener,noreferrer");
-        window.setTimeout(() => void loadStatus(), 3500);
+        void waitForDesktopConnection();
       } else {
         window.location.assign(body.authorize_url);
       }
@@ -152,8 +181,13 @@ export function SpotifyDock() {
           <div><strong>Study soundtrack</strong><span>Spotify · optional</span></div>
         </div>
         <p>Keep your music within reach without leaving your study workspace.</p>
-        <button className="spotify-connect" type="button" disabled={busy} onClick={() => void connect()}>
-          {busy ? "Opening Spotify…" : "Connect Spotify"}
+        <button
+          className="spotify-connect"
+          type="button"
+          disabled={busy}
+          onClick={() => void connect()}
+        >
+          {busy ? "Waiting for Spotify…" : "Connect Spotify"}
         </button>
         {error && <small className="spotify-error">{error}</small>}
       </section>
@@ -165,30 +199,74 @@ export function SpotifyDock() {
       <div className="spotify-dock-head">
         <span className="spotify-mark"><UiIcon name="music" /></span>
         <div><strong>Spotify</strong><span>{status.display_name ?? "Connected"}</span></div>
-        <button className="spotify-disconnect" type="button" disabled={busy} onClick={() => void disconnect()}>Disconnect</button>
+        <button
+          className="spotify-disconnect"
+          type="button"
+          disabled={busy}
+          onClick={() => void disconnect()}
+        >
+          Disconnect
+        </button>
       </div>
 
       {player?.track ? (
         <>
           <div className="spotify-track">
             {player.track.image_url ? (
-              <img src={player.track.image_url} alt="" />
+              <span
+                className="spotify-album-art"
+                style={{ backgroundImage: `url(${player.track.image_url})` }}
+                aria-hidden="true"
+              />
             ) : (
               <span className="spotify-art-placeholder"><UiIcon name="music" /></span>
             )}
             <div>
               <strong title={player.track.name}>{player.track.name}</strong>
-              <span title={player.track.artists.join(", ")}>{player.track.artists.join(", ")}</span>
+              <span title={player.track.artists.join(", ")}>
+                {player.track.artists.join(", ")}
+              </span>
               {player.device_name && <small>{player.device_name}</small>}
             </div>
           </div>
           <div className="spotify-progress" aria-hidden="true">
-            <span style={{ width: `${Math.min(100, ((player.progress_ms ?? 0) / Math.max(1, player.track.duration_ms ?? 1)) * 100)}%` }} />
+            <span
+              style={{
+                width: `${Math.min(
+                  100,
+                  ((player.progress_ms ?? 0) /
+                    Math.max(1, player.track.duration_ms ?? 1)) *
+                    100,
+                )}%`,
+              }}
+            />
           </div>
           <div className="spotify-controls">
-            <button type="button" aria-label="Previous track" disabled={busy} onClick={() => void control("previous")}><UiIcon name="previous" /></button>
-            <button className="spotify-play" type="button" aria-label={player.is_playing ? "Pause Spotify" : "Play Spotify"} disabled={busy} onClick={() => void control(player.is_playing ? "pause" : "play")}><UiIcon name={player.is_playing ? "pause" : "play"} /></button>
-            <button type="button" aria-label="Next track" disabled={busy} onClick={() => void control("next")}><UiIcon name="next" /></button>
+            <button
+              type="button"
+              aria-label="Previous track"
+              disabled={busy}
+              onClick={() => void control("previous")}
+            >
+              <UiIcon name="previous" />
+            </button>
+            <button
+              className="spotify-play"
+              type="button"
+              aria-label={player.is_playing ? "Pause Spotify" : "Play Spotify"}
+              disabled={busy}
+              onClick={() => void control(player.is_playing ? "pause" : "play")}
+            >
+              <UiIcon name={player.is_playing ? "pause" : "play"} />
+            </button>
+            <button
+              type="button"
+              aria-label="Next track"
+              disabled={busy}
+              onClick={() => void control("next")}
+            >
+              <UiIcon name="next" />
+            </button>
           </div>
         </>
       ) : (
