@@ -29,7 +29,7 @@
 
 **StudyOS now ships as a desktop app.**
 
-The Windows build bundles the production StudyOS interface **and a local FastAPI backend** into one desktop package. Normal users can install it and run StudyOS without installing Python, Node, Docker, or configuring a server.
+The Windows build bundles the production StudyOS interface and a local FastAPI fallback into one desktop package. **Fresh installs default to StudyOS Cloud**, so the same centralized account can be used on the website and desktop app. Existing local workspaces are preserved in local mode until the user explicitly migrates them.
 
 ### Windows downloads
 
@@ -40,7 +40,7 @@ When a GitHub Release is published, CI automatically attaches:
 
 👉 **[Download the latest StudyOS release](https://github.com/isikkeskin1/StudyOS/releases/latest)**
 
-On first launch, StudyOS shows an immediate branded startup screen while the bundled backend and web shell start in parallel. It stores its SQLite database plus uploaded course files under your Windows AppData. Hosted/cloud mode remains optional; remote servers must use HTTPS.
+On first launch, StudyOS shows an immediate branded startup screen while the web shell starts. Fresh installs connect to the hosted HTTPS API; legacy/local installations keep their SQLite database and uploaded files under Windows AppData until migration. The bundled backend remains available as the local/manual fallback.
 
 Installed Windows builds from v0.52 onward can check GitHub Releases automatically, download updates in a StudyOS-branded updater window, and install them on restart. The Portable build intentionally stays self-contained and does not auto-update itself.
 
@@ -355,13 +355,13 @@ docker compose up -d --build
 | **v0.52 · Distribution & catalog** | ✅ Complete | Auto-updates, fast desktop boot, institutional course catalog and admin source discovery |
 | **v0.53 · Upgrade safety** | ✅ Complete | Legacy desktop DB migrations, packaged migration resources, release-path hardening |
 | **v0.54 · Work experience** | 🟣 Current | Rebuilt Work flow, clearer priorities, smoother interactions and major UI polish |
-| **Cloud platform · Next** | 🟡 In progress | Centralized accounts, shared web + desktop data, email recovery, hosted StudyOS at studyos.courses |
+| **StudyOS Cloud** | 🟣 Current | Hosted web + API, PostgreSQL, verified centralized accounts, email recovery, shared web/desktop identity and safe local-workspace migration |
 
 \*An external ANN/vector backend remains intentionally scale-driven rather than a beta requirement.
 
 ### What comes after v0.54?
 
-The next platform phase is **StudyOS Cloud**: one centralized account and data plane shared by the Windows app and the hosted web product at **studyos.courses**, followed by broader institutional course coverage, compatibility and security hardening.
+**StudyOS Cloud is now in active rollout**: one centralized account and PostgreSQL-backed data plane shared by the Windows app and hosted web product, with verified email accounts, password recovery, session controls and safe migration from legacy local workspaces. Next comes broader institutional course coverage, object-storage scaling, compatibility and security hardening.
 
 ---
 
