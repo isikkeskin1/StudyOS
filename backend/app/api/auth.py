@@ -5,6 +5,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import StreamingResponse
+from io import BytesIO
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -25,7 +27,7 @@ from app.schemas.auth import (
     SessionRead,
     UserRead,
 )
-from app.services.account_data import delete_user_data, export_user_data
+from app.services.account_data import delete_user_data, export_migration_bundle, export_user_data
 from app.services.email import send_email_verification_code, send_password_reset_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -437,6 +439,21 @@ def me(
     db: Annotated[Session, Depends(get_db)],
 ) -> UserRead:
     return _user_read(_current_user(request, db))
+
+
+@router.get("/migration-bundle")
+def migration_bundle(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> StreamingResponse:
+    user = _current_user(request, db)
+    archive = export_migration_bundle(db, user)
+    filename = f"studyos-migration-{datetime.now(UTC).date().isoformat()}.zip"
+    return StreamingResponse(
+        BytesIO(archive),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/export")
