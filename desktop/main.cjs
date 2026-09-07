@@ -588,6 +588,7 @@ ipcMain.handle("studyos:switch-to-cloud", async (event) => {
   }
   await probeBackend(CLOUD_BACKEND_URL);
   saveConfig(CLOUD_BACKEND_URL);
+  stopRuntime();
   app.relaunch();
   app.exit(0);
   return true;
@@ -603,6 +604,7 @@ ipcMain.handle("studyos:switch-to-local", (event) => {
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
+  stopRuntime();
   app.relaunch();
   app.exit(0);
   return true;
