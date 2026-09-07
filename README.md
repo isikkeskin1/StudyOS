@@ -355,12 +355,13 @@ docker compose up -d --build
 | **v0.52 · Distribution & catalog** | ✅ Complete | Auto-updates, fast desktop boot, institutional course catalog and admin source discovery |
 | **v0.53 · Upgrade safety** | ✅ Complete | Legacy desktop DB migrations, packaged migration resources, release-path hardening |
 | **v0.54 · Work experience** | 🟣 Current | Rebuilt Work flow, clearer priorities, smoother interactions and major UI polish |
+| **Cloud platform · Next** | 🟡 In progress | Centralized accounts, shared web + desktop data, email recovery, hosted StudyOS at studyos.courses |
 
 \*An external ANN/vector backend remains intentionally scale-driven rather than a beta requirement.
 
 ### What comes after v0.54?
 
-The v0.5x line now prioritizes **beta feedback, updater reliability, institutional course coverage, web deployment, compatibility and security** before the first stable release.
+The next platform phase is **StudyOS Cloud**: one centralized account and data plane shared by the Windows app and the hosted web product at **studyos.courses**, followed by broader institutional course coverage, compatibility and security hardening.
 
 ---
 
