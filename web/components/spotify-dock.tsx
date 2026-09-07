@@ -109,6 +109,21 @@ export function SpotifyDock() {
     }
   };
 
+  const disconnect = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/v1/integrations/spotify", { method: "DELETE" });
+      if (!response.ok) throw new Error(await readError(response));
+      setPlayer(null);
+      await loadStatus();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not disconnect Spotify.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const control = async (action: "play" | "pause" | "next" | "previous") => {
     setBusy(true);
     setError(null);
@@ -150,7 +165,7 @@ export function SpotifyDock() {
       <div className="spotify-dock-head">
         <span className="spotify-mark"><UiIcon name="music" /></span>
         <div><strong>Spotify</strong><span>{status.display_name ?? "Connected"}</span></div>
-        <span className="spotify-live-dot" title="Spotify connected" />
+        <button className="spotify-disconnect" type="button" disabled={busy} onClick={() => void disconnect()}>Disconnect</button>
       </div>
 
       {player?.track ? (
