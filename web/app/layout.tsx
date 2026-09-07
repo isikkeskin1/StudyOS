@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { PwaController } from "@/components/pwa-controller";
 
 import "./globals.css";
+import "./product-ui.css";
 
 export const metadata: Metadata = {
   title: "StudyOS — Command Center",
@@ -27,7 +28,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#080b10",
+  themeColor: "#0b0d10",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
