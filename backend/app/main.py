@@ -31,6 +31,7 @@ from app.api.reviews import router as reviews_router
 from app.api.search import router as search_router
 from app.api.semester_dashboard import router as semester_dashboard_router
 from app.api.semester_queue import router as semester_queue_router
+from app.api.spotify import router as spotify_router
 from app.api.tutor import router as tutor_router
 from app.api.tutor_benchmark import router as tutor_benchmark_router
 from app.api.tutor_benchmark_history import router as tutor_benchmark_history_router
@@ -108,6 +109,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(calendar_focus_router, prefix=resolved_settings.api_prefix)
     application.include_router(calendar_subscription_router, prefix=resolved_settings.api_prefix)
     application.include_router(push_notifications_router, prefix=resolved_settings.api_prefix)
+    application.include_router(spotify_router, prefix=resolved_settings.api_prefix)
     application.include_router(analytics_router, prefix=resolved_settings.api_prefix)
     application.include_router(search_router, prefix=resolved_settings.api_prefix)
     application.include_router(diagnostics_router, prefix=resolved_settings.api_prefix)
