@@ -23,6 +23,19 @@ class LoginRequest(RegisterRequest):
     pass
 
 
+class EmailVerificationRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return RegisterRequest.normalize_email(value)
+
+
+class EmailVerificationConfirmRequest(EmailVerificationRequest):
+    code: str = Field(pattern=r"^\d{6}$")
+
+
 class PasswordResetRequest(BaseModel):
     email: str = Field(min_length=5, max_length=320)
 
@@ -50,9 +63,17 @@ class UserRead(BaseModel):
     id: str
     email: str
     is_admin: bool
+    email_verified: bool
     created_at: datetime
 
 
 class AuthRead(BaseModel):
     user: UserRead
     expires_at: datetime
+
+
+class SessionRead(BaseModel):
+    id: str
+    created_at: datetime
+    expires_at: datetime
+    current: bool
