@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -44,6 +44,42 @@ def _service_error(exc: SpotifyIntegrationError) -> HTTPException:
     )
 
 
+def _callback_response(
+    request: Request,
+    outcome: str,
+    *,
+    title: str,
+    message: str,
+) -> RedirectResponse | HTMLResponse:
+    # Web OAuth runs in the same browser and can return directly to the workspace.
+    # Desktop OAuth opens the system browser, which often has no StudyOS session cookie;
+    # give that flow a deliberate completion page instead of dropping it on sign-in.
+    if request.cookies.get("studyos_session"):
+        return RedirectResponse(
+            url=f"/?spotify={outcome}",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    document = f"""<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{title} · StudyOS</title>
+  </head>
+  <body>
+    <main>
+      <p>StudyOS</p>
+      <h1>{title}</h1>
+      <p>{message}</p>
+      <p>You can close this tab and return to the StudyOS app.</p>
+      <a href="/">Open StudyOS in this browser</a>
+    </main>
+  </body>
+</html>"""
+    return HTMLResponse(document)
+
+
 @router.get("/status", response_model=SpotifyStatusRead)
 def spotify_status(
     request: Request,
@@ -81,16 +117,36 @@ def spotify_callback(
     state: str | None = Query(default=None),
     code: str | None = Query(default=None),
     error: str | None = Query(default=None),
-) -> RedirectResponse:
+) -> RedirectResponse | HTMLResponse:
     if error:
-        return RedirectResponse(url="/?spotify=denied", status_code=status.HTTP_303_SEE_OTHER)
+        return _callback_response(
+            request,
+            "denied",
+            title="Spotify connection cancelled",
+            message="Spotify did not grant StudyOS access.",
+        )
     if not state or not code:
-        return RedirectResponse(url="/?spotify=invalid", status_code=status.HTTP_303_SEE_OTHER)
+        return _callback_response(
+            request,
+            "invalid",
+            title="Spotify connection could not be completed",
+            message="The authorization response was incomplete or expired.",
+        )
     try:
         complete_oauth(db, request.app.state.settings, state=state, code=code)
     except SpotifyIntegrationError:
-        return RedirectResponse(url="/?spotify=error", status_code=status.HTTP_303_SEE_OTHER)
-    return RedirectResponse(url="/?spotify=connected", status_code=status.HTTP_303_SEE_OTHER)
+        return _callback_response(
+            request,
+            "error",
+            title="Spotify connection could not be completed",
+            message="StudyOS could not finish the Spotify authorization.",
+        )
+    return _callback_response(
+        request,
+        "connected",
+        title="Spotify connected",
+        message="Your Spotify account is now linked to StudyOS.",
+    )
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
@@ -130,11 +186,7 @@ def _track_from_payload(item: dict[str, Any] | None) -> SpotifyTrackRead | None:
         None,
     )
     external_urls = item.get("external_urls")
-    external_url = (
-        external_urls.get("spotify")
-        if isinstance(external_urls, dict)
-        else None
-    )
+    external_url = external_urls.get("spotify") if isinstance(external_urls, dict) else None
     duration_ms = item.get("duration_ms")
     return SpotifyTrackRead(
         name=str(item.get("name") or "Unknown track"),
