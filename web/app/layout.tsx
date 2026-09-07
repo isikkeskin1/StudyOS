@@ -6,8 +6,8 @@ import "./globals.css";
 import "./product-ui.css";
 
 export const metadata: Metadata = {
-  title: "StudyOS — Command Center",
-  description: "Evidence-driven study planning, execution, and analytics.",
+  title: "StudyOS",
+  description: "Courses, practice, planning, and exam preparation in one workspace.",
   manifest: "/manifest.webmanifest",
   applicationName: "StudyOS",
   icons: {
