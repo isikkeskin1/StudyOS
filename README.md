@@ -8,7 +8,7 @@
 
 <br />
 
-![Version](https://img.shields.io/badge/version-v0.53.0-7C3AED?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-v0.54.0-7C3AED?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-BETA-F59E0B?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs&logoColor=white)
@@ -353,11 +353,12 @@ docker compose up -d --build
 | **v0.50 · Beta hardening** | ✅ Complete | Security, data controls, failure states, production readiness |
 | **v0.51 · Desktop beta** | ✅ Complete | Windows installer, portable app, desktop distribution pipeline |
 | **v0.52 · Distribution & catalog** | ✅ Complete | Auto-updates, fast desktop boot, institutional course catalog and admin source discovery |
-| **v0.53 · Upgrade safety** | 🟣 Current | Legacy desktop DB migrations, packaged migration resources, release-path hardening |
+| **v0.53 · Upgrade safety** | ✅ Complete | Legacy desktop DB migrations, packaged migration resources, release-path hardening |
+| **v0.54 · Work experience** | 🟣 Current | Rebuilt Work flow, clearer priorities, smoother interactions and major UI polish |
 
 \*An external ANN/vector backend remains intentionally scale-driven rather than a beta requirement.
 
-### What comes after v0.53?
+### What comes after v0.54?
 
 The v0.5x line now prioritizes **beta feedback, updater reliability, institutional course coverage, web deployment, compatibility and security** before the first stable release.
 
@@ -383,6 +384,6 @@ StudyOS exists to answer that question continuously.
 
 <br />
 
-**v0.53.0 Desktop Beta · Safer upgrades, same data.**
+**v0.54.0 Desktop Beta · Work gets smarter.**
 
 </div>
