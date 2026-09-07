@@ -7,6 +7,14 @@ type AccountSettingsProps = {
   email: string | null;
   onClose: () => void;
   onDeleted: () => void;
+  onSignedOut: () => void;
+};
+
+type AccountSession = {
+  id: string;
+  created_at: string;
+  expires_at: string;
+  current: boolean;
 };
 
 async function apiError(response: Response): Promise<string> {
@@ -24,15 +32,28 @@ export function AccountSettings({
   email,
   onClose,
   onDeleted,
+  onSignedOut,
 }: AccountSettingsProps) {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [busy, setBusy] = useState<"export" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"export" | "delete" | "sessions" | "logout-all" | null>(null);
+  const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    setBusy("sessions");
+    void fetch("/api/v1/auth/sessions", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await apiError(response));
+        setSessions((await response.json()) as AccountSession[]);
+      })
+      .catch((caught) => {
+        setError(caught instanceof Error ? caught.message : "Could not load active sessions.");
+      })
+      .finally(() => setBusy((current) => current === "sessions" ? null : current));
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !busy) onClose();
     };
@@ -46,6 +67,7 @@ export function AccountSettings({
       setConfirmation("");
       setError(null);
       setNotice(null);
+      setSessions([]);
     }
   }, [open]);
 
@@ -74,6 +96,20 @@ export function AccountSettings({
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not export account data.");
     } finally {
+      setBusy(null);
+    }
+  };
+
+  const logoutEverywhere = async () => {
+    setBusy("logout-all");
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/v1/auth/logout-all", { method: "POST" });
+      if (!response.ok) throw new Error(await apiError(response));
+      onSignedOut();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not sign out all sessions.");
       setBusy(null);
     }
   };
@@ -131,6 +167,35 @@ export function AccountSettings({
           <span className="account-settings-label">Signed in as</span>
           <strong>{email ?? "StudyOS account"}</strong>
           <p>Your courses, study evidence, forecasts, queues, and integrations are private to this account.</p>
+        </section>
+
+        <section className="account-settings-section">
+          <div>
+            <span className="account-settings-label">Devices & sessions</span>
+            <h3>Active StudyOS sessions</h3>
+            <p>
+              {busy === "sessions"
+                ? "Checking your signed-in devices…"
+                : `${sessions.length} active session${sessions.length === 1 ? "" : "s"} across StudyOS.`}
+            </p>
+            {sessions.length > 0 && (
+              <p>
+                Current session started{" "}
+                {new Date(
+                  sessions.find((session) => session.current)?.created_at
+                    ?? sessions[0].created_at,
+                ).toLocaleString()}.
+              </p>
+            )}
+          </div>
+          <button
+            className="ghost-button"
+            type="button"
+            disabled={Boolean(busy) || sessions.length === 0}
+            onClick={() => void logoutEverywhere()}
+          >
+            {busy === "logout-all" ? "Signing out…" : "Sign out everywhere"}
+          </button>
         </section>
 
         <section className="account-settings-section">
