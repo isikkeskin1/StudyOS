@@ -17,6 +17,18 @@ type AccountSession = {
   current: boolean;
 };
 
+type DesktopRuntimeInfo = {
+  mode: "local" | "cloud";
+  backendUrl: string | null;
+  hasLocalWorkspace: boolean;
+};
+
+type DesktopBridge = {
+  getRuntimeInfo: () => Promise<DesktopRuntimeInfo>;
+  switchToCloud: () => Promise<boolean>;
+  switchToLocal: () => Promise<boolean>;
+};
+
 async function apiError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { detail?: string };
@@ -37,15 +49,34 @@ export function AccountSettings({
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState<
-    "export" | "migration" | "import" | "delete" | "sessions" | "logout-all" | null
+    | "export"
+    | "migration"
+    | "import"
+    | "switch-cloud"
+    | "switch-local"
+    | "delete"
+    | "sessions"
+    | "logout-all"
+    | null
   >(null);
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const migrationInputRef = useRef<HTMLInputElement>(null);
+  const [desktopRuntime, setDesktopRuntime] = useState<DesktopRuntimeInfo | null>(null);
+
+  const desktopBridge = () =>
+    (window as Window & { studyosDesktop?: DesktopBridge }).studyosDesktop;
 
   useEffect(() => {
     if (!open) return;
+    const bridge = desktopBridge();
+    if (bridge?.getRuntimeInfo) {
+      void bridge.getRuntimeInfo().then(setDesktopRuntime).catch(() => setDesktopRuntime(null));
+    } else {
+      setDesktopRuntime(null);
+    }
+
     setBusy("sessions");
     void fetch("/api/v1/auth/sessions", { cache: "no-store" })
       .then(async (response) => {
@@ -74,6 +105,7 @@ export function AccountSettings({
       setError(null);
       setNotice(null);
       setSessions([]);
+      setDesktopRuntime(null);
     }
   }, [open]);
 
@@ -173,6 +205,36 @@ export function AccountSettings({
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not import migration bundle.");
     } finally {
+      setBusy(null);
+    }
+  };
+
+  const switchDesktopToCloud = async () => {
+    const bridge = desktopBridge();
+    if (!bridge?.switchToCloud) return;
+    setBusy("switch-cloud");
+    setError(null);
+    setNotice("Switching this StudyOS desktop to Cloud…");
+    try {
+      await bridge.switchToCloud();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not switch StudyOS to Cloud.");
+      setNotice(null);
+      setBusy(null);
+    }
+  };
+
+  const switchDesktopToLocal = async () => {
+    const bridge = desktopBridge();
+    if (!bridge?.switchToLocal) return;
+    setBusy("switch-local");
+    setError(null);
+    setNotice("Returning to your preserved local StudyOS workspace…");
+    try {
+      await bridge.switchToLocal();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not return to local StudyOS.");
+      setNotice(null);
       setBusy(null);
     }
   };
@@ -294,6 +356,26 @@ export function AccountSettings({
               hidden
               onChange={(event) => void importMigrationBundle(event)}
             />
+            {desktopRuntime?.mode === "local" && (
+              <button
+                className="primary-button"
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={() => void switchDesktopToCloud()}
+              >
+                {busy === "switch-cloud" ? "Switching…" : "Switch this desktop to StudyOS Cloud"}
+              </button>
+            )}
+            {desktopRuntime?.mode === "cloud" && desktopRuntime.hasLocalWorkspace && (
+              <button
+                className="ghost-button"
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={() => void switchDesktopToLocal()}
+              >
+                {busy === "switch-local" ? "Returning…" : "Return to preserved local workspace"}
+              </button>
+            )}
           </div>
         </section>
 
