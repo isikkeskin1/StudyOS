@@ -73,7 +73,14 @@ The hosted web app uses the same Next.js application and FastAPI API as desktop.
 
 The hosted backend owns all provider secrets.
 
-Required for password recovery:
+Required for password recovery and verification on hosted Railway environments:
+
+```text
+STUDYOS_BREVO_API_KEY=<Brevo transactional API key>
+STUDYOS_SMTP_FROM_EMAIL=support@studyos.courses
+```
+
+StudyOS prefers Brevo's HTTPS transactional API when `STUDYOS_BREVO_API_KEY` is set. SMTP remains a local/self-hosted fallback:
 
 ```text
 STUDYOS_SMTP_HOST=smtp-relay.brevo.com
