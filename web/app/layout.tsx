@@ -8,6 +8,7 @@ import "./workspace-v055.css";
 import "./course-workspace-v055.css";
 import "./surfaces-v055.css";
 import "./spotify-dock.css";
+import "./integrations-v055.css";
 
 export const metadata: Metadata = {
   title: "StudyOS",
