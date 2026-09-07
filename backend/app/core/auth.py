@@ -16,6 +16,8 @@ from app.models.semester_queue import SemesterStudyQueue
 PUBLIC_API_PATHS = {
     "/api/v1/auth/register",
     "/api/v1/auth/login",
+    "/api/v1/auth/email-verification/request",
+    "/api/v1/auth/email-verification/confirm",
     "/api/v1/auth/password-reset/request",
     "/api/v1/auth/password-reset/confirm",
 }
@@ -72,6 +74,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
             user_id = auth_session.user_id
             request.state.user_id = user_id
+            request.state.session_id = auth_session.id
 
             segments = [segment for segment in path.split("/") if segment]
             if len(segments) >= 4 and segments[2] == "courses":
