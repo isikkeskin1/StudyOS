@@ -68,6 +68,9 @@ def create_oauth_state(db: Session, settings: Settings, user_id: str) -> tuple[s
     require_spotify(settings)
     now = datetime.now(UTC)
     db.execute(delete(SpotifyOAuthState).where(SpotifyOAuthState.expires_at <= now))
+    # Only the newest pairing attempt for an account remains valid. This avoids an old
+    # browser tab linking the account after the student has started a newer OAuth flow.
+    db.execute(delete(SpotifyOAuthState).where(SpotifyOAuthState.user_id == user_id))
     state = secrets.token_urlsafe(32)
     db.add(
         SpotifyOAuthState(
@@ -139,8 +142,10 @@ def complete_oauth(
         raise SpotifyIntegrationError("Spotify authorization state is invalid or expired")
 
     user_id = state_row.user_id
+    # Consume the OAuth state before making any network request. If Spotify is unavailable
+    # or rejects the code, this callback still cannot be replayed with the same StudyOS state.
     db.delete(state_row)
-    db.flush()
+    db.commit()
 
     token_data = _token_request(
         settings,
@@ -153,13 +158,11 @@ def complete_oauth(
     access_token = token_data.get("access_token")
     refresh_token = token_data.get("refresh_token")
     if not isinstance(access_token, str) or not isinstance(refresh_token, str):
-        db.rollback()
         raise SpotifyIntegrationError("Spotify did not return reusable account credentials")
 
     profile = _spotify_json(access_token, "/me")
     spotify_user_id = profile.get("id")
     if not isinstance(spotify_user_id, str):
-        db.rollback()
         raise SpotifyIntegrationError("Spotify profile response was incomplete")
 
     connection = db.scalar(
