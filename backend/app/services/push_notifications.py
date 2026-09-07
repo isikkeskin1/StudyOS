@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -123,13 +124,15 @@ def _send(
     if settings.vapid_private_key is None:
         raise RuntimeError("VAPID private key is not configured")
 
-    # The desktop runtime does not enable Web Push, so keep this transport optional.
-    # Production web deployments still install pywebpush through backend dependencies.
+    # Import dynamically so the desktop sidecar can omit the Web Push dependency tree.
+    # Hosted deployments still install pywebpush and therefore keep full functionality.
     try:
-        from pywebpush import WebPushException, webpush
+        module = importlib.import_module("pywebpush")
     except ImportError as exc:  # pragma: no cover - packaging-specific path
         raise RuntimeError("Web Push transport is not installed") from exc
 
+    webpush = module.webpush
+    webpush_exception = module.WebPushException
     try:
         webpush(
             subscription_info={
@@ -150,7 +153,7 @@ def _send(
             vapid_private_key=settings.vapid_private_key.get_secret_value(),
             vapid_claims={"sub": settings.vapid_subject},
         )
-    except WebPushException as exc:
+    except webpush_exception as exc:
         status_code = getattr(getattr(exc, "response", None), "status_code", None)
         raise PushDeliveryError(str(exc), status_code=status_code) from exc
 
