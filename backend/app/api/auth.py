@@ -30,6 +30,10 @@ SESSION_DAYS = 30
 _DUMMY_PASSWORD_HASH = hash_password("studyos-dummy-auth-check")
 
 
+def _utc(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
 def _user_read(user: User) -> UserRead:
     return UserRead(
         id=user.id,
@@ -201,7 +205,7 @@ def confirm_password_reset(
     )
     if (
         reset is None
-        or reset.expires_at <= now
+        or _utc(reset.expires_at) <= now
         or reset.attempts >= request.app.state.settings.password_reset_max_attempts
     ):
         raise HTTPException(
