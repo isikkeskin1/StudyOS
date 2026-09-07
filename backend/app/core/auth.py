@@ -20,6 +20,7 @@ PUBLIC_API_PATHS = {
     "/api/v1/auth/email-verification/confirm",
     "/api/v1/auth/password-reset/request",
     "/api/v1/auth/password-reset/confirm",
+    "/api/v1/integrations/spotify/callback",
 }
 PUBLIC_API_PREFIXES = ("/api/v1/health",)
 
