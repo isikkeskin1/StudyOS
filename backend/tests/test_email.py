@@ -7,6 +7,9 @@ from app.services.email import send_email_verification_code, send_password_reset
 
 
 class FakeResponse:
+    is_error = False
+    status_code = 201
+
     def raise_for_status(self) -> None:
         pass
 
