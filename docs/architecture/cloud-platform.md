@@ -94,7 +94,7 @@ The SMTP password must only exist in the hosting provider's secret store or serv
 - HTTPS endpoint;
 - SMTP-backed password recovery;
 - deployment migration gate;
-- production backups.
+- production backups and restore drills (see `docs/operations/cloud-backup-restore.md`).
 
 ### Phase B — centralized accounts
 - web signup/login;
