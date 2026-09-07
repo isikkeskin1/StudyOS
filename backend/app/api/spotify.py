@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.models.integrations import SpotifyConnection
 from app.schemas.spotify import (
     SpotifyAuthorizeRead,
     SpotifyControlRequest,
@@ -29,7 +30,10 @@ router = APIRouter(prefix="/integrations/spotify", tags=["integrations", "spotif
 def _user_id(request: Request) -> str:
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
     return str(user_id)
 
 
@@ -97,10 +101,13 @@ def spotify_disconnect(
     disconnect_spotify(db, _user_id(request))
 
 
-def _connection_or_404(request: Request, db: Session):
+def _connection_or_404(request: Request, db: Session) -> SpotifyConnection:
     connection = get_connection(db, _user_id(request))
     if connection is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Spotify is not connected")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Spotify is not connected",
+        )
     return connection
 
 
@@ -128,12 +135,13 @@ def _track_from_payload(item: dict[str, Any] | None) -> SpotifyTrackRead | None:
         if isinstance(external_urls, dict)
         else None
     )
+    duration_ms = item.get("duration_ms")
     return SpotifyTrackRead(
         name=str(item.get("name") or "Unknown track"),
         artists=artists,
         album=str(album.get("name")) if isinstance(album, dict) and album.get("name") else None,
         image_url=image_url,
-        duration_ms=item.get("duration_ms") if isinstance(item.get("duration_ms"), int) else None,
+        duration_ms=duration_ms if isinstance(duration_ms, int) else None,
         uri=item.get("uri") if isinstance(item.get("uri"), str) else None,
         external_url=external_url if isinstance(external_url, str) else None,
     )
@@ -164,16 +172,23 @@ def spotify_player(
             detail="Spotify playback controls require an eligible Spotify account",
         )
     if response.status_code >= 400:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Spotify player unavailable")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Spotify player unavailable",
+        )
 
     payload = response.json()
     device = payload.get("device") if isinstance(payload.get("device"), dict) else {}
+    progress_ms = payload.get("progress_ms")
+    shuffle_state = payload.get("shuffle_state")
+    repeat_state = payload.get("repeat_state")
+    item = payload.get("item")
     return SpotifyPlayerRead(
-        active=bool(payload.get("is_playing") or payload.get("item")),
+        active=bool(payload.get("is_playing") or item),
         is_playing=bool(payload.get("is_playing")),
-        progress_ms=payload.get("progress_ms") if isinstance(payload.get("progress_ms"), int) else None,
-        shuffle_state=payload.get("shuffle_state") if isinstance(payload.get("shuffle_state"), bool) else None,
-        repeat_state=payload.get("repeat_state") if isinstance(payload.get("repeat_state"), str) else None,
+        progress_ms=progress_ms if isinstance(progress_ms, int) else None,
+        shuffle_state=shuffle_state if isinstance(shuffle_state, bool) else None,
+        repeat_state=repeat_state if isinstance(repeat_state, str) else None,
         device_name=device.get("name") if isinstance(device.get("name"), str) else None,
         device_type=device.get("type") if isinstance(device.get("type"), str) else None,
         volume_percent=(
@@ -181,7 +196,7 @@ def spotify_player(
             if isinstance(device.get("volume_percent"), int)
             else None
         ),
-        track=_track_from_payload(payload.get("item") if isinstance(payload.get("item"), dict) else None),
+        track=_track_from_payload(item if isinstance(item, dict) else None),
     )
 
 
@@ -215,4 +230,7 @@ def spotify_player_control(
             detail="Spotify playback controls require Spotify Premium",
         )
     if response.status_code not in {status.HTTP_200_OK, status.HTTP_204_NO_CONTENT}:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Spotify control failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Spotify control failed",
+        )
