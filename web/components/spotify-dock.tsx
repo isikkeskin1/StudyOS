@@ -154,6 +154,7 @@ export function SpotifyDock() {
   };
 
   const control = async (action: "play" | "pause" | "next" | "previous") => {
+    if (!status?.premium) return;
     setBusy(true);
     setError(null);
     try {
@@ -193,6 +194,8 @@ export function SpotifyDock() {
       </section>
     );
   }
+
+  const controlsLocked = !status.premium;
 
   return (
     <section className="spotify-dock" aria-label="Spotify player">
@@ -245,7 +248,8 @@ export function SpotifyDock() {
             <button
               type="button"
               aria-label="Previous track"
-              disabled={busy}
+              title={controlsLocked ? "Spotify Premium is required for playback controls" : undefined}
+              disabled={busy || controlsLocked}
               onClick={() => void control("previous")}
             >
               <UiIcon name="previous" />
@@ -254,7 +258,8 @@ export function SpotifyDock() {
               className="spotify-play"
               type="button"
               aria-label={player.is_playing ? "Pause Spotify" : "Play Spotify"}
-              disabled={busy}
+              title={controlsLocked ? "Spotify Premium is required for playback controls" : undefined}
+              disabled={busy || controlsLocked}
               onClick={() => void control(player.is_playing ? "pause" : "play")}
             >
               <UiIcon name={player.is_playing ? "pause" : "play"} />
@@ -262,7 +267,8 @@ export function SpotifyDock() {
             <button
               type="button"
               aria-label="Next track"
-              disabled={busy}
+              title={controlsLocked ? "Spotify Premium is required for playback controls" : undefined}
+              disabled={busy || controlsLocked}
               onClick={() => void control("next")}
             >
               <UiIcon name="next" />
@@ -274,6 +280,9 @@ export function SpotifyDock() {
           <strong>Spotify is connected.</strong>
           <span>Start something on any Spotify device and it will appear here.</span>
         </div>
+      )}
+      {controlsLocked && (
+        <small className="spotify-limit">Now playing stays visible. Playback controls require Spotify Premium.</small>
       )}
       {error && <small className="spotify-error">{error}</small>}
     </section>
