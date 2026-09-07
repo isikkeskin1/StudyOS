@@ -53,6 +53,28 @@ def test_spotify_connect_requires_account_and_returns_stateful_oauth_url(tmp_pat
         assert "user-modify-playback-state" in params["scope"][0]
 
 
+def test_new_spotify_connect_invalidates_older_pending_state(tmp_path: Path) -> None:
+    app = create_app(_settings(tmp_path))
+    with TestClient(app, follow_redirects=False) as client:
+        assert client.post(
+            "/api/v1/auth/register",
+            json={"email": "one-state@example.com", "password": "music-password"},
+        ).status_code == 201
+
+        first = client.post("/api/v1/integrations/spotify/connect")
+        second = client.post("/api/v1/integrations/spotify/connect")
+        first_state = parse_qs(urlparse(first.json()["authorize_url"]).query)["state"][0]
+        second_state = parse_qs(urlparse(second.json()["authorize_url"]).query)["state"][0]
+        assert first_state != second_state
+
+        stale = client.get(
+            "/api/v1/integrations/spotify/callback",
+            params={"state": first_state, "code": "unused-provider-code"},
+        )
+        assert stale.status_code == 303
+        assert stale.headers["location"] == "/?spotify=error"
+
+
 def test_spotify_callback_is_public_for_desktop_pairing(tmp_path: Path) -> None:
     app = create_app(_settings(tmp_path))
     with TestClient(app, follow_redirects=False) as client:
