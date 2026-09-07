@@ -2,6 +2,39 @@
 
 All notable StudyOS beta changes are documented here.
 
+## [0.54.0] - 2026-09-07
+
+### Added
+
+- Rebuilt Work experience with clearer priorities, smoother interactions and broader UI polish.
+- StudyOS Cloud production topology on Railway with PostgreSQL, hosted FastAPI, hosted Next.js and persistent uploads.
+- Centralized StudyOS accounts shared by web and desktop clients.
+- Email-code password recovery through Brevo SMTP.
+- Email verification for new production accounts with expiring 6-digit codes and retry limits.
+- Active-session listing and a sign-out-everywhere control for centralized accounts.
+- Desktop cloud mode now defaults packaged builds to the hosted StudyOS API while preserving local/manual fallback.
+
+### Changed
+
+- Production accounts now use PostgreSQL as the canonical identity store.
+- Existing accounts are grandfathered as verified during the email-verification migration.
+- Backend, web, desktop, service worker and release metadata are aligned to v0.54.0.
+- Cloud provider secrets remain server-side and are never bundled into the Windows application.
+
+### Security
+
+- Password resets revoke every existing session for the recovered account.
+- Verification and reset codes are stored only as hashes, expire, are attempt-limited and are single-use.
+- Production session cookies remain HTTP-only and Secure.
+- SMTP credentials live only in the hosted environment.
+
+### Infrastructure
+
+- Railway production services: PostgreSQL, backend and web.
+- Database remains private; web-to-backend traffic uses private Railway networking.
+- Hosted upload storage is persistent; current Hobby-tier volume capacity is 500 MB.
+- Custom-domain migration to Cloudflare DNS is in progress for `studyos.courses`.
+
 ## [0.53.0] - 2026-09-06
 
 ### Changed
