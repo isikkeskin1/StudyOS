@@ -528,6 +528,7 @@ export function Dashboard({
         email={userEmail}
         onClose={() => setAccountOpen(false)}
         onDeleted={onAccountDeleted}
+        onSignedOut={onSignOut}
       />
     </div>
   );
