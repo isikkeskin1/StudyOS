@@ -358,7 +358,7 @@ def test_production_style_registration_requires_email_verification(
         data_dir=tmp_path / "uploads",
         max_upload_mb=1,
         require_email_verification=True,
-        smtp_host="smtp.example.test",
+        brevo_api_key="test-brevo-api-key",
         smtp_from_email="support@studyos.courses",
     )
     app = create_app(settings)
