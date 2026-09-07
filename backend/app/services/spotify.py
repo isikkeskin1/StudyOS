@@ -54,7 +54,9 @@ def decrypt_token(settings: Settings, value: str) -> str:
     try:
         return _fernet(settings).decrypt(value.encode("ascii")).decode("utf-8")
     except InvalidToken as exc:
-        raise SpotifyIntegrationError("Spotify connection credentials could not be decrypted") from exc
+        raise SpotifyIntegrationError(
+            "Spotify connection credentials could not be decrypted"
+        ) from exc
 
 
 def require_spotify(settings: Settings) -> None:
