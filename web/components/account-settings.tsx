@@ -56,7 +56,10 @@ export function AccountSettings({
         setError(caught instanceof Error ? caught.message : "Could not load active sessions.");
       })
       .finally(() => setBusy((current) => current === "sessions" ? null : current));
+  }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !busy) onClose();
     };
