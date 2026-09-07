@@ -1,4 +1,4 @@
-const CACHE_NAME = "studyos-shell-v0.54.1";
+const CACHE_NAME = "studyos-shell-v0.55.0";
 const PRECACHE = [
   "/",
   "/offline",
@@ -76,7 +76,6 @@ self.addEventListener("notificationclick", (event) => {
     }),
   );
 });
-
 
 self.addEventListener("push", (event) => {
   let payload = {};
