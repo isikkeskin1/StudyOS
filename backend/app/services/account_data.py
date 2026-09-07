@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from io import BytesIO
+import json
+from zipfile import ZIP_DEFLATED, ZipFile
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -136,6 +139,66 @@ def export_user_data(db: Session, user: User) -> dict[str, Any]:
         "source_files_included": False,
         "tables": exported_tables,
     }
+
+
+def export_migration_bundle(db: Session, user: User) -> bytes:
+    owned = _collect_owned_rows(db, user.id)
+    payload = export_user_data(db, user)
+    manifest: list[dict[str, Any]] = []
+    archive = BytesIO()
+
+    with ZipFile(archive, "w", compression=ZIP_DEFLATED) as bundle:
+        bundle.writestr(
+            "account.json",
+            json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8"),
+        )
+
+        for row in owned.get("documents", []):
+            storage_path = row.get("storage_path")
+            if not storage_path:
+                continue
+            source = Path(str(storage_path))
+            if not source.is_file():
+                manifest.append(
+                    {
+                        "document_id": row["id"],
+                        "original_filename": row.get("original_filename"),
+                        "included": False,
+                        "reason": "source file missing",
+                    }
+                )
+                continue
+
+            extension = str(row.get("extension") or source.suffix or "")
+            archive_name = f"files/{row['id']}{extension}"
+            bundle.write(source, archive_name)
+            manifest.append(
+                {
+                    "document_id": row["id"],
+                    "original_filename": row.get("original_filename"),
+                    "content_type": row.get("content_type"),
+                    "extension": extension,
+                    "size_bytes": row.get("size_bytes"),
+                    "sha256": row.get("sha256"),
+                    "archive_path": archive_name,
+                    "included": True,
+                }
+            )
+
+        bundle.writestr(
+            "manifest.json",
+            json.dumps(
+                {
+                    "format": "studyos-cloud-migration-v1",
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "source_files": manifest,
+                },
+                indent=2,
+                ensure_ascii=False,
+            ).encode("utf-8"),
+        )
+
+    return archive.getvalue()
 
 
 def delete_user_data(db: Session, user: User) -> list[Path]:
