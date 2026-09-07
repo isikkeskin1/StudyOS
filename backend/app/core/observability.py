@@ -5,7 +5,6 @@ import logging
 import time
 import uuid
 
-import sentry_sdk
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -26,6 +25,11 @@ def configure_error_tracking(
 ) -> None:
     if not dsn:
         return
+
+    # Keep Sentry optional at runtime. Desktop builds do not configure a DSN and can
+    # exclude the SDK from the packaged Python sidecar entirely.
+    import sentry_sdk
+
     sentry_sdk.init(
         dsn=dsn,
         environment=environment,
