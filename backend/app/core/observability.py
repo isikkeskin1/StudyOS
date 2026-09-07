@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 import logging
 import time
@@ -26,10 +27,9 @@ def configure_error_tracking(
     if not dsn:
         return
 
-    # Keep Sentry optional at runtime. Desktop builds do not configure a DSN and can
-    # exclude the SDK from the packaged Python sidecar entirely.
-    import sentry_sdk
-
+    # Import dynamically so PyInstaller does not bundle Sentry into the local desktop
+    # runtime, where no DSN is configured. Hosted deployments still install the SDK.
+    sentry_sdk = importlib.import_module("sentry_sdk")
     sentry_sdk.init(
         dsn=dsn,
         environment=environment,
