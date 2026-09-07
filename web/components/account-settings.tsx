@@ -200,8 +200,9 @@ export function AccountSettings({
         files: number;
       };
       setNotice(
-        `Migration complete: ${result.courses} course${result.courses === 1 ? "" : "s"}, ${result.files} source file${result.files === 1 ? "" : "s"} restored. Reload StudyOS to see the imported workspace.`,
+        `Migration complete: ${result.courses} course${result.courses === 1 ? "" : "s"} and ${result.files} source file${result.files === 1 ? "" : "s"} restored. Opening your cloud workspace…`,
       );
+      window.setTimeout(() => window.location.reload(), 700);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not import migration bundle.");
     } finally {
