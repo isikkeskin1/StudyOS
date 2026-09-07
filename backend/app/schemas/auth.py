@@ -31,6 +31,7 @@ class DeleteAccountRequest(BaseModel):
 class UserRead(BaseModel):
     id: str
     email: str
+    is_admin: bool
     created_at: datetime
 
 
