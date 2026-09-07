@@ -35,7 +35,13 @@ from app.models.forecast_tracking import (
     GradeForecastSnapshot,
 )
 from app.models.grading import DiagnosticGradeArtifact, ExamQuestionReference
-from app.models.integrations import CalendarSubscription, PushDelivery, PushSubscription
+from app.models.integrations import (
+    CalendarSubscription,
+    PushDelivery,
+    PushSubscription,
+    SpotifyConnection,
+    SpotifyOAuthState,
+)
 from app.models.mastery_history import MasterySnapshot
 from app.models.mistakes import DiagnosticAnswerArtifact, DiagnosticMistake
 from app.models.review_session import ReviewSession
@@ -100,6 +106,8 @@ __all__ = [
     "CalendarSubscription",
     "PushDelivery",
     "PushSubscription",
+    "SpotifyConnection",
+    "SpotifyOAuthState",
     "MasterySnapshot",
     "SemesterStudyQueue",
     "SemesterStudyQueueBlock",
