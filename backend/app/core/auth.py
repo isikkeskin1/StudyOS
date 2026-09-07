@@ -16,6 +16,8 @@ from app.models.semester_queue import SemesterStudyQueue
 PUBLIC_API_PATHS = {
     "/api/v1/auth/register",
     "/api/v1/auth/login",
+    "/api/v1/auth/password-reset/request",
+    "/api/v1/auth/password-reset/confirm",
 }
 PUBLIC_API_PREFIXES = ("/api/v1/health",)
 
