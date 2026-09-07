@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import re
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -98,10 +99,10 @@ class OpenAIResponsesProvider:
         if self._client is not None:
             return self._client
         try:
-            from openai import OpenAI
+            openai_module = importlib.import_module("openai")
         except ImportError as exc:  # pragma: no cover - packaging protects this path
             raise TutorProviderUnavailable("OpenAI SDK is not installed") from exc
-        self._client = OpenAI(api_key=self._api_key)
+        self._client = openai_module.OpenAI(api_key=self._api_key)
         return self._client
 
     def synthesize(
