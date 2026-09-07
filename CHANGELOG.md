@@ -12,6 +12,8 @@ All notable StudyOS beta changes are documented here.
 - Email-code password recovery through Brevo SMTP.
 - Email verification for new production accounts with expiring 6-digit codes and retry limits.
 - Active-session listing and a sign-out-everywhere control for centralized accounts.
+- Portable local-to-cloud migration bundles that include StudyOS state and uploaded source files while excluding credentials and secrets.
+- Safe cloud migration import for fresh accounts with ID remapping, source-file hash verification, ZIP safety limits and transaction rollback.
 - Desktop cloud mode now defaults packaged builds to the hosted StudyOS API while preserving local/manual fallback.
 
 ### Changed
