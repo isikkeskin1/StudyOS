@@ -209,6 +209,71 @@ def test_migration_bundle_includes_state_and_source_files(tmp_path: Path) -> Non
         assert b"storage_path" not in serialized
 
 
+def test_migration_bundle_round_trip_into_fresh_account(tmp_path: Path) -> None:
+    source_app = _app(tmp_path / "source")
+    with TestClient(source_app) as source:
+        assert source.post(
+            "/api/v1/auth/register",
+            json={"email": "source@example.com", "password": "source-password"},
+        ).status_code == 201
+        course = source.post(
+            "/api/v1/courses",
+            json={"name": "Portable Physics", "target_grade": 27, "max_grade": 30},
+        ).json()
+        uploaded = source.post(
+            f"/api/v1/courses/{course['id']}/documents",
+            files={"file": ("portable.txt", b"migration round trip", "text/plain")},
+        )
+        assert uploaded.status_code == 201
+        bundle = source.get("/api/v1/auth/migration-bundle").content
+
+    target_app = _app(tmp_path / "target")
+    with TestClient(target_app) as target:
+        assert target.post(
+            "/api/v1/auth/register",
+            json={"email": "target@example.com", "password": "target-password"},
+        ).status_code == 201
+        imported = target.post(
+            "/api/v1/auth/migration-bundle/import",
+            files={"file": ("studyos-migration.zip", bundle, "application/zip")},
+        )
+        assert imported.status_code == 200
+        assert imported.json()["courses"] == 1
+        assert imported.json()["files"] == 1
+
+        courses = target.get("/api/v1/courses")
+        assert courses.status_code == 200
+        assert len(courses.json()) == 1
+        assert courses.json()[0]["name"] == "Portable Physics"
+        assert courses.json()[0]["id"] != course["id"]
+
+        documents = target.get(f"/api/v1/courses/{courses.json()[0]['id']}/documents")
+        assert documents.status_code == 200
+        assert len(documents.json()) == 1
+        assert documents.json()[0]["original_filename"] == "portable.txt"
+
+
+def test_migration_import_refuses_nonempty_cloud_account(tmp_path: Path) -> None:
+    app = _app(tmp_path)
+    with TestClient(app) as client:
+        assert client.post(
+            "/api/v1/auth/register",
+            json={"email": "migration@example.com", "password": "migration-password"},
+        ).status_code == 201
+        assert client.post(
+            "/api/v1/courses",
+            json={"name": "Existing cloud course", "max_grade": 30},
+        ).status_code == 201
+
+        bundle = client.get("/api/v1/auth/migration-bundle").content
+        response = client.post(
+            "/api/v1/auth/migration-bundle/import",
+            files={"file": ("studyos-migration.zip", bundle, "application/zip")},
+        )
+        assert response.status_code == 422
+        assert "no courses" in response.json()["detail"]
+
+
 def test_account_deletion_removes_login_and_uploaded_files(tmp_path: Path) -> None:
     app = _app(tmp_path)
     with TestClient(app) as client:
