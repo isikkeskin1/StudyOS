@@ -20,6 +20,7 @@ test("account, setup, dashboard, workspace, and search stay usable", async ({
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Continue your semester." })).toBeVisible();
 
+  await page.screenshot({ path: testInfo.outputPath("sign-in.png"), fullPage: true, animations: "disabled" });
   await page.getByRole("button", { name: "New to StudyOS? Create an account" }).click();
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("studyos-e2e-password");
@@ -44,8 +45,11 @@ test("account, setup, dashboard, workspace, and search stay usable", async ({
   await expectNoHorizontalOverflow(page);
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Semester command center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Let’s make progress." })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+
+  await expect(page.getByRole("heading", { name: "Your courses" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("dashboard.png"), fullPage: true, animations: "disabled" });
 
   await page.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");
   const search = page.getByPlaceholder(
@@ -61,6 +65,7 @@ test("account, setup, dashboard, workspace, and search stay usable", async ({
   await expect(page.getByText(courseName, { exact: true }).first()).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
+  await page.screenshot({ path: testInfo.outputPath("course-workspace.png"), fullPage: true, animations: "disabled" });
   await page.getByRole("button", { name: "Search" }).first().click();
   await search.fill(courseName);
   await expect(page.getByText(courseName, { exact: true }).first()).toBeVisible();

@@ -7,7 +7,7 @@ const __dirname = dirname(__filename);
 const compat = new FlatCompat({ baseDirectory: __dirname });
 
 const config = [
-  { ignores: ["public/sw.js"] },
+  { ignores: ["public/sw.js", ".next/**", "out/**", "test-results/**", "playwright-report/**"] },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];
 

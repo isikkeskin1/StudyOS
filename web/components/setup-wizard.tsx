@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandMark } from "@/components/ui-icon";
+
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import type { Course, CourseDocument, CourseSetup } from "@/lib/setup-types";
@@ -197,7 +199,7 @@ export function SetupWizard({ onReady }: { onReady: () => void }) {
       <section className="setup-card">
         <header className="setup-header">
           <div className="brand setup-brand">
-            <span className="brand-mark">S</span>
+            <BrandMark />
             <span><strong>StudyOS</strong><small>First run</small></span>
           </div>
           <span className="setup-step">Step {step} of 4</span>
