@@ -1,0 +1,83 @@
+/* v0.55 integration surfaces */
+
+.account-integrations {
+  display: grid;
+  gap: 10px;
+  padding: 25px 24px;
+  border-top: 1px solid #252a2a;
+}
+
+.account-integrations > .account-settings-label {
+  margin-bottom: 2px;
+}
+
+.account-settings-panel .spotify-dock {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.account-settings-panel .spotify-dock-head {
+  min-height: 42px;
+}
+
+.account-settings-panel .spotify-connect-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 24px;
+}
+
+.account-settings-panel .spotify-connect-card .spotify-dock-head,
+.account-settings-panel .spotify-connect-card > p {
+  grid-column: 1;
+}
+
+.account-settings-panel .spotify-connect-card > p {
+  max-width: 560px;
+  margin: -2px 0 0;
+  color: #7f8984;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.account-settings-panel .spotify-connect-card .spotify-connect {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 136px;
+  min-height: 36px;
+  border-radius: 6px;
+}
+
+.account-settings-panel .spotify-track {
+  margin-top: 14px;
+}
+
+.account-settings-panel .spotify-controls {
+  justify-content: flex-start;
+}
+
+.account-settings-panel .spotify-error {
+  margin-top: 8px;
+}
+
+@media (max-width: 680px) {
+  .account-integrations {
+    padding: 22px 17px;
+  }
+
+  .account-settings-panel .spotify-connect-card {
+    grid-template-columns: 1fr;
+  }
+
+  .account-settings-panel .spotify-connect-card .spotify-dock-head,
+  .account-settings-panel .spotify-connect-card > p,
+  .account-settings-panel .spotify-connect-card .spotify-connect {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .account-settings-panel .spotify-connect-card .spotify-connect {
+    width: 100%;
+  }
+}
