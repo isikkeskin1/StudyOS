@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
+import { CourseSpotify } from "@/components/course-spotify";
 import { PwaController } from "@/components/pwa-controller";
 
 import "./globals.css";
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         {children}
+        <CourseSpotify />
         <PwaController />
       </body>
     </html>
