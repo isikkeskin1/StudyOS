@@ -2,6 +2,8 @@
 
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 
+import { SpotifyDock } from "@/components/spotify-dock";
+
 type AccountSettingsProps = {
   open: boolean;
   email: string | null;
@@ -279,7 +281,7 @@ export function AccountSettings({
         <header className="manager-header">
           <div>
             <p className="eyebrow">Private workspace</p>
-            <h2 id="account-settings-title">Account & data</h2>
+            <h2 id="account-settings-title">Account & integrations</h2>
           </div>
           <button className="manager-close" type="button" onClick={onClose} disabled={Boolean(busy)}>
             ×
@@ -294,6 +296,11 @@ export function AccountSettings({
           <strong>{email ?? "StudyOS account"}</strong>
           <p>Your courses, study evidence, forecasts, queues, and integrations are private to this account.</p>
         </section>
+
+        <div className="account-integrations">
+          <span className="account-settings-label">Connected services</span>
+          <SpotifyDock />
+        </div>
 
         <section className="account-settings-section">
           <div>
