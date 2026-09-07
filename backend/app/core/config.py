@@ -25,6 +25,9 @@ class Settings(BaseModel):
     auth_rate_limit_attempts: int = Field(default=10, ge=2, le=100)
     auth_rate_limit_window_seconds: int = Field(default=60, ge=10, le=3600)
     admin_emails: tuple[str, ...] = ()
+    require_email_verification: bool = False
+    email_verification_code_minutes: int = Field(default=15, ge=5, le=60)
+    email_verification_max_attempts: int = Field(default=5, ge=3, le=10)
     password_reset_code_minutes: int = Field(default=10, ge=5, le=60)
     password_reset_max_attempts: int = Field(default=5, ge=3, le=10)
     smtp_host: str | None = None
@@ -108,6 +111,16 @@ def get_settings() -> Settings:
             email.strip().lower()
             for email in os.getenv("STUDYOS_ADMIN_EMAILS", "").split(",")
             if email.strip()
+        ),
+        require_email_verification=os.getenv(
+            "STUDYOS_REQUIRE_EMAIL_VERIFICATION",
+            "true" if os.getenv("STUDYOS_ENV", "development").lower() == "production" else "false",
+        ).lower() not in {"0", "false", "no"},
+        email_verification_code_minutes=int(
+            os.getenv("STUDYOS_EMAIL_VERIFICATION_CODE_MINUTES", "15")
+        ),
+        email_verification_max_attempts=int(
+            os.getenv("STUDYOS_EMAIL_VERIFICATION_MAX_ATTEMPTS", "5")
         ),
         password_reset_code_minutes=int(
             os.getenv("STUDYOS_PASSWORD_RESET_CODE_MINUTES", "10")
