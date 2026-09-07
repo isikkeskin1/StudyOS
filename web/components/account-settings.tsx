@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 
 type AccountSettingsProps = {
   open: boolean;
@@ -37,11 +37,12 @@ export function AccountSettings({
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState<
-    "export" | "migration" | "delete" | "sessions" | "logout-all" | null
+    "export" | "migration" | "import" | "delete" | "sessions" | "logout-all" | null
   >(null);
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const migrationInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -142,6 +143,37 @@ export function AccountSettings({
     }
   };
 
+  const importMigrationBundle = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setBusy("import");
+    setError(null);
+    setNotice(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/v1/auth/migration-bundle/import", {
+        method: "POST",
+        body: form,
+      });
+      if (!response.ok) throw new Error(await apiError(response));
+      const result = (await response.json()) as {
+        courses: number;
+        rows: number;
+        files: number;
+      };
+      setNotice(
+        `Migration complete: ${result.courses} course${result.courses === 1 ? "" : "s"}, ${result.files} source file${result.files === 1 ? "" : "s"} restored. Reload StudyOS to see the imported workspace.`,
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not import migration bundle.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const deleteAccount = async (event: FormEvent) => {
     event.preventDefault();
     if (confirmation !== "DELETE") return;
@@ -235,14 +267,31 @@ export function AccountSettings({
               portable ZIP. Passwords, sessions, provider secrets, and local file paths are excluded.
             </p>
           </div>
-          <button
-            className="ghost-button"
-            type="button"
-            disabled={Boolean(busy)}
-            onClick={() => void downloadMigrationBundle()}
-          >
-            {busy === "migration" ? "Packaging…" : "Create migration bundle"}
-          </button>
+          <div>
+            <button
+              className="ghost-button"
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={() => void downloadMigrationBundle()}
+            >
+              {busy === "migration" ? "Packaging…" : "Create migration bundle"}
+            </button>
+            <button
+              className="ghost-button"
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={() => migrationInputRef.current?.click()}
+            >
+              {busy === "import" ? "Importing…" : "Import migration bundle"}
+            </button>
+            <input
+              ref={migrationInputRef}
+              type="file"
+              accept=".zip,application/zip"
+              hidden
+              onChange={(event) => void importMigrationBundle(event)}
+            />
+          </div>
         </section>
 
         <section className="account-settings-section">
