@@ -1,4 +1,4 @@
-from app.models.auth import AuthSession, User
+from app.models.auth import AuthSession, PasswordResetCode, User
 from app.models.calendar_focus import FocusSession, SemesterCalendarPlan
 from app.models.catalog import CatalogCourse, CatalogSource
 from app.models.cheat_sheet import CheatSheet
@@ -61,6 +61,7 @@ from app.models.tutor_practice import (
 
 __all__ = [
     "AuthSession",
+    "PasswordResetCode",
     "User",
     "FocusSession",
     "SemesterCalendarPlan",
