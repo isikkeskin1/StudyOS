@@ -8,7 +8,7 @@
 
 <br />
 
-![Version](https://img.shields.io/badge/version-v0.54.1-7C3AED?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-v0.55.0-7C3AED?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-BETA-F59E0B?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs&logoColor=white)
@@ -27,7 +27,7 @@
 
 ## 🖥️ Download StudyOS for Windows
 
-**StudyOS now ships as a desktop app.**
+**StudyOS ships as a desktop app and a hosted web workspace.**
 
 The Windows build bundles the production StudyOS interface and a local FastAPI fallback into one desktop package. **Fresh installs default to StudyOS Cloud**, so the same centralized account can be used on the website and desktop app. Existing local workspaces are preserved in local mode until the user explicitly migrates them.
 
@@ -56,6 +56,8 @@ Most study apps give you a timer, a to-do list, or a chatbot.
 
 It ingests your real course material, measures what you actually know, estimates where your marks are being lost, watches deadlines and forgetting, and continuously chooses the highest-value work available.
 
+v0.55 puts that intelligence inside a **Today-first study cockpit**: one dominant next session, dense course momentum, current-window evidence, reviews, exam pressure and — if the student chooses — their Spotify study soundtrack without leaving the workspace.
+
 ```text
 📚 Course files + 📝 Past papers + 🎯 Target grade + ⏳ Time available
                               │
@@ -78,6 +80,21 @@ It ingests your real course material, measures what you actually know, estimates
 ```
 
 StudyOS does **not** assume that every topic deserves equal time. If one hour of Physics is expected to help your target more than one hour of Programming, it can prioritize Physics. If that changes after a practice session, the plan changes too.
+
+---
+
+## 🧭 The v0.55 workspace
+
+The home screen is no longer a generic KPI dashboard.
+
+- **Today first** — the next executable study session gets the most visual weight.
+- **Course Momentum** — estimate, target, evidence, mastery, focus time and exam pressure live in one dense ledger.
+- **Study Rhythm** — focused minutes are visible without turning study time into a vanity metric.
+- **Review Queue** — recurring mistakes and weak evidence are brought back into the execution loop.
+- **Context rail** — current block, nearest exam, current-window state, plan progress and optional music stay close while studying.
+- **Course workbenches** — tutor, diagnostics, sources, topics, mistakes, forecasts and cheat sheets now use the same restrained academic design language as the semester cockpit.
+
+The goal is simple: **less analytics you inspect, more workspace that is already pointing at the right work.**
 
 ---
 
@@ -136,6 +153,14 @@ Tutor responses are validated for citation validity, contradictions, unsupported
 > The goal is not “AI that sounds confident.”  
 > The goal is **answers you can trace back to the material you are studying.**
 
+### 🎧 Spotify stays optional
+
+Students can connect Spotify if they want music inside their study environment.
+
+StudyOS can show current playback, track metadata, album artwork, device state and playback progress. Eligible Spotify Premium accounts can use previous, play/pause and next controls directly from StudyOS. Connected users can keep a small collapsible player inside course workspaces.
+
+Spotify OAuth tokens are encrypted on the backend. Provider credentials never ship in the browser or Windows app, and Spotify credentials/state are excluded from account exports and workspace migration bundles.
+
 ### ⚡ Emergency Mode
 
 Exam tomorrow? Three chapters left? Five hours available?
@@ -184,20 +209,21 @@ The probabilistic layer supports:
 | 📈 **Forecasting** | Grade projections, uncertainty, target probability and calibration |
 | 🎯 **Planning** | Normal study plans, expected-marks optimization and target-aware stopping |
 | 🚨 **Emergency Mode** | Hard-deadline optimization with persistent schedules and automatic replanning |
-| 🌐 **Semester OS** | Cross-course optimization, persistent semester queues and command-center analytics |
+| 🌐 **Semester OS** | Cross-course optimization, persistent semester queues and Today-first command-center analytics |
 | 📄 **Cheat sheets** | Source-grounded formulas, methods and recurring mistakes |
 | 📅 **Calendar & focus** | Calendar-aware planning and focus workflow integration |
+| 🎧 **Optional integrations** | Spotify OAuth, now-playing metadata and eligible playback controls inside the study workspace |
 | 📲 **PWA** | Installable web app, offline shell and notifications |
-| 🔐 **Account controls** | Account-scoped ownership, export and confirmed deletion |
+| 🔐 **Account controls** | Verified accounts, email recovery, session controls, export, migration and confirmed deletion |
 | 🏫 **Institution catalog** | Admin-curated university courses, public source discovery, review/import, publishing and direct user assignment |
 
 ---
 
 ## 🛡️ Built for a real beta, not just a demo
 
-v0.50 is the **beta hardening release**.
+v0.50 was the **beta hardening release**. Those controls remain release requirements as StudyOS grows.
 
-The release includes:
+The hardening baseline includes:
 
 🟣 account-scoped data ownership  
 🔵 account export with sensitive-field redaction  
@@ -210,7 +236,7 @@ The release includes:
 🔷 non-root application containers  
 🟪 migration, container, deployment and browser E2E gates
 
-The current release audit is documented in [`docs/releases/v0.50.0-beta-audit.md`](docs/releases/v0.50.0-beta-audit.md).
+The beta hardening audit is documented in [`docs/releases/v0.50.0-beta-audit.md`](docs/releases/v0.50.0-beta-audit.md).
 
 ---
 
@@ -244,6 +270,8 @@ The current release audit is documented in [`docs/releases/v0.50.0-beta-audit.md
           └──────────────────┘
 ```
 
+Optional third-party integrations such as Spotify terminate at the FastAPI backend. OAuth tokens are encrypted server-side and provider client secrets are not exposed to the web or Electron clients.
+
 ### Stack
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -256,6 +284,7 @@ The current release audit is documented in [`docs/releases/v0.50.0-beta-audit.md
 **Backend:** Python 3.12+ · FastAPI · Pydantic · SQLAlchemy 2  
 **Data:** PostgreSQL in production · SQLite for local development/tests · persistent upload storage  
 **Intelligence:** course extraction · retrieval · mastery · planning · forecasting · tutoring  
+**Integrations:** optional server-side OAuth providers with encrypted credentials  
 **Ops:** Docker Compose · GitHub Actions · Playwright · Ruff · Pytest
 
 ---
@@ -285,6 +314,13 @@ Deployment
 ├── Web topology
 ├── API through web proxy
 └── Playwright browser E2E
+
+Desktop
+├── Bundled backend smoke
+├── Legacy database migration smoke
+├── Production web-shell build
+├── Windows package verification
+└── Installed-payload smoke
 ```
 
 ---
@@ -319,6 +355,8 @@ npm run dev
 
 The web app uses the local FastAPI backend through the configured Next.js rewrite.
 
+Spotify is optional. To enable it, create a Spotify Web API application and configure the `STUDYOS_INTEGRATION_SECRET`, `STUDYOS_SPOTIFY_CLIENT_ID`, `STUDYOS_SPOTIFY_CLIENT_SECRET` and redirect URI environment variables shown in `backend/.env.example`.
+
 ---
 
 ## 🐳 Production-style Docker deployment
@@ -327,16 +365,17 @@ The web app uses the local FastAPI backend through the configured Next.js rewrit
 2. Set `STUDYOS_ENV=production`, production URL/proxy settings and any provider credentials you intend to use.
 3. Configure `STUDYOS_FORWARDED_ALLOW_IPS` for your trusted reverse proxy. Do not expose wildcard proxy trust outside the private Compose topology.
 4. Configure a valid VAPID key pair if push notifications are enabled.
-5. Validate and start:
+5. If Spotify is enabled, set the integration encryption secret, Spotify client credentials and the exact production OAuth redirect URI.
+6. Validate and start:
 
 ```bash
 docker compose config --quiet
 docker compose up -d --build
 ```
 
-6. Do not route beta traffic until both liveness and readiness are healthy.
-7. Verify signup/login, onboarding, upload/processing, study flow, export and account deletion.
-8. Require backend CI, web CI and deployment/browser smoke to pass before a release.
+7. Do not route beta traffic until both liveness and readiness are healthy.
+8. Verify signup/login, onboarding, upload/processing, study flow, export and account deletion.
+9. Require backend CI, web CI, deployment/browser smoke and the Windows package gate before a release.
 
 ---
 
@@ -354,14 +393,14 @@ docker compose up -d --build
 | **v0.51 · Desktop beta** | ✅ Complete | Windows installer, portable app, desktop distribution pipeline |
 | **v0.52 · Distribution & catalog** | ✅ Complete | Auto-updates, fast desktop boot, institutional course catalog and admin source discovery |
 | **v0.53 · Upgrade safety** | ✅ Complete | Legacy desktop DB migrations, packaged migration resources, release-path hardening |
-| **v0.54 · Work experience** | 🟣 Current | Rebuilt Work flow, clearer priorities, smoother interactions and major UI polish |
-| **StudyOS Cloud** | 🟣 Current | Hosted web + API, PostgreSQL, verified centralized accounts, email recovery, shared web/desktop identity and safe local-workspace migration |
+| **v0.54 · Work & Cloud** | ✅ Complete | Work-flow rebuild, hosted web/API, centralized accounts, verification, recovery and local-to-cloud migration |
+| **v0.55 · Workspace revamp** | 🟣 Current | Today-first study cockpit, unified course workbenches, supporting-surface redesign and optional Spotify integration |
 
 \*An external ANN/vector backend remains intentionally scale-driven rather than a beta requirement.
 
-### What comes after v0.54?
+### What comes after v0.55?
 
-**StudyOS Cloud is now in active rollout**: one centralized account and PostgreSQL-backed data plane shared by the Windows app and hosted web product, with verified email accounts, password recovery, session controls and safe migration from legacy local workspaces. Next comes broader institutional course coverage, object-storage scaling, compatibility and security hardening.
+The immediate focus after this workspace overhaul is **depth and scale rather than another shell redesign**: broader institutional course coverage, stronger automated content ingestion, object-storage scaling, more evidence-aware review/planning loops, accessibility and device polish, and continued security/reliability work around the centralized Cloud product.
 
 ---
 
@@ -369,7 +408,7 @@ docker compose up -d --build
 
 StudyOS is currently a **beta**. Grade forecasts, expected mark gains and optimization scores are decision-support estimates — not guarantees of exam results.
 
-OpenAI-backed functionality requires valid provider configuration. Core local workflows and CI do not require external provider credentials.
+OpenAI-backed functionality requires valid provider configuration. Core local workflows and CI do not require external provider credentials. Spotify is optional and remains hidden when its provider configuration is absent.
 
 The current authentication rate limiter is process-local and appropriate for the current single-API-process topology. A shared/distributed limiter should replace it before horizontally scaling the API.
 
@@ -385,6 +424,6 @@ StudyOS exists to answer that question continuously.
 
 <br />
 
-**v0.54.1 Desktop Beta · Work gets smarter.**
+**v0.55.0 Desktop + Cloud Beta · The workspace revamp.**
 
 </div>
