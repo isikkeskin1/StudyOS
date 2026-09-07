@@ -234,7 +234,11 @@ function readConfig() {
     const parsed = JSON.parse(fs.readFileSync(configPath(), "utf8"));
     return { backendUrl: String(parsed.backendUrl || "").trim() };
   } catch {
-    return { backendUrl: "" };
+    return {
+      backendUrl: app.isPackaged
+        ? "https://backend-production-33d6e.up.railway.app"
+        : "",
+    };
   }
 }
 
