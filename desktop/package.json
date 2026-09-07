@@ -1,6 +1,6 @@
 {
   "name": "studyos-desktop",
-  "version": "0.54.1",
+  "version": "0.55.0",
   "private": true,
   "description": "StudyOS desktop client",
   "main": "main.cjs",
@@ -38,23 +38,17 @@
       {
         "from": "build/web/.next",
         "to": "web/.next",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "build/web/public",
         "to": "web/public",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "build/web/node_modules",
         "to": "web/node_modules",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "build/web/package.json",
@@ -63,25 +57,13 @@
       {
         "from": "build/backend",
         "to": "backend",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       }
     ],
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
+        {"target": "nsis", "arch": ["x64"]},
+        {"target": "portable", "arch": ["x64"]}
       ],
       "icon": "../web/public/icons/icon-512.png"
     },
