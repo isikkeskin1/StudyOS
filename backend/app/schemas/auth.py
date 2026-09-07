@@ -23,6 +23,24 @@ class LoginRequest(RegisterRequest):
     pass
 
 
+class PasswordResetRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return RegisterRequest.normalize_email(value)
+
+
+class PasswordResetConfirmRequest(PasswordResetRequest):
+    code: str = Field(pattern=r"^\d{6}$")
+    password: str = Field(min_length=8, max_length=256)
+
+
+class MessageRead(BaseModel):
+    message: str
+
+
 class DeleteAccountRequest(BaseModel):
     password: str = Field(min_length=8, max_length=256)
     confirmation: Literal["DELETE"]

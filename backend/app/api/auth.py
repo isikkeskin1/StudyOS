@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+import secrets
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -10,15 +11,19 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import hash_password, new_session_token, token_digest, verify_password
-from app.models.auth import AuthSession, User
+from app.models.auth import AuthSession, PasswordResetCode, User
 from app.schemas.auth import (
     AuthRead,
     DeleteAccountRequest,
     LoginRequest,
+    MessageRead,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
     RegisterRequest,
     UserRead,
 )
 from app.services.account_data import delete_user_data, export_user_data
+from app.services.email import send_password_reset_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 SESSION_DAYS = 30
@@ -122,6 +127,104 @@ def login(
         db.commit()
         db.refresh(user)
     return _issue_session(db, user, request, response)
+
+
+@router.post("/password-reset/request", response_model=MessageRead, status_code=status.HTTP_202_ACCEPTED)
+def request_password_reset(
+    payload: PasswordResetRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> MessageRead:
+    settings = request.app.state.settings
+    if not settings.smtp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Password reset email is not configured",
+        )
+
+    user = db.scalar(select(User).where(User.email == payload.email))
+    if user is not None:
+        now = datetime.now(UTC)
+        active_codes = db.scalars(
+            select(PasswordResetCode).where(
+                PasswordResetCode.user_id == user.id,
+                PasswordResetCode.consumed_at.is_(None),
+            )
+        ).all()
+        for existing in active_codes:
+            existing.consumed_at = now
+
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        reset = PasswordResetCode(
+            user_id=user.id,
+            code_hash=token_digest(f"{user.id}:{code}"),
+            expires_at=now + timedelta(minutes=settings.password_reset_code_minutes),
+        )
+        db.add(reset)
+        db.commit()
+        try:
+            send_password_reset_code(settings, recipient=user.email, code=code)
+        except Exception as exc:
+            reset.consumed_at = datetime.now(UTC)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Password reset email could not be sent",
+            ) from exc
+
+    return MessageRead(
+        message="If an account exists for that email, a verification code has been sent."
+    )
+
+
+@router.post("/password-reset/confirm", response_model=MessageRead)
+def confirm_password_reset(
+    payload: PasswordResetConfirmRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> MessageRead:
+    user = db.scalar(select(User).where(User.email == payload.email))
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification code",
+        )
+
+    now = datetime.now(UTC)
+    reset = db.scalar(
+        select(PasswordResetCode)
+        .where(
+            PasswordResetCode.user_id == user.id,
+            PasswordResetCode.consumed_at.is_(None),
+        )
+        .order_by(PasswordResetCode.created_at.desc())
+    )
+    if (
+        reset is None
+        or reset.expires_at <= now
+        or reset.attempts >= request.app.state.settings.password_reset_max_attempts
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification code",
+        )
+
+    expected = token_digest(f"{user.id}:{payload.code}")
+    if not secrets.compare_digest(reset.code_hash, expected):
+        reset.attempts += 1
+        if reset.attempts >= request.app.state.settings.password_reset_max_attempts:
+            reset.consumed_at = now
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification code",
+        )
+
+    user.password_hash = hash_password(payload.password)
+    reset.consumed_at = now
+    db.query(AuthSession).filter(AuthSession.user_id == user.id).delete()
+    db.commit()
+    return MessageRead(message="Password updated. You can now sign in with your new password.")
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

@@ -25,6 +25,14 @@ class Settings(BaseModel):
     auth_rate_limit_attempts: int = Field(default=10, ge=2, le=100)
     auth_rate_limit_window_seconds: int = Field(default=60, ge=10, le=3600)
     admin_emails: tuple[str, ...] = ()
+    password_reset_code_minutes: int = Field(default=10, ge=5, le=60)
+    password_reset_max_attempts: int = Field(default=5, ge=3, le=10)
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from_email: str | None = None
+    smtp_use_tls: bool = True
 
     tutor_provider: Literal["local", "openai"] = "local"
     tutor_embedding_provider: Literal["none", "openai"] = "none"
@@ -45,6 +53,10 @@ class Settings(BaseModel):
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def smtp_enabled(self) -> bool:
+        return self.smtp_host is not None and self.smtp_from_email is not None
 
     @property
     def push_enabled(self) -> bool:
@@ -68,6 +80,7 @@ def get_settings() -> Settings:
     api_key = os.getenv("OPENAI_API_KEY")
     sentry_dsn = os.getenv("STUDYOS_SENTRY_DSN")
     vapid_private_key = os.getenv("STUDYOS_VAPID_PRIVATE_KEY")
+    smtp_password = os.getenv("STUDYOS_SMTP_PASSWORD")
     return Settings(
         environment=os.getenv("STUDYOS_ENV", "development").lower(),
         database_url=os.getenv("STUDYOS_DATABASE_URL", "sqlite:///./.studyos/studyos.db"),
@@ -96,6 +109,18 @@ def get_settings() -> Settings:
             for email in os.getenv("STUDYOS_ADMIN_EMAILS", "").split(",")
             if email.strip()
         ),
+        password_reset_code_minutes=int(
+            os.getenv("STUDYOS_PASSWORD_RESET_CODE_MINUTES", "10")
+        ),
+        password_reset_max_attempts=int(
+            os.getenv("STUDYOS_PASSWORD_RESET_MAX_ATTEMPTS", "5")
+        ),
+        smtp_host=os.getenv("STUDYOS_SMTP_HOST") or None,
+        smtp_port=int(os.getenv("STUDYOS_SMTP_PORT", "587")),
+        smtp_username=os.getenv("STUDYOS_SMTP_USERNAME") or None,
+        smtp_password=SecretStr(smtp_password) if smtp_password else None,
+        smtp_from_email=os.getenv("STUDYOS_SMTP_FROM_EMAIL") or None,
+        smtp_use_tls=os.getenv("STUDYOS_SMTP_USE_TLS", "true").lower() not in {"0", "false", "no"},
         tutor_provider=os.getenv("STUDYOS_TUTOR_PROVIDER", "local").lower(),
         tutor_embedding_provider=os.getenv(
             "STUDYOS_TUTOR_EMBEDDING_PROVIDER", "none"
