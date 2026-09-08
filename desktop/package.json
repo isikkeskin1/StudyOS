@@ -16,7 +16,7 @@
   },
   "devDependencies": {
     "electron": "44.2.0",
-    "electron-builder": "27.0.0-alpha.8"
+    "electron-builder": "26.15.3"
   },
   "build": {
     "appId": "com.studyos.desktop",
@@ -38,6 +38,9 @@
         { "target": "portable", "arch": ["x64"] }
       ],
       "icon": "../web/public/icons/icon-512.png"
+    },
+    "toolsets": {
+      "winCodeSign": "1.3.0"
     },
     "nsis": {
       "oneClick": false,
