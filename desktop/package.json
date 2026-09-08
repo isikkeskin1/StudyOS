@@ -16,7 +16,7 @@
   },
   "devDependencies": {
     "electron": "44.2.0",
-    "electron-builder": "26.15.3"
+    "electron-builder": "27.0.0-alpha.8"
   },
   "build": {
     "appId": "com.studyos.desktop",
@@ -56,7 +56,8 @@
       "artifactName": "StudyOS-${version}-Microsoft-Store-x64.${ext}",
       "displayName": "StudyOS",
       "languages": ["en-US"],
-      "minVersion": "10.0.17763.0"
+      "minVersion": "10.0.17763.0",
+      "createMsixupload": true
     }
   },
   "dependencies": { "electron-updater": "6.6.2" }
