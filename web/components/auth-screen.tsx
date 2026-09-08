@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { BrandMark, UiIcon } from "@/components/ui-icon";
 
 import { FormEvent, useState } from "react";
@@ -186,7 +188,7 @@ export function AuthScreen({
         </div>
         <div className="auth-story-foot">
           <span><UiIcon name="shield" />Your workspace. Your pace.</span>
-          <a className="ghost-button" href="/download">Get the Windows app</a>
+          <Link className="ghost-button" href="/download">Get the Windows app</Link>
         </div>
       </aside>
 
