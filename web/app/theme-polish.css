@@ -164,4 +164,115 @@ html[data-study-theme] .workspace-app .workspace-topbar h1 {
     min-height: 32px;
     padding: 0 6px;
   }
+
+  /* Dashboard utility controls are navigation, not floating widgets. Reserve bottom-nav cells for them. */
+  body:has(.study-cockpit) .cockpit-sidebar .side-nav {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    padding-right: calc((100vw - 20px) / 3) !important;
+  }
+  body:has(.study-cockpit):has(.library-launcher a:nth-child(2)) .cockpit-sidebar .side-nav {
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    padding-right: calc((100vw - 20px) * 3 / 7) !important;
+  }
+
+  body:has(.study-cockpit) .library-launcher {
+    position: fixed !important;
+    z-index: 126 !important;
+    left: calc(10px + ((100vw - 20px) * 4 / 6)) !important;
+    right: auto !important;
+    bottom: env(safe-area-inset-bottom) !important;
+    width: calc((100vw - 20px) / 6) !important;
+    height: 58px !important;
+    display: flex !important;
+    align-items: stretch !important;
+    gap: 2px !important;
+    padding: 0 !important;
+  }
+  body:has(.study-cockpit):has(.library-launcher a:nth-child(2)) .library-launcher {
+    left: calc(10px + ((100vw - 20px) * 4 / 7)) !important;
+    width: calc((100vw - 20px) * 2 / 7) !important;
+  }
+  body:has(.study-cockpit) .library-launcher a {
+    flex: 1 1 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 52px !important;
+    height: 52px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    gap: 3px !important;
+    padding: 4px 2px !important;
+    border: 0 !important;
+    border-radius: 10px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    color: var(--ui-muted) !important;
+    font-size: 8px !important;
+    line-height: 1 !important;
+  }
+  body:has(.study-cockpit) .library-launcher a:hover,
+  body:has(.study-cockpit) .library-launcher a:active {
+    background: var(--ui-surface-2) !important;
+    color: var(--ui-text) !important;
+  }
+  body:has(.study-cockpit) .library-launcher a span { display: block !important; }
+  body:has(.study-cockpit) .library-launcher .ui-icon {
+    width: 18px !important;
+    height: 18px !important;
+    color: var(--ui-muted) !important;
+  }
+
+  body:has(.study-cockpit) > .study-appearance {
+    position: fixed !important;
+    z-index: 126 !important;
+    top: auto !important;
+    right: 10px !important;
+    bottom: env(safe-area-inset-bottom) !important;
+    width: calc((100vw - 20px) / 6) !important;
+    height: 58px !important;
+    display: block !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    transform: none !important;
+  }
+  body:has(.study-cockpit):has(.library-launcher a:nth-child(2)) > .study-appearance {
+    width: calc((100vw - 20px) / 7) !important;
+  }
+  body:has(.study-cockpit) > .study-appearance button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 52px !important;
+    height: 52px !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 4px 2px !important;
+    border: 0 !important;
+    border-radius: 10px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--ui-muted) !important;
+    font-size: 8px !important;
+    line-height: 1 !important;
+  }
+  body:has(.study-cockpit) > .study-appearance button::before {
+    content: "◐";
+    display: block;
+    color: var(--ui-muted);
+    font-size: 19px;
+    line-height: 18px;
+  }
+  body:has(.study-cockpit) > .study-appearance button:hover,
+  body:has(.study-cockpit) > .study-appearance button:active {
+    background: var(--ui-surface-2) !important;
+    color: var(--ui-text) !important;
+  }
 }
