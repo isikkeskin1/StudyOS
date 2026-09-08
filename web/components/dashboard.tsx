@@ -277,7 +277,7 @@ export function Dashboard({
         <div className="sidebar-tools">
           <p className="nav-label">Actions</p>
           <button onClick={() => setManagerOpen(true)}><UiIcon name="plus" />Add or manage courses</button>
-          {isAdmin && <button onClick={() => setAdminOpen(true)}><UiIcon name="shield" />Master courses</button>}
+          {isAdmin && <><a className="sidebar-admin-link" href="/admin"><UiIcon name="shield" />Admin</a><a className="sidebar-admin-link" href="/admin/library"><UiIcon name="sources" />Institution files</a></>}
           <button onClick={() => setAccountOpen(true)}><UiIcon name="settings" />Account & integrations</button>
         </div>
 
