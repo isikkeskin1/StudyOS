@@ -32,7 +32,7 @@ function isRouteAnchor(anchor: HTMLAnchorElement, event: MouseEvent) {
     const target = new URL(anchor.href, window.location.href);
     if (target.origin !== window.location.origin) return false;
     const current = new URL(window.location.href);
-    return target.pathname !== current.pathname || target.search !== current.search;
+    return target.pathname !== current.pathname;
   } catch {
     return false;
   }
