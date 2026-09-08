@@ -1,3 +1,4 @@
+import Link from "next/link";
 import "./download.css";
 
 const STORE_URL = process.env.NEXT_PUBLIC_STUDYOS_STORE_URL?.trim() || "";
@@ -6,7 +7,7 @@ export default function DownloadPage() {
   return (
     <main className="download-shell">
       <section className="download-hero">
-        <a className="download-back" href="/">← Back to StudyOS</a>
+        <Link className="download-back" href="/">← Back to StudyOS</Link>
         <div className="download-kicker">StudyOS for Windows</div>
         <h1>Keep your study system one click away.</h1>
         <p className="download-lead">
