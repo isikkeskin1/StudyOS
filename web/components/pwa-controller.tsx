@@ -281,7 +281,7 @@ export function PwaController() {
   };
 
   return (
-    <div className={styles.root}>
+    <div className={`${styles.root} pwa-controller-root`}>
       {panelOpen && (
         <section className={styles.panel} aria-label="StudyOS app controls">
           <div className={styles.panelHead}>
