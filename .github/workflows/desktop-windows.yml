@@ -247,7 +247,7 @@ jobs:
         if: github.event_name == 'release'
         shell: pwsh
         run: |
-          $installer = Get-ChildItem "desktop/dist/StudyOS Setup *.exe" | Select-Object -First 1
+          $installer = Get-ChildItem "desktop/dist/StudyOS-*-Windows-x64-Setup.exe" | Select-Object -First 1
           if (-not $installer) {
             throw "Missing StudyOS installer for signature verification"
           }
@@ -264,8 +264,8 @@ jobs:
             throw "Missing latest.yml auto-update metadata"
           }
           $raw = Get-Content $metadata -Raw
-          if ($raw -notmatch "StudyOS Setup") {
-            throw "latest.yml does not reference the StudyOS installer"
+          if ($raw -notmatch "StudyOS-.*-Windows-x64-Setup\.exe") {
+            throw "latest.yml does not reference the StudyOS Windows installer"
           }
 
       - name: Verify packaged web runtime
@@ -289,7 +289,8 @@ jobs:
         with:
           name: StudyOS-Windows
           path: |
-            desktop/dist/StudyOS Setup *.exe
+            desktop/dist/StudyOS-*-Windows-x64-Setup.exe
+            desktop/dist/StudyOS-*-Windows-x64-Portable.exe
             desktop/dist/latest.yml
             desktop/dist/*.blockmap
           if-no-files-found: error
@@ -301,11 +302,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          $installer = Get-ChildItem "desktop/dist/StudyOS Setup *.exe" | Select-Object -First 1
+          $installer = Get-ChildItem "desktop/dist/StudyOS-*-Windows-x64-Setup.exe" | Select-Object -First 1
           if (-not $installer) {
             throw "Missing StudyOS installer"
           }
           $assets = @($installer.FullName, (Resolve-Path "desktop/dist/latest.yml").Path)
+          $portable = Get-ChildItem "desktop/dist/StudyOS-*-Windows-x64-Portable.exe" | Select-Object -First 1
+          if ($portable) {
+            $assets += $portable.FullName
+          }
           $blockmap = Get-ChildItem "desktop/dist/*.blockmap" | Select-Object -First 1
           if ($blockmap) {
             $assets += $blockmap.FullName
