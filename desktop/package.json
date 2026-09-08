@@ -16,7 +16,7 @@
   },
   "devDependencies": {
     "electron": "44.2.0",
-    "electron-builder": "26.16.0"
+    "electron-builder": "26.16.1"
   },
   "build": {
     "appId": "com.studyos.desktop",
