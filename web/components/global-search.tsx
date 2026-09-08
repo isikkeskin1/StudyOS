@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 type SearchKind =
   | "course"
@@ -42,11 +43,14 @@ const LABELS: Record<SearchKind, string> = {
 
 export function GlobalSearch() {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!open) return;
@@ -99,72 +103,74 @@ export function GlobalSearch() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  const modal = open && mounted ? createPortal(
+    <div className="global-search-backdrop" onMouseDown={() => setOpen(false)}>
+      <section
+        className="global-search-panel"
+        onMouseDown={(event) => event.stopPropagation()}
+        aria-label="Search StudyOS"
+      >
+        <div className="global-search-input-row">
+          <span>⌕</span>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search courses, topics, sources, mistakes, practice…"
+          />
+          <button onClick={() => setOpen(false)} aria-label="Close search">Esc</button>
+        </div>
+
+        <div className="global-search-body">
+          {query.trim().length < 2 && (
+            <div className="global-search-empty">
+              <strong>Search your entire StudyOS workspace.</strong>
+              <span>Type at least two characters.</span>
+            </div>
+          )}
+
+          {busy && <div className="global-search-empty"><span>Searching…</span></div>}
+          {error && <div className="global-search-empty error"><span>{error}</span></div>}
+
+          {!busy && !error && query.trim().length >= 2 && results.length === 0 && (
+            <div className="global-search-empty">
+              <strong>No matches.</strong>
+              <span>Try a topic, filename, mistake type, or phrase from your notes.</span>
+            </div>
+          )}
+
+          {!busy && results.length > 0 && (
+            <div className="global-search-results">
+              {results.map((result) => (
+                <Link
+                  key={`${result.kind}:${result.id}`}
+                  href={result.href}
+                  onClick={() => setOpen(false)}
+                >
+                  <div className="global-search-result-head">
+                    <span className="global-search-kind">{LABELS[result.kind]}</span>
+                    <small>{result.course_name}</small>
+                  </div>
+                  <strong>{result.title}</strong>
+                  {result.subtitle && <span className="global-search-subtitle">{result.subtitle}</span>}
+                  {result.excerpt && <p>{result.excerpt}</p>}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    </div>,
+    document.body,
+  ) : null;
+
   return (
     <>
       <button className="ghost-button global-search-trigger" onClick={() => setOpen(true)}>
         Search
         <span>⌘K</span>
       </button>
-
-      {open && (
-        <div className="global-search-backdrop" onMouseDown={() => setOpen(false)}>
-          <section
-            className="global-search-panel"
-            onMouseDown={(event) => event.stopPropagation()}
-            aria-label="Search StudyOS"
-          >
-            <div className="global-search-input-row">
-              <span>⌕</span>
-              <input
-                ref={inputRef}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search courses, topics, sources, mistakes, practice…"
-              />
-              <button onClick={() => setOpen(false)} aria-label="Close search">Esc</button>
-            </div>
-
-            <div className="global-search-body">
-              {query.trim().length < 2 && (
-                <div className="global-search-empty">
-                  <strong>Search your entire StudyOS workspace.</strong>
-                  <span>Type at least two characters.</span>
-                </div>
-              )}
-
-              {busy && <div className="global-search-empty"><span>Searching…</span></div>}
-              {error && <div className="global-search-empty error"><span>{error}</span></div>}
-
-              {!busy && !error && query.trim().length >= 2 && results.length === 0 && (
-                <div className="global-search-empty">
-                  <strong>No matches.</strong>
-                  <span>Try a topic, filename, mistake type, or phrase from your notes.</span>
-                </div>
-              )}
-
-              {!busy && results.length > 0 && (
-                <div className="global-search-results">
-                  {results.map((result) => (
-                    <Link
-                      key={`${result.kind}:${result.id}`}
-                      href={result.href}
-                      onClick={() => setOpen(false)}
-                    >
-                      <div className="global-search-result-head">
-                        <span className="global-search-kind">{LABELS[result.kind]}</span>
-                        <small>{result.course_name}</small>
-                      </div>
-                      <strong>{result.title}</strong>
-                      {result.subtitle && <span className="global-search-subtitle">{result.subtitle}</span>}
-                      {result.excerpt && <p>{result.excerpt}</p>}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
+      {modal}
     </>
   );
 }

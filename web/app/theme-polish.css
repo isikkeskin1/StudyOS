@@ -1,0 +1,276 @@
+/* Final visual-QA corrections. Keep this small and scoped to defects found in browser screenshots. */
+
+/* Only show the accessibility skip link for genuine keyboard focus. */
+.skip-link:focus { top: -100px !important; }
+.skip-link:focus-visible { top: 12px !important; }
+
+/* The compact course card intentionally shows one grade figure; prevent the old target cell sharing its grid area. */
+html[data-study-theme] .ledger-row > .ledger-grade:nth-of-type(3) { display: none !important; }
+html[data-study-theme] .ledger-row > .ledger-grade:nth-of-type(2) { display: flex !important; }
+html[data-study-theme] .course-ledger:has(> .ledger-row:only-child) {
+  grid-template-columns: 1fr !important;
+}
+
+/* Theme the remaining analytics-window control instead of inheriting the old hard-coded black surface. */
+html[data-study-theme] .window-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: 10px !important;
+  background: var(--ui-surface-2) !important;
+}
+html[data-study-theme] .window-toggle button {
+  min-width: 38px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--ui-muted) !important;
+  font-size: 10px;
+}
+html[data-study-theme] .window-toggle button.active,
+html[data-study-theme] .window-toggle button[aria-pressed="true"] {
+  background: var(--ui-surface-3) !important;
+  color: var(--ui-text) !important;
+}
+html[data-study-theme="dark"] .window-toggle button.active,
+html[data-study-theme="dark"] .window-toggle button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--ui-accent) 16%, var(--ui-surface-3)) !important;
+}
+
+/* Protect unusually long real course names without turning the workspace into a billboard. */
+html[data-study-theme] .workspace-app .workspace-topbar h1 {
+  max-width: 900px;
+  overflow-wrap: anywhere;
+  font-size: clamp(38px, 4.6vw, 64px) !important;
+}
+
+@media (max-width: 760px) {
+  /* Mobile already has landmarks and a persistent nav; don't let a programmatically focused skip link become UI chrome. */
+  .skip-link { display: none !important; }
+
+  /* The phone nav needs full labels: icon-only/truncated navigation failed screenshot QA. */
+  html[data-study-theme] .cockpit-sidebar .side-nav .nav-text {
+    display: block !important;
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+    font-size: 8px;
+    line-height: 1;
+  }
+
+  /* On phones the switch shows only the destination theme, cutting its footprint in half. */
+  .study-appearance {
+    display: block !important;
+    width: auto;
+    padding: 3px;
+  }
+  .study-appearance button {
+    min-width: 52px;
+    min-height: 34px;
+  }
+  html[data-study-theme="dark"] .study-appearance button[aria-pressed="true"],
+  html[data-study-theme="light"] .study-appearance button[aria-pressed="true"] {
+    display: none;
+  }
+
+  /* On auth, move the theme switch away from the full-width sign-in/create-account action. */
+  body:has(.auth-shell) > .study-appearance {
+    top: 12px;
+    right: 12px;
+    bottom: auto;
+  }
+
+  /* First-run setup is already busy on phones; honor the saved theme without adding another floating control. */
+  body:has(.setup-shell) > .study-appearance { display: none !important; }
+
+  /* Installation/notification controls belong in settings on a phone, not floating over study content. */
+  .pwa-controller-root { display: none !important; }
+
+  /* Focus and the course workbench should have zero persistent overlays. Theme still follows the saved choice. */
+  body:has(.focus-room) > .study-appearance,
+  body:has(.workspace-app) > .study-appearance {
+    display: none !important;
+  }
+
+  /* Mobile needs a discoverable search affordance; a keyboard-only shortcut is useless on a phone. */
+  html[data-study-theme] .workspace-app .workspace-search {
+    display: block !important;
+    margin: 0 0 7px !important;
+    padding: 0 !important;
+  }
+  html[data-study-theme] .workspace-app .workspace-search .global-search-trigger {
+    width: 100%;
+    min-height: 36px;
+    justify-content: flex-start;
+    gap: 7px;
+    padding: 0 10px;
+    border: 1px solid var(--ui-line) !important;
+    border-radius: 9px !important;
+    background: var(--ui-surface-2) !important;
+    color: var(--ui-muted) !important;
+    font-size: 10px;
+  }
+  html[data-study-theme] .workspace-app .workspace-search .global-search-trigger::before {
+    content: "⌕";
+    color: var(--ui-faint);
+    font-size: 14px;
+    line-height: 1;
+  }
+  html[data-study-theme] .workspace-app .workspace-search .global-search-trigger > span {
+    display: none !important;
+  }
+
+  /* Keep course identity as a small sticky context row above the horizontal workbench tabs. */
+  html[data-study-theme] .workspace-app .workspace-course-label {
+    display: grid !important;
+    gap: 2px;
+    margin: 0 2px 7px !important;
+    padding: 2px 6px 9px !important;
+    border-bottom: 1px solid var(--ui-line);
+  }
+  html[data-study-theme] .workspace-app .workspace-course-label span {
+    color: var(--ui-faint) !important;
+    font-size: 8px !important;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+  }
+  html[data-study-theme] .workspace-app .workspace-course-label strong {
+    max-width: calc(100vw - 40px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ui-text) !important;
+    font-size: 11px !important;
+    font-weight: 600;
+  }
+
+  html[data-study-theme] .workspace-app .workspace-topbar h1 {
+    font-size: clamp(32px, 10vw, 44px) !important;
+  }
+
+  html[data-study-theme] .ledger-row > .ledger-grade:nth-of-type(2) {
+    align-self: end;
+  }
+
+  html[data-study-theme] .window-toggle {
+    flex: 0 0 auto;
+  }
+  html[data-study-theme] .window-toggle button {
+    min-width: 34px;
+    min-height: 32px;
+    padding: 0 6px;
+  }
+
+  /* Dashboard utility controls are navigation, not floating widgets. Reserve bottom-nav cells for them. */
+  body:has(.study-cockpit) .cockpit-sidebar .side-nav {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+  body:has(.study-cockpit):has(.library-launcher a:nth-child(2)) .cockpit-sidebar .side-nav {
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  }
+
+  body:has(.study-cockpit) .library-launcher {
+    position: fixed !important;
+    z-index: 126 !important;
+    left: calc(10px + ((100vw - 20px) * 4 / 6)) !important;
+    right: auto !important;
+    bottom: env(safe-area-inset-bottom) !important;
+    width: calc((100vw - 20px) / 6) !important;
+    height: 58px !important;
+    display: flex !important;
+    align-items: stretch !important;
+    gap: 2px !important;
+    padding: 0 !important;
+  }
+  body:has(.study-cockpit):has(.library-launcher a:nth-child(2)) .library-launcher {
+    left: calc(10px + ((100vw - 20px) * 4 / 7)) !important;
+    width: calc((100vw - 20px) * 2 / 7) !important;
+  }
+  body:has(.study-cockpit) .library-launcher a {
+    flex: 1 1 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 52px !important;
+    height: 52px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    gap: 3px !important;
+    padding: 4px 2px !important;
+    border: 0 !important;
+    border-radius: 10px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    color: var(--ui-muted) !important;
+    font-size: 8px !important;
+    line-height: 1 !important;
+  }
+  body:has(.study-cockpit) .library-launcher a:hover,
+  body:has(.study-cockpit) .library-launcher a:active {
+    background: var(--ui-surface-2) !important;
+    color: var(--ui-text) !important;
+  }
+  body:has(.study-cockpit) .library-launcher a span { display: block !important; }
+  body:has(.study-cockpit) .library-launcher .ui-icon {
+    width: 18px !important;
+    height: 18px !important;
+    color: var(--ui-muted) !important;
+  }
+
+  body:has(.study-cockpit) > .study-appearance {
+    position: fixed !important;
+    z-index: 126 !important;
+    top: auto !important;
+    right: 10px !important;
+    bottom: env(safe-area-inset-bottom) !important;
+    width: calc((100vw - 20px) / 6) !important;
+    height: 58px !important;
+    display: block !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    transform: none !important;
+  }
+  body:has(.study-cockpit):has(.library-launcher a:nth-child(2)) > .study-appearance {
+    width: calc((100vw - 20px) / 7) !important;
+  }
+  body:has(.study-cockpit) > .study-appearance button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 52px !important;
+    height: 52px !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 4px 2px !important;
+    border: 0 !important;
+    border-radius: 10px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--ui-muted) !important;
+    font-size: 8px !important;
+    line-height: 1 !important;
+  }
+  body:has(.study-cockpit) > .study-appearance button::before {
+    content: "◐";
+    display: block;
+    color: var(--ui-muted);
+    font-size: 19px;
+    line-height: 18px;
+  }
+  body:has(.study-cockpit) > .study-appearance button:hover,
+  body:has(.study-cockpit) > .study-appearance button:active {
+    background: var(--ui-surface-2) !important;
+    color: var(--ui-text) !important;
+  }
+}
