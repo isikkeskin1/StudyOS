@@ -57,6 +57,7 @@ export function AppearanceControl() {
     <div className="study-appearance" aria-label="Appearance">
       <button
         type="button"
+        aria-label="Dark"
         aria-pressed={theme === "dark"}
         onClick={() => switchTheme("dark")}
       >
@@ -64,6 +65,7 @@ export function AppearanceControl() {
       </button>
       <button
         type="button"
+        aria-label="Light"
         aria-pressed={theme === "light"}
         onClick={() => switchTheme("light")}
       >
