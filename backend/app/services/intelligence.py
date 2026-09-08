@@ -19,7 +19,9 @@ from app.models.course_intelligence import (
 from app.models.document import Document
 from app.models.document_content import DocumentAnalysis, DocumentChunk
 
-_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9']*")
+# Keep tokens Unicode-aware so Italian/European course material does not silently lose words.
+# Tokens must start with a letter but may contain digits afterwards (for terms such as H2O or 3D-like labels).
+_TOKEN_RE = re.compile(r"[^\W\d_][\w'-]*", re.UNICODE)
 _STOPWORDS = {
     "about",
     "after",
@@ -122,8 +124,130 @@ _GENERIC_TOKENS = {
     "tests",
     "written",
 }
+# Words that usually describe an instruction rather than a lesson/topic.
+_INSTRUCTION_TOKENS = {
+    "answer",
+    "answers",
+    "ask",
+    "asked",
+    "asks",
+    "assume",
+    "calculate",
+    "choose",
+    "compute",
+    "consider",
+    "derive",
+    "determine",
+    "draw",
+    "evaluate",
+    "explain",
+    "find",
+    "following",
+    "given",
+    "prove",
+    "select",
+    "show",
+    "sketch",
+    "solve",
+    "state",
+    "write",
+}
+# Short lines with these words are usually page furniture / assessment metadata.
+_BOILERPLATE_TOKENS = {
+    "academic",
+    "candidate",
+    "date",
+    "department",
+    "duration",
+    "faculty",
+    "instructor",
+    "matricola",
+    "name",
+    "page",
+    "pages",
+    "professor",
+    "school",
+    "semester",
+    "student",
+    "surname",
+    "university",
+    "year",
+}
+_BOILERPLATE_PHRASES = (
+    "academic year",
+    "course code",
+    "department of",
+    "student id",
+    "student number",
+    "time allowed",
+    "written exam",
+    "politecnico di torino",
+)
+# These can be meaningful in prose but are poor standalone lesson names without structural evidence.
+_WEAK_SINGLE_TOKENS = {
+    "case",
+    "cases",
+    "data",
+    "equation",
+    "equations",
+    "figure",
+    "figures",
+    "function",
+    "functions",
+    "method",
+    "methods",
+    "number",
+    "numbers",
+    "part",
+    "parts",
+    "result",
+    "results",
+    "section",
+    "sections",
+    "system",
+    "systems",
+    "table",
+    "tables",
+    "time",
+    "value",
+    "values",
+}
+_SENTENCE_VERBS = {
+    "be",
+    "describe",
+    "describes",
+    "give",
+    "gives",
+    "has",
+    "have",
+    "is",
+    "means",
+    "relate",
+    "relates",
+    "represent",
+    "represents",
+    "show",
+    "shows",
+    "use",
+    "uses",
+    "was",
+    "were",
+}
 _EXAM_TYPES = {"past_exam", "past_exam_solution"}
 _LECTURE_TYPES = {"lecture", "notes", "textbook", "exercise_sheet", "syllabus"}
+_SECTION_PREFIX_RE = re.compile(
+    r"^(?:(?:chapter|section|lecture|lesson|week|unit|module|topic)\s+)?"
+    r"(?:\d+(?:\.\d+){0,3}|[ivxlcdm]+)[\s.):-]+",
+    re.IGNORECASE,
+)
+_NAMED_PREFIX_RE = re.compile(
+    r"^(?:chapter|section|lecture|lesson|week|unit|module|topic)\s*[:\-–—]\s*",
+    re.IGNORECASE,
+)
+_PAGE_ONLY_RE = re.compile(
+    r"^(?:page\s*)?\d+\s*(?:(?:of|/)\s*\d+)?$",
+    re.IGNORECASE,
+)
 
 
 class NoProcessedDocumentsError(RuntimeError):
@@ -139,6 +263,9 @@ class CandidateStats:
     weighted_score: float = 0.0
     heading_hits: int = 0
     document_ids: set[str] = field(default_factory=set)
+    heading_document_ids: set[str] = field(default_factory=set)
+    exam_document_ids: set[str] = field(default_factory=set)
+    lecture_document_ids: set[str] = field(default_factory=set)
     chunk_scores: dict[str, float] = field(default_factory=dict)
 
 
@@ -174,27 +301,95 @@ def _display_from_normalized(normalized: str) -> str:
     return " ".join(word.capitalize() if len(word) > 3 else word for word in normalized.split())
 
 
-def _is_heading_candidate(line: str) -> bool:
-    stripped = line.strip().lstrip("#*- ").strip()
+def _heading_surface(line: str) -> tuple[str, bool]:
+    original = line.strip()
+    explicit_marker = original.startswith(("#", "*", "-", "•", "–", "—"))
+    stripped = original.lstrip("#*•-–— \t").strip()
+
+    numbered = bool(_SECTION_PREFIX_RE.match(stripped))
+    stripped = _SECTION_PREFIX_RE.sub("", stripped, count=1).strip()
+    named_prefix = bool(_NAMED_PREFIX_RE.match(stripped))
+    stripped = _NAMED_PREFIX_RE.sub("", stripped, count=1).strip()
+
+    return stripped.rstrip(":").strip(), explicit_marker or numbered or named_prefix
+
+
+def _is_boilerplate(raw: str, words: list[str]) -> bool:
+    lowered = " ".join(raw.lower().split())
+    if not lowered or _PAGE_ONLY_RE.fullmatch(lowered):
+        return True
+    if any(phrase in lowered for phrase in _BOILERPLATE_PHRASES):
+        return True
+
+    meaningful = [word for word in words if word not in _STOPWORDS]
+    if not meaningful:
+        return True
+    boilerplate_count = sum(
+        word in _BOILERPLATE_TOKENS or word in _GENERIC_TOKENS
+        for word in meaningful
+    )
+    return boilerplate_count == len(meaningful)
+
+
+def _is_heading_candidate(
+    line: str,
+    *,
+    previous_blank: bool = False,
+    next_blank: bool = False,
+) -> bool:
+    stripped, structural_hint = _heading_surface(line)
     if not stripped or len(stripped) > 90:
         return False
+    if stripped.endswith((".", "?", "!", ";")):
+        return False
+
     words = _tokenize(stripped)
     if not 1 <= len(words) <= 8:
         return False
-    if stripped.endswith((".", "?", "!")):
+    if _is_boilerplate(stripped, words):
         return False
-    if words[0] in _GENERIC_TOKENS:
+    if any(word in _INSTRUCTION_TOKENS or word in _SENTENCE_VERBS for word in words):
         return False
-    meaningful = [word for word in words if word not in _STOPWORDS and word not in _GENERIC_TOKENS]
-    return bool(meaningful)
+
+    meaningful = [
+        word
+        for word in words
+        if word not in _STOPWORDS
+        and word not in _GENERIC_TOKENS
+        and word not in _BOILERPLATE_TOKENS
+    ]
+    if not meaningful:
+        return False
+    if len(words) == 1 and words[0] in _WEAK_SINGLE_TOKENS:
+        return False
+
+    surface_words = re.findall(r"[^\W\d_][\w'-]*", stripped, re.UNICODE)
+    title_like = bool(surface_words) and (
+        sum(word[:1].isupper() for word in surface_words) / len(surface_words) >= 0.65
+    )
+    letters = "".join(character for character in stripped if character.isalpha())
+    all_caps = len(letters) >= 4 and letters.upper() == letters
+    isolated = previous_blank and next_blank
+    single_concept = len(words) == 1 and len(words[0]) >= 4
+
+    # Do not infer a heading merely because a PDF happened to wrap a short sentence onto
+    # its own line. Require some actual structural signal.
+    return structural_hint or title_like or all_caps or isolated or single_concept
 
 
 def _heading_candidates(text: str) -> list[tuple[str, str]]:
     candidates: list[tuple[str, str]] = []
-    for line in text.splitlines():
-        if not _is_heading_candidate(line):
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        previous_blank = index == 0 or not lines[index - 1].strip()
+        next_blank = index == len(lines) - 1 or not lines[index + 1].strip()
+        if not _is_heading_candidate(
+            line,
+            previous_blank=previous_blank,
+            next_blank=next_blank,
+        ):
             continue
-        raw = line.strip().lstrip("#*- ").strip()
+        raw, _ = _heading_surface(line)
         normalized = _normalize_phrase(raw)
         if normalized and not all(token in _GENERIC_TOKENS for token in normalized.split()):
             candidates.append((normalized, raw))
@@ -202,22 +397,38 @@ def _heading_candidates(text: str) -> list[tuple[str, str]]:
 
 
 def _ngram_candidates(text: str) -> Counter[str]:
-    tokens = _tokenize(text)
     counts: Counter[str] = Counter()
 
-    for size in (1, 2, 3):
-        for index in range(len(tokens) - size + 1):
-            phrase_tokens = tokens[index : index + size]
-            if phrase_tokens[0] in _STOPWORDS or phrase_tokens[-1] in _STOPWORDS:
-                continue
-            if all(token in _STOPWORDS or token in _GENERIC_TOKENS for token in phrase_tokens):
-                continue
-            if any(len(token) < 3 for token in phrase_tokens):
-                continue
-            if size == 1 and phrase_tokens[0] in _GENERIC_TOKENS:
-                continue
-            normalized = " ".join(phrase_tokens)
-            counts[normalized] += 1
+    # Never let n-grams span a page line or sentence boundary. The old extractor did this,
+    # which could manufacture phrases from the end of one sentence and the start of another.
+    segments = re.split(r"(?:\n+|(?<=[.!?;:])\s+)", text)
+    for segment in segments:
+        tokens = _tokenize(segment)
+        for size in (1, 2, 3):
+            for index in range(len(tokens) - size + 1):
+                phrase_tokens = tokens[index : index + size]
+                if phrase_tokens[0] in _STOPWORDS or phrase_tokens[-1] in _STOPWORDS:
+                    continue
+                if any(
+                    token in _INSTRUCTION_TOKENS
+                    or token in _BOILERPLATE_TOKENS
+                    or token in _SENTENCE_VERBS
+                    for token in phrase_tokens
+                ):
+                    continue
+                if all(token in _STOPWORDS or token in _GENERIC_TOKENS for token in phrase_tokens):
+                    continue
+                if any(len(token) < 3 for token in phrase_tokens):
+                    continue
+                if len(set(phrase_tokens)) != len(phrase_tokens):
+                    continue
+                if size == 1 and (
+                    phrase_tokens[0] in _GENERIC_TOKENS
+                    or phrase_tokens[0] in _WEAK_SINGLE_TOKENS
+                ):
+                    continue
+                normalized = " ".join(phrase_tokens)
+                counts[normalized] += 1
 
     return counts
 
@@ -244,13 +455,45 @@ def _candidate_quality(normalized: str, stats: CandidateStats) -> bool:
         return False
     if any(token.isdigit() for token in tokens):
         return False
+    if any(
+        token in _INSTRUCTION_TOKENS
+        or token in _BOILERPLATE_TOKENS
+        or token in _SENTENCE_VERBS
+        for token in tokens
+    ):
+        return False
     if all(token in _GENERIC_TOKENS or token in _STOPWORDS for token in tokens):
         return False
-    if len(tokens) == 1 and stats.mention_count < 3 and stats.heading_hits == 0:
+    if len(tokens) == 1 and tokens[0] in _WEAK_SINGLE_TOKENS:
         return False
-    if len(tokens) > 1 and stats.mention_count < 2 and stats.heading_hits == 0:
+
+    # Structural headings in teaching material are strong evidence on their own. Exam-only
+    # headings are accepted only when teaching material independently mentions the same topic.
+    if stats.heading_hits > 0:
+        if stats.lecture_document_ids:
+            return True
+        if len(stats.heading_document_ids) >= 2:
+            return True
+        return bool(stats.exam_mentions and stats.lecture_mentions)
+
+    # Body text should support/rank a lesson, not invent one from a random sentence. A body-only
+    # topic therefore needs cross-document support and at least one teaching document.
+    document_count = len(stats.document_ids)
+    lecture_document_count = len(stats.lecture_document_ids)
+    exam_document_count = len(stats.exam_document_ids)
+    if document_count < 2 or lecture_document_count == 0:
         return False
-    return True
+
+    if len(tokens) == 1:
+        return (
+            stats.mention_count >= 5
+            and (lecture_document_count >= 2 or exam_document_count >= 1)
+        )
+
+    return (
+        stats.mention_count >= 3
+        and (lecture_document_count >= 2 or exam_document_count >= 1)
+    )
 
 
 def _extract_topics(
@@ -258,7 +501,7 @@ def _extract_topics(
     analyses: dict[str, DocumentAnalysis],
     chunks: list[DocumentChunk],
     *,
-    limit: int = 30,
+    limit: int = 20,
 ) -> list[TopicResult]:
     stats_by_phrase: dict[str, CandidateStats] = {}
     chunks_by_document: dict[str, list[DocumentChunk]] = defaultdict(list)
@@ -268,8 +511,9 @@ def _extract_topics(
     for document in documents:
         analysis = analyses[document.id]
         doc_type = analysis.document_type
-        exam_multiplier = 2.4 if doc_type in _EXAM_TYPES else 1.0
-        lecture_multiplier = 1.2 if doc_type in _LECTURE_TYPES else 1.0
+        # Exams should increase importance, but they should not dominate topic discovery.
+        exam_multiplier = 1.7 if doc_type in _EXAM_TYPES else 1.0
+        lecture_multiplier = 1.3 if doc_type in _LECTURE_TYPES else 1.0
 
         for chunk in chunks_by_document[document.id]:
             heading_candidates = _heading_candidates(chunk.text)
@@ -278,19 +522,29 @@ def _extract_topics(
                     normalized,
                     CandidateStats(display_name=raw),
                 )
-                score = 4.0 * exam_multiplier * lecture_multiplier
+                if candidate.heading_hits == 0:
+                    candidate.display_name = raw
+                if doc_type in _LECTURE_TYPES:
+                    score = 7.0
+                elif doc_type in _EXAM_TYPES:
+                    score = 4.0
+                else:
+                    score = 4.5
                 candidate.heading_hits += 1
                 candidate.mention_count += 1
                 candidate.weighted_score += score
                 candidate.document_ids.add(document.id)
+                candidate.heading_document_ids.add(document.id)
                 candidate.chunk_scores[chunk.id] = max(
                     candidate.chunk_scores.get(chunk.id, 0.0),
                     score,
                 )
                 if doc_type in _EXAM_TYPES:
                     candidate.exam_mentions += 1
+                    candidate.exam_document_ids.add(document.id)
                 if doc_type in _LECTURE_TYPES:
                     candidate.lecture_mentions += 1
+                    candidate.lecture_document_ids.add(document.id)
 
             ngrams = _ngram_candidates(chunk.text)
             for normalized, count in ngrams.items():
@@ -300,7 +554,9 @@ def _extract_topics(
                     CandidateStats(display_name=_display_from_normalized(normalized)),
                 )
                 phrase_weight = 1.0 + (size - 1) * 0.35
-                score = count * phrase_weight * exam_multiplier * lecture_multiplier
+                # A repeated footer or copied solution paragraph should not swamp the course graph.
+                effective_count = min(count, 8)
+                score = effective_count * phrase_weight * exam_multiplier * lecture_multiplier
                 candidate.mention_count += count
                 candidate.weighted_score += score
                 candidate.document_ids.add(document.id)
@@ -309,8 +565,10 @@ def _extract_topics(
                 )
                 if doc_type in _EXAM_TYPES:
                     candidate.exam_mentions += count
+                    candidate.exam_document_ids.add(document.id)
                 if doc_type in _LECTURE_TYPES:
                     candidate.lecture_mentions += count
+                    candidate.lecture_document_ids.add(document.id)
 
     viable = [
         (normalized, stats)
@@ -319,8 +577,10 @@ def _extract_topics(
     ]
     viable.sort(
         key=lambda item: (
+            item[1].heading_hits > 0,
+            len(item[1].heading_document_ids),
+            len(item[1].document_ids),
             item[1].weighted_score,
-            item[1].heading_hits,
             len(item[0].split()),
         ),
         reverse=True,
@@ -329,9 +589,19 @@ def _extract_topics(
     selected: list[tuple[str, CandidateStats]] = []
     for normalized, stats in viable:
         redundant = False
+        normalized_tokens = set(normalized.split())
         for chosen_normalized, chosen_stats in selected:
-            if normalized in chosen_normalized or chosen_normalized in normalized:
-                if stats.weighted_score <= chosen_stats.weighted_score * 0.9:
+            chosen_tokens = set(chosen_normalized.split())
+            contained = normalized in chosen_normalized or chosen_normalized in normalized
+            overlap = (
+                len(normalized_tokens & chosen_tokens)
+                / max(1, min(len(normalized_tokens), len(chosen_tokens)))
+            )
+            if contained or overlap >= 0.85:
+                if (
+                    stats.heading_hits <= chosen_stats.heading_hits
+                    and stats.weighted_score <= chosen_stats.weighted_score * 1.1
+                ):
                     redundant = True
                     break
         if redundant:
