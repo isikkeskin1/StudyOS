@@ -244,6 +244,7 @@ jobs:
         run: npm run build:win
 
       - name: Build Microsoft Store MSIX
+        id: build-msix
         working-directory: desktop
         shell: pwsh
         env:
@@ -262,19 +263,56 @@ jobs:
             throw "Configure all three Microsoft Store repository variables or leave all three unset."
           }
 
-          if ($configuredCount -eq 3) {
-            npx electron-builder --win msix --publish never `
-              --config.msix.identityName="$env:STORE_IDENTITY_NAME" `
-              --config.msix.publisher="$env:STORE_PUBLISHER" `
-              --config.msix.publisherDisplayName="$env:STORE_PUBLISHER_DISPLAY_NAME"
-          } else {
-            npm run dist:store
+          try {
+            if ($configuredCount -eq 3) {
+              npx electron-builder --win msix --publish never `
+                --config.msix.identityName="$env:STORE_IDENTITY_NAME" `
+                --config.msix.publisher="$env:STORE_PUBLISHER" `
+                --config.msix.publisherDisplayName="$env:STORE_PUBLISHER_DISPLAY_NAME"
+              if ($LASTEXITCODE -ne 0) {
+                throw "electron-builder MSIX build exited with code $LASTEXITCODE"
+              }
+            } else {
+              npm run dist:store
+              if ($LASTEXITCODE -ne 0) {
+                throw "npm dist:store exited with code $LASTEXITCODE"
+              }
+            }
+          } catch {
+            Write-Host "::group::MSIX mapping diagnostics"
+            $mappingFiles = Get-ChildItem "dist" -Filter "mapping.txt" -Recurse -File -ErrorAction SilentlyContinue
+            if ($mappingFiles.Count -eq 0) {
+              Write-Host "No mapping.txt found under desktop/dist"
+            } else {
+              foreach ($mapping in $mappingFiles) {
+                Write-Host "===== $($mapping.FullName) ====="
+                Write-Host "Lines: $((Get-Content $mapping.FullName).Count)"
+                Get-Content $mapping.FullName
+              }
+            }
+            $manifestFiles = Get-ChildItem "dist" -Filter "AppxManifest.xml" -Recurse -File -ErrorAction SilentlyContinue
+            foreach ($manifest in $manifestFiles) {
+              Write-Host "===== $($manifest.FullName) ====="
+              Get-Content $manifest.FullName
+            }
+            Write-Host "::endgroup::"
+            throw
           }
 
           $storePackage = Get-ChildItem "dist/StudyOS-*-Microsoft-Store-x64.msixupload" | Select-Object -First 1
           if (-not $storePackage) {
             throw "Missing Microsoft Store .msixupload package"
           }
+
+      - name: Upload MSIX diagnostics
+        if: failure() && steps.build-msix.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: StudyOS-MSIX-diagnostics
+          path: |
+            desktop/dist/**/mapping.txt
+            desktop/dist/**/AppxManifest.xml
+          if-no-files-found: ignore
 
       - name: Verify release signature
         if: github.event_name == 'release'
