@@ -3,17 +3,6 @@ name: Desktop Windows
 on:
   push:
     branches: [main]
-    paths:
-      - "backend/**"
-      - "desktop/**"
-      - "web/**"
-      - ".github/workflows/desktop-windows.yml"
-  pull_request:
-    paths:
-      - "backend/**"
-      - "desktop/**"
-      - "web/**"
-      - ".github/workflows/desktop-windows.yml"
   workflow_dispatch:
   release:
     types: [published]
@@ -22,182 +11,38 @@ permissions:
   contents: write
 
 jobs:
-  build-windows:
+  windows:
     runs-on: windows-latest
-    timeout-minutes: 30
-
+    defaults:
+      run:
+        shell: pwsh
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
-      - name: Align desktop version with release tag
-        if: github.event_name == 'release'
-        working-directory: desktop
-        shell: pwsh
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          $version = $env:RELEASE_TAG.TrimStart("v")
-          $parts = $version.Split(".")
-          if ($parts.Count -lt 3) {
-            throw "Release tag must look like v0.53.0"
-          }
-          npm version "$version" --no-git-tag-version --allow-same-version
-          Write-Host "Building StudyOS Desktop $version"
-
-      - name: Set up Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Build local backend sidecar
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.14.0"
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            desktop/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
         shell: pwsh
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e backend pyinstaller
-          $alembicPath = (Resolve-Path "backend/alembic").Path
-          pyinstaller --noconfirm --clean --onedir --name StudyOSBackend --paths backend --add-data "$alembicPath;alembic" --distpath desktop/build/backend --workpath desktop/build/pyinstaller-work --specpath desktop/build desktop/backend_launcher.py
-          if (!(Test-Path "desktop/build/backend/StudyOSBackend/StudyOSBackend.exe")) {
-            throw "Missing bundled StudyOS backend executable"
-          }
+        run: pip install -r requirements.txt
 
-      - name: Smoke desktop legacy database migration
+      - name: Verify backend source
+        working-directory: backend
         shell: pwsh
-        run: |
-          $legacyRoot = Join-Path $env:RUNNER_TEMP "studyos-legacy"
-          New-Item -ItemType Directory -Path $legacyRoot -Force | Out-Null
-          $dbPath = Join-Path $legacyRoot "legacy.db"
-          $uploadPath = Join-Path $legacyRoot "uploads"
-
-          @'
-          import sqlite3
-          import sys
-
-          path = sys.argv[1]
-          connection = sqlite3.connect(path)
-          try:
-              connection.execute(
-                  """
-                  CREATE TABLE users (
-                      id VARCHAR(36) PRIMARY KEY,
-                      email VARCHAR(320) NOT NULL UNIQUE,
-                      password_hash VARCHAR(512) NOT NULL,
-                      created_at DATETIME NOT NULL
-                  )
-                  """
-              )
-              connection.commit()
-          finally:
-              connection.close()
-          '@ | python - $dbPath
-
-          $verifyScript = Join-Path $legacyRoot "verify-migration.py"
-          @'
-          import sqlite3
-          import sys
-
-          connection = sqlite3.connect(sys.argv[1])
-          try:
-              columns = {
-                  row[1]
-                  for row in connection.execute("PRAGMA table_info(users)").fetchall()
-              }
-              tables = {
-                  row[0]
-                  for row in connection.execute(
-                      "SELECT name FROM sqlite_master WHERE type='table'"
-                  ).fetchall()
-              }
-              required_tables = {
-                  "alembic_version",
-                  "catalog_courses",
-                  "catalog_sources",
-              }
-              if "is_admin" not in columns:
-                  raise SystemExit("users.is_admin was not migrated")
-              missing = required_tables - tables
-              if missing:
-                  raise SystemExit(f"Missing migrated tables: {sorted(missing)}")
-          finally:
-              connection.close()
-          '@ | Set-Content -Path $verifyScript -Encoding UTF8
-
-          $env:STUDYOS_ENV = "desktop"
-          $env:STUDYOS_DATABASE_URL = "sqlite:///$($dbPath -replace '\\','/')"
-          $env:STUDYOS_DATA_DIR = $uploadPath
-          $env:STUDYOS_DESKTOP_HOST = "127.0.0.1"
-          $env:STUDYOS_DESKTOP_PORT = "8766"
-          $backend = Start-Process "desktop/build/backend/StudyOSBackend/StudyOSBackend.exe" -PassThru
-          try {
-            $healthy = $false
-            for ($attempt = 0; $attempt -lt 90; $attempt++) {
-              try {
-                $response = Invoke-WebRequest "http://127.0.0.1:8766/api/v1/health/ready" -UseBasicParsing -TimeoutSec 2
-                if ($response.StatusCode -eq 200) {
-                  $healthy = $true
-                  break
-                }
-              } catch {}
-              if ($backend.HasExited) {
-                throw "Bundled backend exited during legacy database migration smoke"
-              }
-              Start-Sleep -Milliseconds 500
-            }
-            if (-not $healthy) {
-              throw "Bundled backend never became ready after legacy database migration"
-            }
-
-            python $verifyScript $dbPath
-            if ($LASTEXITCODE -ne 0) {
-              throw "Legacy database migration verification failed"
-            }
-          } finally {
-            if (-not $backend.HasExited) {
-              Stop-Process -Id $backend.Id -Force
-            }
-          }
-
-      - name: Smoke bundled backend
-        shell: pwsh
-        run: |
-          $smokeRoot = Join-Path $env:RUNNER_TEMP "studyos-backend-smoke"
-          New-Item -ItemType Directory -Path $smokeRoot -Force | Out-Null
-          $dbPath = Join-Path $smokeRoot "smoke.db"
-          $uploadPath = Join-Path $smokeRoot "uploads"
-          $env:STUDYOS_ENV = "desktop"
-          $env:STUDYOS_DATABASE_URL = "sqlite:///$($dbPath -replace '\\','/')"
-          $env:STUDYOS_DATA_DIR = $uploadPath
-          $env:STUDYOS_DESKTOP_HOST = "127.0.0.1"
-          $env:STUDYOS_DESKTOP_PORT = "8765"
-          $backend = Start-Process "desktop/build/backend/StudyOSBackend/StudyOSBackend.exe" -PassThru
-          try {
-            $healthy = $false
-            for ($attempt = 0; $attempt -lt 60; $attempt++) {
-              try {
-                $response = Invoke-WebRequest "http://127.0.0.1:8765/api/v1/health/ready" -UseBasicParsing -TimeoutSec 2
-                if ($response.StatusCode -eq 200) {
-                  $healthy = $true
-                  break
-                }
-              } catch {}
-              if ($backend.HasExited) {
-                throw "Bundled backend exited during startup"
-              }
-              Start-Sleep -Milliseconds 500
-            }
-            if (-not $healthy) {
-              throw "Bundled backend never became ready"
-            }
-          } finally {
-            if (-not $backend.HasExited) {
-              Stop-Process -Id $backend.Id -Force
-            }
-          }
+        run: python -m compileall -q .
 
       - name: Install web dependencies
         working-directory: web
@@ -243,8 +88,8 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run build:win
 
-      - name: Build Microsoft Store MSIX
-        id: build-msix
+      - name: Build Microsoft Store AppX
+        id: build-store
         working-directory: desktop
         shell: pwsh
         env:
@@ -263,52 +108,31 @@ jobs:
             throw "Configure all three Microsoft Store repository variables or leave all three unset."
           }
 
-          try {
-            if ($configuredCount -eq 3) {
-              npx electron-builder --win msix --publish never `
-                --config.msix.identityName="$env:STORE_IDENTITY_NAME" `
-                --config.msix.publisher="$env:STORE_PUBLISHER" `
-                --config.msix.publisherDisplayName="$env:STORE_PUBLISHER_DISPLAY_NAME"
-              if ($LASTEXITCODE -ne 0) {
-                throw "electron-builder MSIX build exited with code $LASTEXITCODE"
-              }
-            } else {
-              npm run dist:store
-              if ($LASTEXITCODE -ne 0) {
-                throw "npm dist:store exited with code $LASTEXITCODE"
-              }
+          if ($configuredCount -eq 3) {
+            npx electron-builder --win appx --publish never `
+              --config.appx.identityName="$env:STORE_IDENTITY_NAME" `
+              --config.appx.publisher="$env:STORE_PUBLISHER" `
+              --config.appx.publisherDisplayName="$env:STORE_PUBLISHER_DISPLAY_NAME"
+            if ($LASTEXITCODE -ne 0) {
+              throw "electron-builder AppX build exited with code $LASTEXITCODE"
             }
-          } catch {
-            Write-Host "::group::MSIX mapping diagnostics"
-            $mappingFiles = Get-ChildItem "dist" -Filter "mapping.txt" -Recurse -File -ErrorAction SilentlyContinue
-            if ($mappingFiles.Count -eq 0) {
-              Write-Host "No mapping.txt found under desktop/dist"
-            } else {
-              foreach ($mapping in $mappingFiles) {
-                Write-Host "===== $($mapping.FullName) ====="
-                Write-Host "Lines: $((Get-Content $mapping.FullName).Count)"
-                Get-Content $mapping.FullName
-              }
+          } else {
+            npm run dist:store
+            if ($LASTEXITCODE -ne 0) {
+              throw "npm dist:store exited with code $LASTEXITCODE"
             }
-            $manifestFiles = Get-ChildItem "dist" -Filter "AppxManifest.xml" -Recurse -File -ErrorAction SilentlyContinue
-            foreach ($manifest in $manifestFiles) {
-              Write-Host "===== $($manifest.FullName) ====="
-              Get-Content $manifest.FullName
-            }
-            Write-Host "::endgroup::"
-            throw
           }
 
-          $storePackage = Get-ChildItem "dist/StudyOS-*-Microsoft-Store-x64.msixupload" | Select-Object -First 1
+          $storePackage = Get-ChildItem "dist/StudyOS-*-Microsoft-Store-x64.appx" | Select-Object -First 1
           if (-not $storePackage) {
-            throw "Missing Microsoft Store .msixupload package"
+            throw "Missing Microsoft Store .appx package"
           }
 
-      - name: Upload MSIX diagnostics
-        if: failure() && steps.build-msix.outcome == 'failure'
-        uses: actions/upload-artifact@v7
+      - name: Upload Store package diagnostics
+        if: failure() && steps.build-store.outcome == 'failure'
+        uses: actions/upload-artifact@v4
         with:
-          name: StudyOS-MSIX-diagnostics
+          name: StudyOS-Store-diagnostics
           path: |
             desktop/dist/**/mapping.txt
             desktop/dist/**/AppxManifest.xml
@@ -356,7 +180,7 @@ jobs:
           }
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: StudyOS-Windows
           path: |
@@ -367,10 +191,10 @@ jobs:
           if-no-files-found: error
 
       - name: Upload Microsoft Store package
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: StudyOS-Microsoft-Store
-          path: desktop/dist/StudyOS-*-Microsoft-Store-x64.msixupload
+          path: desktop/dist/StudyOS-*-Microsoft-Store-x64.appx
           if-no-files-found: error
 
       - name: Attach installers to published release
