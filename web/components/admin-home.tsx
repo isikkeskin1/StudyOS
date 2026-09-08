@@ -52,7 +52,7 @@ export function AdminHome() {
             <UiIcon name="arrow" />
           </Link>
           <Link className="admin-home-card" href="/library">
-            <span className="admin-home-icon"><UiIcon name="book" /></span>
+            <span className="admin-home-icon"><UiIcon name="courses" /></span>
             <div><strong>Student library</strong><small>Open the published library exactly as students see it.</small></div>
             <UiIcon name="arrow" />
           </Link>
