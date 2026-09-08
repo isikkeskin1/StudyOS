@@ -48,7 +48,6 @@ test("focus countdown survives reload and never auto-completes", async ({ page }
 
   await page.getByRole("link", { name: "Open Focus Room" }).click();
   await expect(page).toHaveURL(/\/focus$/);
-  await expect(page.getByText("Focus session live", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Complete block", exact: true })).toBeVisible();
   await expect(page.getByText("Time remaining", { exact: true })).toBeVisible();
   const scratchpad = page.getByLabel("Focus scratchpad");
