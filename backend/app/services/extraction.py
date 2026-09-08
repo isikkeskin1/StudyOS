@@ -20,7 +20,30 @@ class ExtractedUnit:
     text: str
 
 
+def _storage_safe_text(text: str) -> str:
+    """Remove code points that cannot be safely persisted as PostgreSQL text.
+
+    PDF extractors can surface embedded NUL bytes and lone UTF-16 surrogate code
+    points from malformed/custom font maps. PostgreSQL rejects NUL in TEXT and
+    database drivers cannot encode lone surrogates as UTF-8, even though the PDF
+    parser itself may return them successfully.
+    """
+    safe: list[str] = []
+    for character in text:
+        codepoint = ord(character)
+        if character == "\x00":
+            continue
+        if 0xD800 <= codepoint <= 0xDFFF:
+            safe.append("\ufffd")
+            continue
+        if codepoint < 32 and character not in {"\n", "\t", "\r"}:
+            continue
+        safe.append(character)
+    return "".join(safe)
+
+
 def _clean_text(text: str) -> str:
+    text = _storage_safe_text(text)
     lines = [line.rstrip() for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
     cleaned: list[str] = []
     blank = False
