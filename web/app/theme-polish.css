@@ -77,6 +77,16 @@ html[data-study-theme] .workspace-app .workspace-topbar h1 {
     display: none;
   }
 
+  /* On auth, move the theme switch away from the full-width sign-in/create-account action. */
+  body:has(.auth-shell) > .study-appearance {
+    top: 12px;
+    right: 12px;
+    bottom: auto;
+  }
+
+  /* First-run setup is already busy on phones; honor the saved theme without adding another floating control. */
+  body:has(.setup-shell) > .study-appearance { display: none !important; }
+
   /* Installation/notification controls belong in settings on a phone, not floating over study content. */
   .pwa-controller-root { display: none !important; }
 
