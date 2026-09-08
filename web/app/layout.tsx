@@ -16,6 +16,7 @@ import "./theme-system.css";
 import "./theme-polish.css";
 import "./motion-system.css";
 import "./motion-async.css";
+import "./sidebar-lock.css";
 
 export const metadata: Metadata = {
   title: "StudyOS",
