@@ -115,3 +115,89 @@ def test_reanalysis_replaces_previous_topic_graph(client: TestClient) -> None:
     assert second.status_code == 200
     assert first.json()["analysis"]["topic_count"] == second.json()["analysis"]["topic_count"]
     assert len(first.json()["topics"]) == len(second.json()["topics"])
+
+
+def test_topic_extraction_rejects_exam_boilerplate_and_instruction_fragments(
+    client: TestClient,
+) -> None:
+    course_id = _create_course(client)
+
+    _upload_and_process(
+        client,
+        course_id,
+        "lecture-kinematics.txt",
+        (
+            b"Kinematics\n"
+            b"Kinematics studies motion, displacement, velocity, and acceleration.\n\n"
+            b"Newton's Laws\n"
+            b"Newton's laws connect force, mass, and acceleration.\n\n"
+            b"Conservation of Momentum\n"
+            b"Momentum is conserved for an isolated system during collisions."
+        ),
+    )
+    _upload_and_process(
+        client,
+        course_id,
+        "text_with_solutions.txt",
+        (
+            b"POLITECNICO DI TORINO\n"
+            b"Physics I Written Exam\n"
+            b"Academic year 2025/2026\n"
+            b"Student ID\n"
+            b"Time allowed 90 minutes\n"
+            b"Page 1 of 4\n\n"
+            b"Question 1\n"
+            b"Calculate the value of acceleration using the following data\n"
+            b"Kinematics\n"
+            b"The problem concerns displacement, velocity, and acceleration.\n\n"
+            b"Question 2\n"
+            b"Determine the force and show every step\n"
+            b"Newton's Laws\n"
+            b"The solution applies Newton's second law.\n\n"
+            b"Answers and Solutions\n"
+            b"The answer is obtained from the given values."
+        ),
+    )
+
+    response = client.post(f"/api/v1/courses/{course_id}/analyze")
+    assert response.status_code == 200
+
+    normalized_names = [topic["normalized_name"] for topic in response.json()["topics"]]
+    joined = " | ".join(normalized_names)
+
+    assert any("kinematics" == name for name in normalized_names)
+    assert any("newton" in name and "law" in name for name in normalized_names)
+    assert all(noise not in joined for noise in (
+        "politecnico",
+        "student",
+        "academic year",
+        "time allowed",
+        "calculate",
+        "following data",
+        "determine",
+        "answer",
+        "question",
+        "written exam",
+    ))
+
+
+def test_body_ngrams_do_not_cross_line_or_sentence_boundaries(client: TestClient) -> None:
+    course_id = _create_course(client)
+    _upload_and_process(
+        client,
+        course_id,
+        "lecture.txt",
+        (
+            b"Momentum\n"
+            b"Momentum is conserved in collisions.\n"
+            b"Acceleration\n"
+            b"Acceleration describes the rate of change of velocity."
+        ),
+    )
+
+    response = client.post(f"/api/v1/courses/{course_id}/analyze")
+    assert response.status_code == 200
+    normalized_names = [topic["normalized_name"] for topic in response.json()["topics"]]
+
+    assert "collisions acceleration" not in normalized_names
+    assert "momentum acceleration" not in normalized_names
