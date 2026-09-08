@@ -1583,3 +1583,77 @@ body {
 @media (max-width:1000px) {
   .study-cockpit .course-ledger { grid-template-columns:1fr !important; }
 }
+
+
+/* === Quiet Luxury v3.2 composition === */
+.study-cockpit .cockpit-layout {
+  max-width:1320px;
+}
+.study-cockpit .cockpit-workspace {
+  max-width:1080px;
+  margin:0 auto;
+}
+.study-cockpit .today-header {
+  margin-bottom:38px;
+}
+.study-cockpit .today-header h1 {
+  font-size:clamp(50px,5.4vw,76px);
+}
+.study-cockpit .today-signals:empty { display:none; }
+.study-cockpit .today-focus {
+  min-height:360px !important;
+}
+.study-cockpit .today-focus-copy {
+  padding:clamp(48px,5.2vw,72px) !important;
+}
+.study-cockpit .today-focus h2 {
+  max-width:760px;
+  font-size:clamp(38px,4.4vw,60px) !important;
+}
+.study-cockpit .workspace-section {
+  margin-top:74px;
+}
+.study-cockpit .workspace-section-head {
+  margin-bottom:18px;
+}
+.study-cockpit .workspace-section-head h2 {
+  font-size:26px;
+}
+.study-cockpit .course-ledger {
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+}
+.study-cockpit .ledger-row {
+  min-height:138px !important;
+  padding:24px !important;
+}
+.study-cockpit .ledger-row:hover { padding:24px !important; }
+.study-cockpit .ledger-course strong { font-size:15px; }
+.study-cockpit .ledger-progress { margin-top:16px; }
+.study-cockpit .progress-section .rhythm-chart {
+  min-height:150px !important;
+}
+.study-cockpit .rhythm-empty {
+  min-height:100px !important;
+  padding:0 12px !important;
+  border:0 !important;
+}
+.study-cockpit .rhythm-empty > strong {
+  color:#1d1d1f;
+  font-size:13px;
+  font-weight:600;
+}
+.study-cockpit .rhythm-empty > span {
+  color:#86868b;
+  font-size:11px;
+}
+.study-cockpit .rhythm-footer {
+  border:0 !important;
+  padding-top:12px;
+}
+.study-cockpit .review-clear {
+  min-height:126px !important;
+}
+@media(max-width:1000px){
+  .study-cockpit .cockpit-workspace { max-width:760px; }
+  .study-cockpit .course-ledger { grid-template-columns:1fr !important; }
+}
