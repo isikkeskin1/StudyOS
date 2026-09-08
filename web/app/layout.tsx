@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 
 import { AppearanceControl } from "@/components/appearance-control";
 import { CourseSpotify } from "@/components/course-spotify";
+import { MotionOrchestrator } from "@/components/motion-orchestrator";
 import { PwaController } from "@/components/pwa-controller";
 
 import "./globals.css";
@@ -13,6 +14,7 @@ import "./spotify-dock.css";
 import "./integrations-v055.css";
 import "./theme-system.css";
 import "./theme-polish.css";
+import "./motion-system.css";
 
 export const metadata: Metadata = {
   title: "StudyOS",
@@ -62,6 +64,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body>
         {children}
+        <MotionOrchestrator />
         <AppearanceControl />
         <CourseSpotify />
         <PwaController />
