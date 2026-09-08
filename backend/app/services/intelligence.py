@@ -19,8 +19,8 @@ from app.models.course_intelligence import (
 from app.models.document import Document
 from app.models.document_content import DocumentAnalysis, DocumentChunk
 
-# Keep tokens Unicode-aware so Italian/European course material does not silently lose words.
-# Tokens must start with a letter but may contain digits afterwards (for terms such as H2O or 3D-like labels).
+# Unicode-aware tokens keep Italian/European course material intact.
+# Tokens start with a letter and may contain digits afterwards (for example H2O).
 _TOKEN_RE = re.compile(r"[^\W\d_][\w'-]*", re.UNICODE)
 _STOPWORDS = {
     "about",
