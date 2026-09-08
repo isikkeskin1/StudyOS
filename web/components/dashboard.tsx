@@ -246,7 +246,7 @@ export function Dashboard({
       <aside className="sidebar cockpit-sidebar">
         <a className="brand" href="#overview" aria-label="StudyOS home">
           <BrandMark />
-          <span><strong>StudyOS<span className="brand-period">.</span></strong><small>Study workspace</small></span>
+          <span><strong>StudyOS<span className="brand-period">.</span></strong><small>Your semester</small></span>
         </a>
 
         <div className="sidebar-search"><GlobalSearch /></div>
@@ -277,7 +277,7 @@ export function Dashboard({
         <div className="sidebar-tools">
           <p className="nav-label">Actions</p>
           <button onClick={() => setManagerOpen(true)}><UiIcon name="plus" />Add or manage courses</button>
-          {isAdmin && <button onClick={() => setAdminOpen(true)}><UiIcon name="shield" />Institution catalog</button>}
+          {isAdmin && <button onClick={() => setAdminOpen(true)}><UiIcon name="shield" />Master courses</button>}
           <button onClick={() => setAccountOpen(true)}><UiIcon name="settings" />Account & integrations</button>
         </div>
 
@@ -310,11 +310,11 @@ export function Dashboard({
               <section className="today-header" id="overview">
                 <span className="today-date">{dayHeading()}</span>
                 <h1>Today</h1>
-                <div className="today-signals" aria-label="Current study signals">
+                <div className="today-signals" aria-label="Today at a glance">
                   <span><strong>{formatMinutes(analytics.summary.focus_minutes)}</strong> focused · {days}d</span>
                   <span><strong>{semester.due_review_count}</strong> reviews due</span>
                   <span><strong>{formatPercent(analytics.summary.average_answer_score)}</strong> answer quality</span>
-                  <span><strong>{analytics.summary.below_target_count}</strong> below target</span>
+                  <span><strong>{analytics.summary.below_target_count}</strong> courses behind</span>
                 </div>
               </section>
 
@@ -368,7 +368,7 @@ export function Dashboard({
 
               <section className="workspace-section course-momentum" id="courses">
                 <div className="workspace-section-head">
-                  <div><span className="section-number">02</span><div><h2>Course momentum</h2><p>Current evidence against each target.</p></div></div>
+                  <div><span className="section-number">02</span><div><h2>Course momentum</h2><p>Where you stand, and what needs work.</p></div></div>
                   <button className="text-action" onClick={() => setManagerOpen(true)}>Manage courses <UiIcon name="arrow" /></button>
                 </div>
 
@@ -399,7 +399,7 @@ export function Dashboard({
 
               <section className="workspace-section progress-section" id="activity">
                 <div className="workspace-section-head">
-                  <div><span className="section-number">03</span><div><h2>Study rhythm</h2><p>Focused minutes, not vanity activity.</p></div></div>
+                  <div><span className="section-number">03</span><div><h2>Study rhythm</h2><p>Your actual study pattern over time.</p></div></div>
                   <div className="window-toggle" aria-label="Analytics window">
                     {WINDOWS.map((windowDays) => <button key={windowDays} aria-pressed={days === windowDays} className={days === windowDays ? "active" : ""} onClick={() => setDays(windowDays)}>{windowDays}D</button>)}
                   </div>
