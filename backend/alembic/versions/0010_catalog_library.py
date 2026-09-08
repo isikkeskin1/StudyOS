@@ -57,18 +57,31 @@ def upgrade() -> None:
             ["parent_id"],
         )
 
-    document_columns = {column["name"] for column in inspector.get_columns("documents")}
-    if "catalog_folder_id" not in document_columns:
-        with op.batch_alter_table("documents") as batch:
-            batch.add_column(sa.Column("catalog_folder_id", sa.String(36), nullable=True))
-            batch.create_foreign_key(
-                "fk_documents_catalog_folder_id",
-                "catalog_folders",
-                ["catalog_folder_id"],
-                ["id"],
-                ondelete="SET NULL",
-            )
-            batch.create_index("ix_documents_catalog_folder_id", ["catalog_folder_id"])
+    # Some old desktop databases are stamped at the legacy v0.4 baseline even
+    # when they only contain the historical users table. The desktop lifespan
+    # creates any still-missing application tables after Alembic finishes, so
+    # the migration must tolerate documents not existing yet. Fresh/cloud
+    # databases already have documents here and receive the FK normally.
+    if "documents" in tables:
+        document_columns = {
+            column["name"] for column in inspector.get_columns("documents")
+        }
+        if "catalog_folder_id" not in document_columns:
+            with op.batch_alter_table("documents") as batch:
+                batch.add_column(
+                    sa.Column("catalog_folder_id", sa.String(36), nullable=True)
+                )
+                batch.create_foreign_key(
+                    "fk_documents_catalog_folder_id",
+                    "catalog_folders",
+                    ["catalog_folder_id"],
+                    ["id"],
+                    ondelete="SET NULL",
+                )
+                batch.create_index(
+                    "ix_documents_catalog_folder_id",
+                    ["catalog_folder_id"],
+                )
 
 
 def downgrade() -> None:
@@ -80,7 +93,10 @@ def downgrade() -> None:
         if "catalog_folder_id" in columns:
             with op.batch_alter_table("documents") as batch:
                 batch.drop_index("ix_documents_catalog_folder_id")
-                batch.drop_constraint("fk_documents_catalog_folder_id", type_="foreignkey")
+                batch.drop_constraint(
+                    "fk_documents_catalog_folder_id",
+                    type_="foreignkey",
+                )
                 batch.drop_column("catalog_folder_id")
     if "catalog_folders" in tables:
         op.drop_table("catalog_folders")
