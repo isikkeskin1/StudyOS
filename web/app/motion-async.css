@@ -1,5 +1,19 @@
 /* Async-state motion: data fetching, processing, analysis, and action feedback. */
 
+/* Keep utility chrome out of the way while the product is booting. */
+body:has(.studyos-boot) > .study-appearance,
+body:has(.studyos-boot) > .pwa-controller-root {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(8px) scale(.96);
+}
+.studyos-boot-core {
+  animation: async-boot-core-in 620ms var(--motion-ease) both;
+}
+@keyframes async-boot-core-in {
+  from { opacity: 0; transform: translateY(14px) scale(.975); filter: blur(6px); }
+}
+
 /* Legacy client loaders become a designed loading surface instead of loose text. */
 .workspace-shell:has(> .setup-loading) {
   min-height: 100dvh;
@@ -94,6 +108,32 @@ html[data-study-theme] :is(.primary-button,.focus-room-complete,.tutor-panel but
 }
 @keyframes async-button-scan { to { transform: translateX(120%); } }
 
+/* Setup analysis gets a restrained scan through the current panel. */
+.setup-card {
+  position: relative;
+  overflow: hidden;
+}
+.setup-card:has(.primary-button:disabled)::after {
+  content: "";
+  position: absolute;
+  z-index: 20;
+  left: 4%;
+  right: 4%;
+  height: 1px;
+  top: 12%;
+  pointer-events: none;
+  opacity: .75;
+  background: linear-gradient(90deg, transparent, var(--ui-accent), transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--ui-accent) 28%, transparent);
+  animation: async-panel-scan 1.75s var(--motion-ease) infinite;
+}
+@keyframes async-panel-scan {
+  0% { top: 10%; opacity: 0; }
+  12% { opacity: .72; }
+  82% { opacity: .5; }
+  100% { top: 92%; opacity: 0; }
+}
+
 /* Status feedback enters with direction and then settles. */
 .setup-message,
 .error-banner,
@@ -145,6 +185,7 @@ html[data-study-theme] :is(.primary-button,.focus-room-complete,.tutor-panel but
   .workspace-shell > .setup-loading { padding-top: 74px; }
   .workspace-shell > .setup-loading::before { width: 50px; height: 50px; margin-left: -25px; }
   .workspace-shell > .setup-loading::after { top: 23px; }
+  .setup-card:has(.primary-button:disabled)::after { left: 6%; right: 6%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -152,7 +193,8 @@ html[data-study-theme] :is(.primary-button,.focus-room-complete,.tutor-panel but
   .workspace-shell > .setup-loading::after,
   .focus-room-state:not(:has(h1)) .brand-mark,
   .focus-room-state:not(:has(h1)) .brand-mark::after,
-  .focus-room-state:not(:has(h1)) p {
+  .focus-room-state:not(:has(h1)) p,
+  .setup-card:has(.primary-button:disabled)::after {
     animation: none !important;
   }
 }
