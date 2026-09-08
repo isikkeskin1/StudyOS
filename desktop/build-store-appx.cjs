@@ -31,9 +31,6 @@ function findFile(root, targetName) {
 }
 
 function runBuilder() {
-  // Do not spawn npx.cmd: Node spawnSync can return EINVAL for .cmd launchers on
-  // GitHub-hosted Windows runners. Invoke the installed electron-builder CLI with
-  // the current Node executable instead.
   const electronBuilderCli = path.join(desktopDir, 'node_modules', 'electron-builder', 'out', 'cli', 'cli.js');
   if (!fs.existsSync(electronBuilderCli)) fail(`Missing local electron-builder CLI: ${electronBuilderCli}`);
 
@@ -69,7 +66,15 @@ fs.mkdirSync(stagingDir, { recursive: true });
 
 const lines = fs.readFileSync(mappingPath, 'utf8').split(/\r?\n/);
 let copied = 0;
-let skippedManifest = 0;
+let skippedReserved = 0;
+
+const reservedPayloadNames = new Set([
+  'appxmanifest.xml',
+  'appxblockmap.xml',
+  'appxstreammap.xml',
+  'appxsignature.p7x',
+  '[content_types].xml',
+]);
 
 for (const line of lines) {
   const trimmed = line.trim();
@@ -79,9 +84,17 @@ for (const line of lines) {
 
   const source = match[1].replace(/\\"/g, '"');
   const destination = match[2].replace(/\\"/g, '"');
+  const destinationLeaf = path.basename(destination).toLowerCase();
 
-  if (destination.toLowerCase() === 'appxmanifest.xml') { skippedManifest += 1; continue; }
-  if (path.isAbsolute(destination) || destination.split('\\').includes('..')) fail(`Unsafe AppX destination in mapping: ${destination}`);
+  if (reservedPayloadNames.has(destinationLeaf)) {
+    skippedReserved += 1;
+    console.log(`Skipping reserved AppX payload name: ${destination}`);
+    continue;
+  }
+
+  if (path.isAbsolute(destination) || destination.split('\\').includes('..')) {
+    fail(`Unsafe AppX destination in mapping: ${destination}`);
+  }
 
   const destinationPath = path.resolve(stagingDir, ...destination.split('\\'));
   const stagingRoot = path.resolve(stagingDir) + path.sep;
@@ -95,8 +108,6 @@ for (const line of lines) {
 
 fs.copyFileSync(manifestPath, path.join(stagingDir, 'AppxManifest.xml'));
 
-// electron-builder's Windows toolset cache is named winCodeSign (camel case).
-// Keep this lookup case-aware and recursive so it also survives bundle layout changes.
 const cacheRoot = process.env.LOCALAPPDATA
   ? path.join(process.env.LOCALAPPDATA, 'electron-builder', 'Cache')
   : null;
@@ -104,7 +115,7 @@ const makeAppx = findFile(cacheRoot, 'makeappx.exe');
 if (!makeAppx) fail(`Could not find makeappx.exe under ${cacheRoot || '<missing LOCALAPPDATA>'}`);
 
 if (fs.existsSync(outputPath)) fs.rmSync(outputPath, { force: true });
-console.log(`Manual AppX staging ready: ${copied} payload files copied, ${skippedManifest} manifest mapping(s) removed.`);
+console.log(`Manual AppX staging ready: ${copied} payload files copied, ${skippedReserved} reserved payload(s) skipped.`);
 console.log(`Using MakeAppx: ${makeAppx}`);
 console.log(`Creating: ${outputPath}`);
 
