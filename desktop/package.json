@@ -22,69 +22,20 @@
     "appId": "com.studyos.desktop",
     "productName": "StudyOS",
     "asar": true,
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "main.cjs",
-      "preload.cjs",
-      "setup.html",
-      "package.json",
-      "update.html",
-      "splash.html"
-    ],
+    "directories": { "output": "dist" },
+    "files": ["main.cjs","preload.cjs","setup.html","package.json","update.html","splash.html"],
     "extraResources": [
-      {
-        "from": "build/web/server.js",
-        "to": "web/server.js"
-      },
-      {
-        "from": "build/web/.next",
-        "to": "web/.next",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "build/web/public",
-        "to": "web/public",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "build/web/node_modules",
-        "to": "web/node_modules",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "build/web/package.json",
-        "to": "web/package.json"
-      },
-      {
-        "from": "build/backend",
-        "to": "backend",
-        "filter": [
-          "**/*"
-        ]
-      }
+      { "from": "build/web/server.js", "to": "web/server.js" },
+      { "from": "build/web/.next", "to": "web/.next", "filter": ["**/*"] },
+      { "from": "build/web/public", "to": "web/public", "filter": ["**/*"] },
+      { "from": "build/web/node_modules", "to": "web/node_modules", "filter": ["**/*"] },
+      { "from": "build/web/package.json", "to": "web/package.json" },
+      { "from": "build/backend", "to": "backend", "filter": ["**/*"] }
     ],
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
       ],
       "icon": "../web/public/icons/icon-512.png"
     },
@@ -96,28 +47,17 @@
       "shortcutName": "StudyOS",
       "artifactName": "StudyOS-Windows-x64-Setup.${ext}"
     },
-    "portable": {
-      "artifactName": "StudyOS-${version}-Windows-x64-Portable.${ext}"
-    },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "isikkeskin1",
-        "repo": "StudyOS",
-        "releaseType": "release"
-      }
-    ],
+    "portable": { "artifactName": "StudyOS-${version}-Windows-x64-Portable.${ext}" },
+    "publish": [{ "provider": "github", "owner": "isikkeskin1", "repo": "StudyOS", "releaseType": "release" }],
     "msix": {
+      "identityName": "isikkeskin.StudyOS",
+      "publisher": "CN=0E4D601A-07D5-4DE4-9443-3990D3F6EBCE",
+      "publisherDisplayName": "isikkeskin",
       "artifactName": "StudyOS-${version}-Microsoft-Store-x64.${ext}",
       "displayName": "StudyOS",
-      "publisherDisplayName": "StudyOS",
-      "languages": [
-        "en-US"
-      ],
+      "languages": ["en-US"],
       "minVersion": "10.0.17763.0"
     }
   },
-  "dependencies": {
-    "electron-updater": "6.6.2"
-  }
+  "dependencies": { "electron-updater": "6.6.2" }
 }
