@@ -26,8 +26,31 @@ export function FocusTimer({ session, minutes }: { session: FocusSession | null;
         <circle className="dial-track" cx="90" cy="90" r="78" />
         <circle className="dial-progress" cx="90" cy="90" r="78" pathLength="100" strokeDasharray="100" strokeDashoffset={100 - progress * 100} />
       </svg>
-      <div><span className="focus-dial-label">{label}</span><strong role="timer" aria-label={`${label}: ${Math.floor(seconds / 60)} minutes ${seconds % 60} seconds`}>{Math.floor(seconds / 60).toString().padStart(2, "0")}<span>:</span>{(seconds % 60).toString().padStart(2, "0")}</strong><small>{session ? "One thing at a time." : "Make room for deep work."}</small></div>
+      <div>
+        <span className="focus-dial-label">{label}</span>
+        <strong role="timer" aria-label={`${label}: ${Math.floor(seconds / 60)} minutes ${seconds % 60} seconds`}>
+          {Math.floor(seconds / 60).toString().padStart(2, "0")}<span>:</span>{(seconds % 60).toString().padStart(2, "0")}
+        </strong>
+        <small>{session ? "One thing at a time." : "Make room for deep work."}</small>
+        {session && <a className="focus-room-entry" href="/focus">Open Focus Room</a>}
+      </div>
       <style jsx global>{`
+        .focus-room-entry {
+          margin-top: 9px;
+          color: #b6ebce;
+          font-size: 9px;
+          text-decoration: none;
+          letter-spacing: .02em;
+        }
+
+        .focus-room-entry:hover {
+          color: #d0f6df;
+        }
+
+        .focus-room .focus-room-entry {
+          display: none;
+        }
+
         @media (max-width: 760px) {
           .today-focus.is-active {
             flex-direction: column;
