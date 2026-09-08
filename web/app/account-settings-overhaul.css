@@ -1,6 +1,25 @@
 /* Account & integrations — large app-native settings workspace. */
 
+/* The account dialog lives inside the animated dashboard tree. Page-arrival transforms can
+   otherwise become the containing block for position:fixed, making settings open at the
+   document scroll offset. Freeze that root while the modal is open and anchor the overlay
+   explicitly to the visual viewport. */
+body:has(.account-settings-backdrop) {
+  overflow: hidden !important;
+}
+
+body:has(.account-settings-backdrop) .study-cockpit {
+  animation: none !important;
+  transform: none !important;
+  filter: none !important;
+}
+
 .account-settings-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  z-index: 10000 !important;
   display: grid;
   place-items: center;
   padding: 32px;
