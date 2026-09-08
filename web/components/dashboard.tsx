@@ -311,10 +311,10 @@ export function Dashboard({
                 <span className="today-date">{dayHeading()}</span>
                 <h1>Today</h1>
                 <div className="today-signals" aria-label="Today at a glance">
-                  <span><strong>{formatMinutes(analytics.summary.focus_minutes)}</strong> focused</span>
-                  <span><strong>{semester.due_review_count}</strong> reviews due</span>
-                  <span><strong>{formatPercent(analytics.summary.average_answer_score)}</strong> accuracy</span>
-                  <span><strong>{analytics.summary.below_target_count}</strong> behind target</span>
+                  {analytics.summary.focus_minutes > 0 && <span><strong>{formatMinutes(analytics.summary.focus_minutes)}</strong> focused</span>}
+                  {semester.due_review_count > 0 && <span><strong>{semester.due_review_count}</strong> reviews due</span>}
+                  {analytics.summary.average_answer_score !== null && <span><strong>{formatPercent(analytics.summary.average_answer_score)}</strong> accuracy</span>}
+                  {analytics.summary.below_target_count > 0 && <span><strong>{analytics.summary.below_target_count}</strong> behind target</span>}
                 </div>
               </section>
 
@@ -350,13 +350,13 @@ export function Dashboard({
                     </>
                   ) : (
                     <>
-                      <span className="focus-course-name">{semester.course_count ? "Courses need planning" : "No courses yet"}</span>
-                      <h2>{selectedQueue?.needs_refresh ? "Your study queue needs a refresh." : "Build the first real study block."}</h2>
-                      <p className="focus-setup-copy">{selectedQueue?.needs_refresh ? selectedQueue.refresh_reasons.join(" · ") : "Add course evidence, set a target, and StudyOS will choose the highest-value next block."}</p>
+                      <span className="focus-course-name">{semester.course_count ? "One step left" : "Start here"}</span>
+                      <h2>{selectedQueue?.needs_refresh ? "Your plan is ready for an update." : semester.course_count ? "Turn your course into a study plan." : "Add your first course."}</h2>
+                      <p className="focus-setup-copy">{selectedQueue?.needs_refresh ? "A few things changed since your last plan." : semester.course_count ? "Add material or set an exam target. StudyOS will handle what comes next." : "Choose a course or create your own. You can add material later."}</p>
                       {selectedQueue?.needs_refresh ? (
                         <button className="primary-button" disabled={actionBusy} onClick={() => void refreshQueue()}>Refresh plan</button>
                       ) : (
-                        <button className="primary-button" onClick={() => setManagerOpen(true)}><UiIcon name="plus" />Set up courses</button>
+                        <button className="primary-button" onClick={() => setManagerOpen(true)}><UiIcon name="plus" />{semester.course_count ? "Finish setup" : "Add course"}</button>
                       )}
                     </>
                   )}
