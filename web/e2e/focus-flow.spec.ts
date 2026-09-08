@@ -42,7 +42,7 @@ test("focus countdown survives reload and never auto-completes", async ({ page }
   await page.clock.install();
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
-  await page.getByRole("button", { name: /Start session/ }).click();
+  await page.getByRole("button", { name: /Start(?: session)?$/ }).click();
   await expect(page.getByText("Time remaining", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Open Focus Room" })).toBeVisible();
 

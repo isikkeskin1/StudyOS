@@ -382,3 +382,1288 @@ select { background-color: var(--panel); color: #c6cfcb; }
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   .course-card:hover, .primary-button:hover:not(:disabled), button:active:not(:disabled) { transform: none; }
 }
+
+
+/* === Authored StudyOS v2: Today cockpit === */
+:root {
+  --bg: #0b0d0c;
+  --panel: #111411;
+  --panel-2: #171b18;
+  --sidebar: #0d100e;
+  --line: #262d29;
+  --line-soft: #1c221f;
+  --text: #f3f6f4;
+  --muted: #a4afa9;
+  --muted-2: #6f7b75;
+  --accent: #b9efcf;
+  --accent-strong: #92d7b1;
+  --warn: #e2bd79;
+  --radius: 12px;
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.56;
+  letter-spacing: -.006em;
+}
+
+.study-cockpit {
+  background:
+    radial-gradient(circle at 78% -18%, rgba(126, 195, 157, .045), transparent 31%),
+    var(--bg);
+}
+
+.cockpit-sidebar {
+  width: 248px;
+  padding: 26px 20px 18px;
+  background: linear-gradient(180deg, #0e110f 0%, #0a0c0b 100%);
+  border-right: 1px solid #202622;
+}
+
+.cockpit-sidebar .brand {
+  padding: 0 8px;
+  gap: 12px;
+}
+.cockpit-sidebar .brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  box-shadow: none;
+}
+.cockpit-sidebar .brand strong { font-size: 19px; }
+.cockpit-sidebar .brand small {
+  margin-top: 1px;
+  color: #69746f;
+  font-size: 10px;
+}
+
+.cockpit-sidebar .nav-label {
+  margin: 0 10px 8px;
+  color: #59635e;
+  font-size: 9px;
+  letter-spacing: .13em;
+}
+
+.cockpit-sidebar .side-nav { gap: 2px; }
+.cockpit-sidebar .side-nav a,
+.cockpit-sidebar .sidebar-tools button {
+  min-height: 42px;
+  border-radius: 7px;
+  padding: 10px 11px;
+  font-size: 12px;
+}
+.cockpit-sidebar .side-nav a.active {
+  background: #151d18;
+  border-color: #24352b;
+  color: #d3eadc;
+}
+.cockpit-sidebar .side-nav a.active::before {
+  left: -21px;
+  width: 2px;
+  height: 22px;
+  background: #a7e8c1;
+}
+
+.cockpit-main {
+  width: calc(100% - 248px);
+  margin-left: 248px;
+  max-width: none;
+  padding: 0 clamp(28px, 4vw, 76px) 88px;
+}
+
+.cockpit-toolbar {
+  min-height: 62px;
+  border-bottom: 1px solid #202622;
+}
+.cockpit-toolbar > span {
+  color: #77837d;
+  font-size: 10px;
+  letter-spacing: .02em;
+}
+.cockpit-toolbar select,
+.cockpit-toolbar .ghost-button {
+  min-height: 36px;
+  background: #0f1311;
+  border-color: #242b27;
+  color: #9da8a2;
+}
+
+.cockpit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 300px);
+  gap: clamp(30px, 4vw, 64px);
+  align-items: start;
+}
+
+.cockpit-workspace {
+  min-width: 0;
+  padding-top: 42px;
+}
+
+.today-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 8px 24px;
+  margin-bottom: 26px;
+}
+.today-date {
+  grid-column: 1 / -1;
+  color: #6f7b75;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.today-header h1 {
+  margin: 0;
+  font-size: clamp(38px, 4.8vw, 66px);
+  line-height: .94;
+  letter-spacing: -.065em;
+  font-weight: 590;
+}
+.today-signals {
+  align-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0;
+  color: #717d77;
+}
+.today-signals span {
+  padding: 0 12px;
+  border-left: 1px solid #28302b;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.today-signals span:first-child { border-left: 0; }
+.today-signals strong {
+  color: #b8c3bd;
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.today-focus {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  min-height: 330px;
+  overflow: hidden;
+  border: 1px solid #2b3930;
+  border-radius: 14px;
+  background:
+    linear-gradient(120deg, rgba(185, 239, 207, .035), transparent 44%),
+    #101411;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .24);
+}
+.today-focus::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, #b9efcf, #5f8f73);
+}
+.today-focus-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(36px, 5vw, 62px);
+  min-width: 0;
+}
+.focus-kicker {
+  margin-bottom: 26px;
+  color: #7e8c85;
+  font-size: 10px;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.focus-kicker .focus-index {
+  color: #b9efcf;
+  font-variant-numeric: tabular-nums;
+}
+.focus-course-name {
+  margin-bottom: 8px;
+  color: #92d7b1;
+  font-size: 12px;
+  font-weight: 620;
+  letter-spacing: .015em;
+}
+.today-focus h2 {
+  max-width: 780px;
+  margin: 0;
+  font-size: clamp(30px, 4vw, 54px);
+  line-height: 1.02;
+  letter-spacing: -.052em;
+  font-weight: 575;
+}
+.focus-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 0;
+  margin-top: 20px;
+  color: #7f8b84;
+}
+.focus-meta span {
+  padding-right: 14px;
+  margin-right: 14px;
+  border-right: 1px solid #2a322d;
+  font-size: 11px;
+}
+.focus-meta span:last-child { border-right: 0; }
+
+.focus-launch {
+  width: min(100%, 460px);
+  min-height: 62px;
+  margin-top: 34px;
+  padding: 0 18px 0 12px;
+  border: 1px solid #9adbb5;
+  border-radius: 10px;
+  background: #b9efcf;
+  color: #102017;
+  box-shadow: 0 12px 28px rgba(90, 150, 116, .11);
+}
+.focus-launch:hover:not(:disabled) {
+  background: #c9f5da;
+  transform: translateY(-1px);
+  box-shadow: 0 18px 36px rgba(90, 150, 116, .16);
+}
+.focus-launch > span {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: #102017;
+  color: #c7f5da;
+}
+.focus-launch strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+.focus-launch small {
+  margin-top: 2px;
+  color: #355445;
+  font-size: 10px;
+}
+
+.today-focus-timer {
+  display: grid;
+  place-items: center;
+  border-left: 1px solid #27312b;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(185,239,207,.08), transparent 48%),
+    #0d110f;
+}
+.today-focus-timer .focus-dial { width: 162px; }
+.today-focus-timer .focus-dial strong {
+  font-size: 34px;
+  font-weight: 450;
+}
+
+.workspace-section {
+  margin-top: 58px;
+  padding-top: 0;
+  border-top: 0;
+}
+.workspace-section-head {
+  align-items: flex-end;
+  margin-bottom: 18px;
+  padding-bottom: 13px;
+  border-bottom: 1px solid #202622;
+}
+.workspace-section-head > div { align-items: flex-start; }
+.section-number {
+  width: 28px;
+  padding-top: 4px;
+  color: #51605a;
+  font-size: 9px;
+  letter-spacing: .08em;
+}
+.workspace-section-head h2 {
+  font-size: 20px;
+  letter-spacing: -.028em;
+  font-weight: 600;
+}
+.workspace-section-head p {
+  margin-top: 3px;
+  color: #707d76;
+  font-size: 11px;
+}
+
+.course-ledger {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.ledger-row {
+  position: relative;
+  min-height: 92px;
+  grid-template-columns: 44px minmax(230px, 1.4fr) 92px 92px minmax(130px, .75fr) minmax(120px, .7fr) 18px;
+  gap: 16px;
+  padding: 16px 4px;
+  border: 0;
+  border-bottom: 1px solid #202622;
+  border-radius: 0;
+  background: transparent;
+}
+.ledger-row:hover {
+  padding-left: 10px;
+  padding-right: 10px;
+  background: linear-gradient(90deg, #141a16 0%, rgba(20,26,22,.25) 80%, transparent 100%);
+}
+.ledger-symbol {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.ledger-course strong {
+  font-size: 14px;
+  font-weight: 620;
+  color: #e9eeeb;
+}
+.ledger-course span,
+.ledger-evidence span,
+.ledger-deadline > span,
+.ledger-grade span {
+  font-size: 9px;
+  color: #6e7a74;
+}
+.ledger-grade strong {
+  font-size: 16px;
+  font-weight: 560;
+}
+.ledger-progress {
+  height: 4px;
+  margin-top: 12px;
+  background: #1d2420;
+}
+.ledger-progress > span {
+  background: #89c7a5;
+}
+.ledger-progress i {
+  width: 1px;
+  background: #d5e5dc;
+}
+.ledger-status {
+  font-size: 9px;
+  border-radius: 5px;
+  padding: 3px 6px;
+}
+
+.progress-section .rhythm-chart {
+  min-height: 210px;
+  padding: 24px 0 6px;
+  border: 0;
+  background: transparent;
+}
+.rhythm-day { min-width: 20px; }
+.rhythm-line { background: #1b221e; }
+.rhythm-day i {
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, #a4dabc, #5d8b70);
+}
+.rhythm-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #202622;
+  color: #6e7a74;
+  font-size: 10px;
+}
+
+.review-ledger {
+  border-top: 1px solid #202622;
+}
+.review-row {
+  min-height: 68px;
+  padding: 13px 4px;
+  border-bottom: 1px solid #202622;
+  background: transparent;
+}
+.review-row:hover { background: #111713; }
+.review-row strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.review-row span { font-size: 10px; }
+.review-count {
+  min-width: 30px;
+  font-size: 18px;
+  font-weight: 500;
+  color: #d9e7df;
+}
+
+.cockpit-rail {
+  position: sticky;
+  top: 22px;
+  align-self: start;
+  padding-top: 42px;
+}
+.rail-block {
+  padding: 0 0 24px;
+  margin-bottom: 24px;
+  border: 0;
+  border-bottom: 1px solid #202622;
+  border-radius: 0;
+  background: transparent;
+}
+.rail-label {
+  margin-bottom: 12px;
+  color: #59645f;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .11em;
+}
+.rail-now strong {
+  color: #dbe4df;
+  font-size: 13px;
+  font-weight: 580;
+}
+.rail-now span,
+.rail-plan,
+.rail-deadline,
+.rail-week {
+  color: #748078;
+  font-size: 10px;
+  line-height: 1.6;
+}
+.rail-plan-progress {
+  height: 4px;
+  margin-top: 10px;
+  background: #1a211d;
+}
+.rail-plan-progress span { background: #81bd9d; }
+.rail-deadline strong {
+  display: block;
+  margin-top: 3px;
+  color: #d9e4de;
+  font-size: 19px;
+  font-weight: 520;
+  letter-spacing: -.03em;
+}
+
+.text-action,
+.quiet-action {
+  color: #8c9992;
+}
+.text-action:hover,
+.quiet-action:hover {
+  color: #c7d4cd;
+}
+
+@media (max-width: 1180px) {
+  .cockpit-layout { grid-template-columns: 1fr; }
+  .cockpit-rail {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    padding-top: 0;
+  }
+  .rail-block {
+    padding: 18px;
+    border: 1px solid #202622;
+    border-radius: 10px;
+    background: #0f1311;
+  }
+}
+@media (max-width: 900px) {
+  .cockpit-sidebar { width: 210px; }
+  .cockpit-main {
+    width: calc(100% - 210px);
+    margin-left: 210px;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+  .today-focus { grid-template-columns: 1fr 180px; }
+  .ledger-row {
+    grid-template-columns: 36px minmax(180px, 1fr) 80px 80px 18px;
+  }
+  .ledger-evidence,
+  .ledger-deadline { display: none; }
+}
+@media (max-width: 760px) {
+  .cockpit-main {
+    width: 100%;
+    margin-left: 0;
+    padding: 0 16px 60px;
+  }
+  .today-header {
+    grid-template-columns: 1fr;
+    margin-top: 18px;
+  }
+  .today-signals {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .today-signals span:first-child { padding-left: 0; }
+  .today-focus {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .today-focus-copy { padding: 30px 24px 28px; }
+  .today-focus h2 { font-size: 36px; }
+  .today-focus-timer {
+    min-height: 190px;
+    border-left: 0;
+    border-top: 1px solid #27312b;
+  }
+  .cockpit-rail { grid-template-columns: 1fr; }
+  .ledger-row {
+    grid-template-columns: 36px minmax(0,1fr) 70px 18px;
+    gap: 10px;
+  }
+  .ledger-grade:nth-of-type(4),
+  .ledger-evidence,
+  .ledger-deadline { display: none; }
+}
+
+
+/* === Authored StudyOS v2.1: screenshot corrections === */
+.cockpit-main {
+  padding-left: clamp(24px, 2.6vw, 42px);
+  padding-right: clamp(24px, 2.6vw, 42px);
+}
+
+.cockpit-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 238px);
+  gap: clamp(28px, 3vw, 42px);
+}
+
+.cockpit-workspace {
+  padding: 42px 0 88px;
+}
+
+.cockpit-rail {
+  padding: 42px 0 70px;
+  background: transparent;
+  border-left: 0;
+}
+
+.today-focus {
+  min-height: 318px;
+}
+
+.workspace-section {
+  margin-top: 52px;
+}
+
+.rhythm-empty {
+  position: relative;
+  min-height: 150px;
+  display: grid;
+  align-content: end;
+  gap: 4px;
+  overflow: hidden;
+}
+.rhythm-empty::before {
+  content: "";
+  position: absolute;
+  inset: 22px 0 50px;
+  opacity: .55;
+  background:
+    linear-gradient(to top, #202822 1px, transparent 1px) 0 100% / 100% 33%,
+    linear-gradient(90deg,
+      transparent 0 2%,
+      #243029 2% 4%, transparent 4% 8%,
+      #1f2923 8% 11%, transparent 11% 15%,
+      #2b3930 15% 19%, transparent 19% 23%,
+      #202b24 23% 26%, transparent 26% 31%,
+      #304238 31% 35%, transparent 35% 39%,
+      #223029 39% 42%, transparent 42% 47%,
+      #28372f 47% 51%, transparent 51% 56%,
+      #1d2822 56% 60%, transparent 60% 65%,
+      #32463a 65% 69%, transparent 69% 74%,
+      #27352d 74% 78%, transparent 78% 83%,
+      #1f2c25 83% 87%, transparent 87% 92%,
+      #2c3d33 92% 96%, transparent 96% 100%
+    );
+  mask-image: linear-gradient(to top, black, transparent 88%);
+}
+
+.review-clear {
+  min-height: 96px;
+  padding: 20px 4px;
+  border-bottom: 1px solid #202622;
+}
+.review-clear::before {
+  width: 26px;
+  height: 26px;
+  border: 1px solid #2b4034;
+  border-radius: 50%;
+  background: #101713;
+}
+
+@media (max-width: 1400px) and (min-width: 981px) {
+  .ledger-row {
+    grid-template-columns: 40px minmax(210px, 1fr) 82px 82px 18px;
+    gap: 14px;
+  }
+  .ledger-evidence,
+  .ledger-deadline {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .cockpit-workspace {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .cockpit-rail {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+
+/* === Authored StudyOS v2.2: subject identity === */
+.section-number {
+  display: none;
+}
+.workspace-section-head > div:first-child {
+  gap: 0;
+}
+
+.workspace-section-head h2 {
+  font-size: 22px;
+  font-weight: 620;
+  letter-spacing: -.035em;
+}
+
+.workspace-section-head p {
+  font-size: 11px;
+  color: #77837d;
+}
+
+.ledger-row {
+  min-height: 98px;
+}
+
+.ledger-symbol {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  font-size: 11px;
+  letter-spacing: .02em;
+  font-weight: 760;
+  color: #eaf4ee;
+  border: 1px solid rgba(255,255,255,.055);
+  box-shadow: inset 0 1px rgba(255,255,255,.035);
+}
+.ledger-symbol.course-color-0 { background: #21382c; color: #bcebd0; }
+.ledger-symbol.course-color-1 { background: #263142; color: #c7d8f4; }
+.ledger-symbol.course-color-2 { background: #3a2e23; color: #ead1ad; }
+.ledger-symbol.course-color-3 { background: #35283b; color: #dec3e5; }
+
+.ledger-course > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.ledger-course strong {
+  font-size: 15px;
+  font-weight: 660;
+  letter-spacing: -.018em;
+}
+.ledger-course > div:first-child > span {
+  font-size: 9px;
+  color: #657069;
+}
+
+.ledger-progress {
+  height: 6px;
+  max-width: 440px;
+  margin-top: 13px;
+  border-radius: 99px;
+  overflow: visible;
+  background: #1b231e;
+}
+.ledger-progress > span {
+  border-radius: 99px;
+  box-shadow: 0 0 14px rgba(137,199,165,.08);
+}
+.ledger-progress i {
+  top: -3px;
+  height: 12px;
+  background: #cbd7d0;
+}
+
+.ledger-grade {
+  gap: 3px;
+}
+.ledger-grade span {
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #59645f;
+  font-size: 8px;
+}
+.ledger-grade strong {
+  color: #dce5e0;
+  font-size: 19px;
+  font-weight: 560;
+  letter-spacing: -.03em;
+}
+.ledger-grade strong small {
+  color: #647069;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.ledger-evidence {
+  gap: 3px;
+}
+.ledger-evidence span:first-child {
+  color: #a4b1aa;
+}
+
+.ledger-deadline {
+  gap: 4px;
+}
+.ledger-deadline > span {
+  color: #8c9791;
+}
+
+.review-section .workspace-section-head {
+  margin-bottom: 8px;
+}
+.review-clear strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.review-clear span {
+  max-width: 520px;
+  line-height: 1.55;
+}
+
+.today-signals {
+  margin-bottom: 1px;
+}
+.today-signals span {
+  color: #69756f;
+}
+.today-signals strong {
+  color: #c1cbc6;
+  font-size: 12px;
+}
+
+.cockpit-rail .rail-block:first-child .rail-label {
+  color: #819087;
+}
+.cockpit-rail .rail-now strong {
+  font-size: 14px;
+}
+
+@media (max-width: 760px) {
+  .workspace-section-head h2 { font-size: 20px; }
+  .ledger-course strong { font-size: 13px; }
+  .ledger-grade strong { font-size: 16px; }
+}
+
+
+/* === StudyOS Quiet Luxury v3 === */
+.study-cockpit {
+  --lux-bg: #f5f5f7;
+  --lux-surface: rgba(255,255,255,.78);
+  --lux-text: #1d1d1f;
+  --lux-secondary: #6e6e73;
+  --lux-line: rgba(0,0,0,.075);
+  --lux-blue: #0071e3;
+  background: var(--lux-bg);
+  color: var(--lux-text);
+}
+
+.cockpit-sidebar {
+  width: 220px;
+  padding: 20px 14px 16px;
+  background: rgba(247,247,249,.86);
+  border-right: 1px solid var(--lux-line);
+  backdrop-filter: saturate(180%) blur(28px);
+}
+.cockpit-sidebar .brand { padding: 0 8px 20px; }
+.cockpit-sidebar .brand-mark {
+  width: 30px; height: 30px; border-radius: 8px; box-shadow: none;
+}
+.cockpit-sidebar .brand strong {
+  color: #1d1d1f; font-size: 17px; font-weight: 650; letter-spacing: -.04em;
+}
+.cockpit-sidebar .brand small,
+.cockpit-sidebar .nav-label { display: none; }
+.cockpit-sidebar .sidebar-search { margin: 0 4px 18px; }
+.cockpit-sidebar .side-nav { gap: 3px; }
+.cockpit-sidebar .side-nav a,
+.cockpit-sidebar .sidebar-tools button {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  color: #66666b;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+}
+.cockpit-sidebar .side-nav a:hover,
+.cockpit-sidebar .sidebar-tools button:hover { background: rgba(0,0,0,.035); color:#1d1d1f; }
+.cockpit-sidebar .side-nav a.active {
+  background: rgba(0,0,0,.055);
+  border: 0;
+  color: #1d1d1f;
+}
+.cockpit-sidebar .side-nav a.active::before { display:none; }
+.cockpit-sidebar .side-nav svg,
+.cockpit-sidebar .sidebar-tools svg { opacity:.72; }
+.cockpit-sidebar .sidebar-tools {
+  margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--lux-line);
+}
+.account-foot {
+  border-top: 1px solid var(--lux-line);
+  color:#1d1d1f;
+}
+.account-foot small { color:#8e8e93; }
+.account-avatar { background:#e7e7ea; color:#55555a; }
+.account-logout { color:#8e8e93; }
+
+.cockpit-main {
+  width: calc(100% - 220px);
+  margin-left: 220px;
+  padding: 0 clamp(30px,4.5vw,76px) 100px;
+  background: var(--lux-bg);
+}
+.cockpit-toolbar {
+  min-height: 58px;
+  border-bottom: 0;
+  color: #8e8e93;
+}
+.cockpit-toolbar > span { font-size: 10px; color:#9a9a9f; }
+.cockpit-toolbar select,
+.cockpit-toolbar .ghost-button {
+  min-height: 34px;
+  border: 1px solid rgba(0,0,0,.07);
+  border-radius: 9px;
+  background: rgba(255,255,255,.62);
+  color:#515154;
+  box-shadow: 0 1px 2px rgba(0,0,0,.025);
+}
+
+.cockpit-layout {
+  display:block;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+.cockpit-workspace { padding: 50px 0 80px; }
+.cockpit-rail { display:none; }
+
+.today-header {
+  display:block;
+  margin-bottom: 34px;
+}
+.today-date {
+  display:block;
+  margin-bottom: 8px;
+  color:#86868b;
+  font-size:12px;
+  text-transform:none;
+  letter-spacing:0;
+}
+.today-header h1 {
+  color:#1d1d1f;
+  font-size: clamp(42px,5vw,68px);
+  line-height:.98;
+  font-weight: 690;
+  letter-spacing:-.065em;
+}
+.today-signals {
+  justify-content:flex-start;
+  gap: 18px;
+  margin-top:18px;
+  color:#86868b;
+}
+.today-signals span {
+  padding:0;
+  border:0;
+  color:#86868b;
+  font-size:11px;
+}
+.today-signals strong { color:#515154; font-size:11px; font-weight:600; }
+
+.today-focus {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 240px;
+  min-height: 340px;
+  border:0;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(255,255,255,.95), transparent 34%),
+    linear-gradient(135deg,#ffffff 0%,#f0f1f3 100%);
+  box-shadow:
+    0 1px 2px rgba(0,0,0,.04),
+    0 16px 50px rgba(0,0,0,.075);
+  overflow:hidden;
+}
+.today-focus::before { display:none; }
+.today-focus-copy {
+  justify-content:center;
+  padding: clamp(42px,5vw,66px);
+}
+.focus-kicker {
+  margin-bottom:22px;
+  color:#86868b;
+  font-size:11px;
+  text-transform:none;
+  letter-spacing:0;
+}
+.focus-kicker .focus-index { display:none; }
+.focus-course-name {
+  color:#0071e3;
+  font-size:12px;
+  font-weight:600;
+}
+.today-focus h2 {
+  max-width:720px;
+  color:#1d1d1f;
+  font-size:clamp(34px,4.2vw,56px);
+  line-height:1.02;
+  letter-spacing:-.055em;
+  font-weight:680;
+}
+.focus-meta { margin-top:18px; gap:14px; color:#86868b; }
+.focus-meta span {
+  margin:0; padding:0; border:0; color:#86868b; font-size:11px;
+}
+.focus-setup-copy { color:#6e6e73; max-width:620px; font-size:14px; line-height:1.55; }
+
+.focus-launch,
+.today-focus .primary-button {
+  width:max-content;
+  min-width:160px;
+  min-height:46px;
+  margin-top:30px;
+  padding:0 18px;
+  border:0;
+  border-radius:999px;
+  background:#0071e3;
+  color:white;
+  box-shadow:none;
+}
+.focus-launch:hover:not(:disabled),
+.today-focus .primary-button:hover:not(:disabled) {
+  background:#0077ed;
+  transform:none;
+  box-shadow:none;
+}
+.focus-launch > span { display:none; }
+.focus-launch strong { color:white; font-size:13px; font-weight:600; }
+.focus-launch small { display:none; }
+.focus-launch > svg { color:white; }
+
+.today-focus-timer {
+  border:0;
+  background:transparent;
+}
+.today-focus-timer .focus-dial { width:170px; }
+.today-focus-timer .focus-dial strong { color:#1d1d1f; font-size:36px; font-weight:500; }
+
+.workspace-section {
+  margin-top:68px;
+}
+.workspace-section-head {
+  margin-bottom:14px;
+  padding:0;
+  border:0;
+}
+.workspace-section-head h2 {
+  color:#1d1d1f;
+  font-size:24px;
+  font-weight:650;
+  letter-spacing:-.035em;
+}
+.workspace-section-head p { display:none; }
+.text-action, .quiet-action { color:#0071e3; font-size:11px; }
+.text-action:hover,.quiet-action:hover { color:#0077ed; }
+
+.course-ledger {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+.ledger-row {
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr) auto;
+  grid-template-areas:
+    "symbol course arrow"
+    "symbol grade arrow";
+  min-height:126px;
+  gap:10px 14px;
+  padding:20px;
+  border:0;
+  border-radius:18px;
+  background:#fff;
+  box-shadow:0 1px 2px rgba(0,0,0,.025);
+}
+.ledger-row:hover {
+  padding:20px;
+  background:#fff;
+  transform:translateY(-1px);
+  box-shadow:0 8px 24px rgba(0,0,0,.055);
+}
+.ledger-symbol {
+  grid-area:symbol;
+  width:40px; height:40px; border-radius:11px;
+  border:0; box-shadow:none;
+}
+.ledger-course { grid-area:course; min-width:0; }
+.ledger-course strong { color:#1d1d1f; font-size:14px; }
+.ledger-course > div:first-child > span { display:none; }
+.ledger-progress {
+  max-width:none; height:4px; margin-top:12px; background:#ececef;
+}
+.ledger-progress > span { background:#0071e3; box-shadow:none; }
+.ledger-progress i { background:#1d1d1f; }
+.ledger-grade {
+  grid-area:grade;
+  align-self:end;
+  display:flex;
+  flex-direction:row;
+  align-items:baseline;
+  gap:6px;
+}
+.ledger-grade:nth-of-type(4),
+.ledger-evidence,.ledger-deadline { display:none; }
+.ledger-grade span { color:#8e8e93; font-size:9px; }
+.ledger-grade strong { color:#1d1d1f; font-size:18px; }
+.ledger-row > svg { grid-area:arrow; align-self:center; color:#c7c7cc; }
+
+.progress-section .rhythm-chart {
+  min-height:180px;
+  padding:22px;
+  border:0;
+  border-radius:18px;
+  background:#fff;
+  box-shadow:0 1px 2px rgba(0,0,0,.025);
+}
+.rhythm-line { background:#ececef; }
+.rhythm-day i { background:#0071e3; }
+.rhythm-day span,.rhythm-footer { color:#8e8e93; }
+.rhythm-footer { border-top-color:#ededf0; }
+
+.review-ledger {
+  border:0;
+  border-radius:18px;
+  overflow:hidden;
+  background:#fff;
+}
+.review-row {
+  min-height:64px;
+  padding:14px 18px;
+  border-bottom:1px solid #ededf0;
+  background:#fff;
+}
+.review-row:hover { background:#fafafa; }
+.review-row strong { color:#1d1d1f; }
+.review-row span { color:#86868b; }
+.review-count { color:#1d1d1f; }
+.review-clear {
+  min-height:112px;
+  padding:24px;
+  border:0;
+  background:#fff;
+  color:#1d1d1f;
+}
+.review-clear span { color:#86868b; }
+.review-clear::before { background:#f2f2f4; border-color:#e2e2e5; }
+
+.ledger-empty {
+  grid-column:1/-1;
+  padding:42px;
+  border:0;
+  border-radius:18px;
+  background:#fff;
+  color:#1d1d1f;
+}
+.ledger-empty span { color:#86868b; }
+.ledger-empty button { color:#0071e3; }
+
+@media (max-width: 1000px) {
+  .course-ledger { grid-template-columns:1fr; }
+}
+@media (max-width: 760px) {
+  .study-cockpit { background:#f5f5f7; }
+  .cockpit-main { width:100%; margin-left:0; padding:0 16px 60px; }
+  .cockpit-workspace { padding:30px 0 60px; }
+  .today-header h1 { font-size:46px; }
+  .today-signals { overflow:auto; flex-wrap:nowrap; padding-bottom:4px; }
+  .today-focus { grid-template-columns:1fr; border-radius:22px; }
+  .today-focus-copy { padding:34px 26px; }
+  .today-focus h2 { font-size:36px; }
+  .today-focus-timer { min-height:180px; border-top:1px solid #ededf0; }
+  .workspace-section { margin-top:52px; }
+  .workspace-section-head h2 { font-size:22px; }
+  .course-ledger { grid-template-columns:1fr; }
+}
+
+
+/* === Quiet Luxury v3.1 screenshot repair === */
+/* Kill inherited dark cockpit rules that were still winning the cascade. */
+.study-cockpit .cockpit-toolbar {
+  background: transparent !important;
+  border: 0 !important;
+}
+.study-cockpit .today-focus,
+.study-cockpit .today-focus.is-active {
+  color:#1d1d1f !important;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(255,255,255,1), transparent 38%),
+    linear-gradient(145deg,#ffffff 0%,#f4f4f6 100%) !important;
+  border:1px solid rgba(0,0,0,.045) !important;
+}
+.study-cockpit .today-focus-copy,
+.study-cockpit .today-focus h2,
+.study-cockpit .today-focus .focus-setup-copy {
+  color:#1d1d1f !important;
+}
+.study-cockpit .today-focus .focus-kicker { color:#86868b !important; }
+.study-cockpit .today-focus .focus-course-name { color:#0071e3 !important; }
+.study-cockpit .today-focus .focus-setup-copy { color:#6e6e73 !important; }
+
+.study-cockpit .course-ledger {
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  gap:12px !important;
+  border:0 !important;
+  background:transparent !important;
+}
+.study-cockpit .ledger-row {
+  grid-template-columns:42px minmax(0,1fr) 18px !important;
+  grid-template-areas:"symbol course arrow" "symbol grade arrow" !important;
+  min-height:126px !important;
+  padding:20px !important;
+  gap:10px 14px !important;
+  border:1px solid rgba(0,0,0,.045) !important;
+  border-radius:18px !important;
+  background:#fff !important;
+  box-shadow:0 1px 2px rgba(0,0,0,.025) !important;
+}
+.study-cockpit .ledger-row:hover {
+  padding:20px !important;
+  border-color:rgba(0,0,0,.06) !important;
+  transform:translateY(-1px);
+  box-shadow:0 10px 28px rgba(0,0,0,.055) !important;
+}
+.study-cockpit .ledger-row .ledger-symbol { grid-area:symbol !important; }
+.study-cockpit .ledger-row .ledger-course { grid-area:course !important; }
+.study-cockpit .ledger-row .ledger-grade { grid-area:grade !important; }
+.study-cockpit .ledger-row .ledger-grade:nth-of-type(4),
+.study-cockpit .ledger-row .ledger-evidence,
+.study-cockpit .ledger-row .ledger-deadline { display:none !important; }
+.study-cockpit .ledger-row > svg { grid-area:arrow !important; }
+
+.study-cockpit .progress-section .rhythm-chart {
+  min-height:170px !important;
+  padding:22px !important;
+  border:1px solid rgba(0,0,0,.045) !important;
+  border-radius:18px !important;
+  background:#fff !important;
+}
+.study-cockpit .rhythm-empty::before { display:none !important; }
+.study-cockpit .rhythm-empty {
+  min-height:120px !important;
+  align-content:center !important;
+  padding-left:8px;
+}
+.study-cockpit .review-ledger,
+.study-cockpit .review-clear {
+  border:0 !important;
+  background:#fff !important;
+}
+.study-cockpit .review-ledger {
+  border:1px solid rgba(0,0,0,.045) !important;
+  border-radius:18px !important;
+}
+.study-cockpit .review-clear { border-radius:18px !important; }
+
+@media (max-width:1000px) {
+  .study-cockpit .course-ledger { grid-template-columns:1fr !important; }
+}
+
+
+/* === Quiet Luxury v3.2 composition === */
+.study-cockpit .cockpit-layout {
+  max-width:1320px;
+}
+.study-cockpit .cockpit-workspace {
+  max-width:1080px;
+  margin:0 auto;
+}
+.study-cockpit .today-header {
+  margin-bottom:38px;
+}
+.study-cockpit .today-header h1 {
+  font-size:clamp(50px,5.4vw,76px);
+}
+.study-cockpit .today-signals:empty { display:none; }
+.study-cockpit .today-focus {
+  min-height:360px !important;
+}
+.study-cockpit .today-focus-copy {
+  padding:clamp(48px,5.2vw,72px) !important;
+}
+.study-cockpit .today-focus h2 {
+  max-width:760px;
+  font-size:clamp(38px,4.4vw,60px) !important;
+}
+.study-cockpit .workspace-section {
+  margin-top:74px;
+}
+.study-cockpit .workspace-section-head {
+  margin-bottom:18px;
+}
+.study-cockpit .workspace-section-head h2 {
+  font-size:26px;
+}
+.study-cockpit .course-ledger {
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+}
+.study-cockpit .ledger-row {
+  min-height:138px !important;
+  padding:24px !important;
+}
+.study-cockpit .ledger-row:hover { padding:24px !important; }
+.study-cockpit .ledger-course strong { font-size:15px; }
+.study-cockpit .ledger-progress { margin-top:16px; }
+.study-cockpit .progress-section .rhythm-chart {
+  min-height:150px !important;
+}
+.study-cockpit .rhythm-empty {
+  min-height:100px !important;
+  padding:0 12px !important;
+  border:0 !important;
+}
+.study-cockpit .rhythm-empty > strong {
+  color:#1d1d1f;
+  font-size:13px;
+  font-weight:600;
+}
+.study-cockpit .rhythm-empty > span {
+  color:#86868b;
+  font-size:11px;
+}
+.study-cockpit .rhythm-footer {
+  border:0 !important;
+  padding-top:12px;
+}
+.study-cockpit .review-clear {
+  min-height:126px !important;
+}
+@media(max-width:1000px){
+  .study-cockpit .cockpit-workspace { max-width:760px; }
+  .study-cockpit .course-ledger { grid-template-columns:1fr !important; }
+}
+
+
+/* === Admin nav quiet-luxury integration === */
+.cockpit-sidebar .sidebar-tools .sidebar-admin-link{
+  min-height:38px;display:flex;align-items:center;gap:10px;padding:8px 10px;
+  border:0;border-radius:9px;background:transparent;color:#66666b;
+  text-decoration:none;font-size:12px;font-weight:500;
+}
+.cockpit-sidebar .sidebar-tools .sidebar-admin-link:hover{background:rgba(0,0,0,.035);color:#1d1d1f}
+.cockpit-sidebar .sidebar-tools .sidebar-admin-link svg{opacity:.72}

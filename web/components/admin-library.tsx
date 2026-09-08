@@ -183,12 +183,12 @@ export function AdminLibrary() {
     <main className="admin-library-shell">
       <header className="admin-library-topbar">
         <Link href="/" className="admin-library-brand"><BrandMark /><strong>StudyOS<span>.</span></strong></Link>
-        <div><span>Admin · Institutional files</span><Link href="/library">Student library</Link><Link href="/">Back to Today</Link></div>
+        <div><span>Admin · Institutional files</span><Link href="/admin">Admin home</Link><Link href="/library">Student library</Link><Link href="/">Today</Link></div>
       </header>
 
       <div className="admin-library-layout">
         <aside className="admin-library-course-list">
-          <div className="admin-library-aside-head"><span>Master courses</span><small>Create new institutional courses from the Admin catalog on Today.</small></div>
+          <div className="admin-library-aside-head"><span>Master courses</span><small>Create and manage institutional courses from Admin.</small></div>
           {courses.map((course) => (
             <button key={course.id} className={courseId === course.id ? "active" : ""} onClick={() => chooseCourse(course.id)}>
               <span>{course.institution_code ?? course.institution_name}</span>
@@ -196,7 +196,7 @@ export function AdminLibrary() {
               <small>{course.course_code ?? "No code"} · {course.published ? "Published" : "Draft"}</small>
             </button>
           ))}
-          {!loading && courses.length === 0 && <div className="admin-library-no-courses">No master courses yet. Create one from the Admin catalog first.</div>}
+          {!loading && courses.length === 0 && <div className="admin-library-no-courses">No master courses yet. Create your first one in Admin.</div>}
         </aside>
 
         <section className="admin-library-main">

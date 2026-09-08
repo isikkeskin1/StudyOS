@@ -246,7 +246,7 @@ export function Dashboard({
       <aside className="sidebar cockpit-sidebar">
         <a className="brand" href="#overview" aria-label="StudyOS home">
           <BrandMark />
-          <span><strong>StudyOS<span className="brand-period">.</span></strong><small>Study workspace</small></span>
+          <span><strong>StudyOS<span className="brand-period">.</span></strong><small>Your semester</small></span>
         </a>
 
         <div className="sidebar-search"><GlobalSearch /></div>
@@ -277,7 +277,7 @@ export function Dashboard({
         <div className="sidebar-tools">
           <p className="nav-label">Actions</p>
           <button onClick={() => setManagerOpen(true)}><UiIcon name="plus" />Add or manage courses</button>
-          {isAdmin && <button onClick={() => setAdminOpen(true)}><UiIcon name="shield" />Institution catalog</button>}
+          {isAdmin && <><a className="sidebar-admin-link" href="/admin"><UiIcon name="shield" />Admin</a><a className="sidebar-admin-link" href="/admin/library"><UiIcon name="sources" />Institution files</a></>}
           <button onClick={() => setAccountOpen(true)}><UiIcon name="settings" />Account & integrations</button>
         </div>
 
@@ -290,7 +290,7 @@ export function Dashboard({
 
       <main className="main-content cockpit-main" id="main-content" tabIndex={-1}>
         <div className="cockpit-toolbar">
-          <span>{loading ? "Syncing" : error ? "Sync interrupted" : "Synced"}<i className={error ? "sync-dot warn" : "sync-dot"} /></span>
+          <span>{loading ? "Updating…" : error ? "Offline" : "Up to date"}<i className={error ? "sync-dot warn" : "sync-dot"} /></span>
           <div>
             <select aria-label="Filter dashboard by course" value={courseId} onChange={(event) => setCourseId(event.target.value)}>
               <option value="all">All courses</option>
@@ -310,11 +310,11 @@ export function Dashboard({
               <section className="today-header" id="overview">
                 <span className="today-date">{dayHeading()}</span>
                 <h1>Today</h1>
-                <div className="today-signals" aria-label="Current study signals">
-                  <span><strong>{formatMinutes(analytics.summary.focus_minutes)}</strong> focused · {days}d</span>
-                  <span><strong>{semester.due_review_count}</strong> reviews due</span>
-                  <span><strong>{formatPercent(analytics.summary.average_answer_score)}</strong> answer quality</span>
-                  <span><strong>{analytics.summary.below_target_count}</strong> below target</span>
+                <div className="today-signals" aria-label="Today at a glance">
+                  {analytics.summary.focus_minutes > 0 && <span><strong>{formatMinutes(analytics.summary.focus_minutes)}</strong> focused</span>}
+                  {semester.due_review_count > 0 && <span><strong>{semester.due_review_count}</strong> reviews due</span>}
+                  {analytics.summary.average_answer_score !== null && <span><strong>{formatPercent(analytics.summary.average_answer_score)}</strong> accuracy</span>}
+                  {analytics.summary.below_target_count > 0 && <span><strong>{analytics.summary.below_target_count}</strong> behind target</span>}
                 </div>
               </section>
 
@@ -322,7 +322,7 @@ export function Dashboard({
                 <div className="today-focus-copy">
                   <div className="focus-kicker">
                     <span className={activeFocus ? "live-pulse" : "focus-index"}>{activeFocus ? "" : "01"}</span>
-                    <span>{activeFocus ? "In session" : semester.next_action ? "Next session" : "Setup"}</span>
+                    <span>{activeFocus ? "In session" : semester.next_action ? "Up next" : "Get started"}</span>
                   </div>
 
                   {semester.next_action ? (
@@ -332,7 +332,7 @@ export function Dashboard({
                       <div className="focus-meta">
                         <span>{semester.next_action.planned_minutes} min</span>
                         <span>+{semester.next_action.expected_mark_gain.toFixed(2)} expected marks</span>
-                        <span>{semester.next_action.status.replace("_", " ")}</span>
+                        
                       </div>
 
                       {activeFocus ? (
@@ -343,20 +343,20 @@ export function Dashboard({
                       ) : (
                         <button className="focus-launch" disabled={actionBusy || selectedQueue?.needs_refresh} onClick={() => void focusAction("start")}>
                           <span><UiIcon name="play" /></span>
-                          <div><strong>{selectedQueue?.needs_refresh ? "Refresh plan first" : "Start session"}</strong><small>{semester.next_action.planned_minutes} minutes · distraction-free mode</small></div>
+                          <div><strong>{selectedQueue?.needs_refresh ? "Refresh plan" : "Start"}</strong><small>{semester.next_action.planned_minutes} minutes</small></div>
                           <UiIcon name="arrow" />
                         </button>
                       )}
                     </>
                   ) : (
                     <>
-                      <span className="focus-course-name">{semester.course_count ? "Courses need planning" : "No courses yet"}</span>
-                      <h2>{selectedQueue?.needs_refresh ? "Your study queue needs a refresh." : "Build the first real study block."}</h2>
-                      <p className="focus-setup-copy">{selectedQueue?.needs_refresh ? selectedQueue.refresh_reasons.join(" · ") : "Add course evidence, set a target, and StudyOS will choose the highest-value next block."}</p>
+                      <span className="focus-course-name">{semester.course_count ? "One step left" : "Start here"}</span>
+                      <h2>{selectedQueue?.needs_refresh ? "Your plan is ready for an update." : semester.course_count ? "Turn your course into a study plan." : "Add your first course."}</h2>
+                      <p className="focus-setup-copy">{selectedQueue?.needs_refresh ? "A few things changed since your last plan." : semester.course_count ? "Add material or set an exam target. StudyOS will handle what comes next." : "Choose a course or create your own. You can add material later."}</p>
                       {selectedQueue?.needs_refresh ? (
                         <button className="primary-button" disabled={actionBusy} onClick={() => void refreshQueue()}>Refresh plan</button>
                       ) : (
-                        <button className="primary-button" onClick={() => setManagerOpen(true)}><UiIcon name="plus" />Set up courses</button>
+                        <button className="primary-button" onClick={() => setManagerOpen(true)}><UiIcon name="plus" />{semester.course_count ? "Finish setup" : "Add course"}</button>
                       )}
                     </>
                   )}
@@ -368,7 +368,7 @@ export function Dashboard({
 
               <section className="workspace-section course-momentum" id="courses">
                 <div className="workspace-section-head">
-                  <div><span className="section-number">02</span><div><h2>Course momentum</h2><p>Current evidence against each target.</p></div></div>
+                  <div><span className="section-number">02</span><div><h2>Courses</h2><p>Where you stand, and what needs work.</p></div></div>
                   <button className="text-action" onClick={() => setManagerOpen(true)}>Manage courses <UiIcon name="arrow" /></button>
                 </div>
 
@@ -381,7 +381,7 @@ export function Dashboard({
                     const semesterCourse = semester.courses.find((item) => item.course_id === course.course_id);
                     return (
                       <a className="ledger-row" href={`/courses/${course.course_id}`} key={course.course_id}>
-                        <span className={`ledger-symbol course-color-${index % 4}`}>{String(index + 1).padStart(2, "0")}</span>
+                        <span className={`ledger-symbol course-color-${index % 4}`}>{course.course_name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
                         <div className="ledger-course">
                           <div><strong>{course.course_name}</strong><span>{course.measured_topic_count}/{course.topic_count} topics measured</span></div>
                           <div className="ledger-progress"><span style={{ width: `${readiness * 100}%` }} />{course.target_grade !== null && <i style={{ left: `${target * 100}%` }} />}</div>
@@ -399,7 +399,7 @@ export function Dashboard({
 
               <section className="workspace-section progress-section" id="activity">
                 <div className="workspace-section-head">
-                  <div><span className="section-number">03</span><div><h2>Study rhythm</h2><p>Focused minutes, not vanity activity.</p></div></div>
+                  <div><span className="section-number">03</span><div><h2>Study rhythm</h2><p>Your actual study pattern over time.</p></div></div>
                   <div className="window-toggle" aria-label="Analytics window">
                     {WINDOWS.map((windowDays) => <button key={windowDays} aria-pressed={days === windowDays} className={days === windowDays ? "active" : ""} onClick={() => setDays(windowDays)}>{windowDays}D</button>)}
                   </div>
@@ -420,7 +420,7 @@ export function Dashboard({
 
               <section className="workspace-section review-section" id="risks">
                 <div className="workspace-section-head">
-                  <div><span className="section-number">04</span><div><h2>Review queue</h2><p>Where the evidence says to look again.</p></div></div>
+                  <div><span className="section-number">04</span><div><h2>Review</h2><p>Mistakes and topics worth another pass.</p></div></div>
                   <span className="review-count">{riskRows.length} signals</span>
                 </div>
                 {riskRows.length ? (

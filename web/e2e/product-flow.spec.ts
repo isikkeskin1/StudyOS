@@ -49,7 +49,7 @@ test("account, setup, cockpit, workspace, and search stay usable", async ({
   await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await expect(page.getByRole("heading", { name: "Course momentum" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Courses", exact: true })).toBeVisible();
   await expect(
     page.locator(".course-ledger .ledger-row").filter({ hasText: courseName }).first(),
   ).toBeVisible();
