@@ -12,7 +12,7 @@
     "build:win": "npm run dist:win",
     "dist:win": "electron-builder --win nsis portable --publish never",
     "pack:win": "electron-builder --win dir",
-    "dist:store": "electron-builder --win appx --publish never"
+    "dist:store": "node build-store-appx.cjs"
   },
   "devDependencies": {
     "electron": "44.2.0",
