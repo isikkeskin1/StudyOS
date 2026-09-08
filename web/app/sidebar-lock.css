@@ -1,0 +1,24 @@
+/* Desktop app chrome must remain anchored while the study canvas scrolls. */
+@media (min-width: 761px) {
+  html[data-study-theme] .study-cockpit .cockpit-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    z-index: 80 !important;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ui-line-strong) transparent;
+  }
+
+  html[data-study-theme] .study-cockpit .cockpit-sidebar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  html[data-study-theme] .study-cockpit .cockpit-sidebar::-webkit-scrollbar-thumb {
+    background: var(--ui-line-strong);
+    border-radius: 999px;
+  }
+}
