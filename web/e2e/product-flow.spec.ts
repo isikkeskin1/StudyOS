@@ -10,6 +10,20 @@ async function expectNoHorizontalOverflow(page: import("@playwright/test").Page)
   expect(overflow.body).toBeLessThanOrEqual(overflow.viewport + 1);
 }
 
+test("appearance defaults dark and persists the chosen mode", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-study-theme", "dark");
+
+  await page.getByRole("button", { name: "Light", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-study-theme", "light");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-study-theme", "light");
+
+  await page.getByRole("button", { name: "Dark", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-study-theme", "dark");
+  await expectNoHorizontalOverflow(page);
+});
+
 test("account, setup, cockpit, workspace, and search stay usable", async ({
   page,
 }, testInfo) => {
