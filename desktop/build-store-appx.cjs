@@ -95,7 +95,11 @@ for (const line of lines) {
 
 fs.copyFileSync(manifestPath, path.join(stagingDir, 'AppxManifest.xml'));
 
-const cacheRoot = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'electron-builder', 'Cache', 'win-codesign') : null;
+// electron-builder's Windows toolset cache is named winCodeSign (camel case).
+// Keep this lookup case-aware and recursive so it also survives bundle layout changes.
+const cacheRoot = process.env.LOCALAPPDATA
+  ? path.join(process.env.LOCALAPPDATA, 'electron-builder', 'Cache')
+  : null;
 const makeAppx = findFile(cacheRoot, 'makeappx.exe');
 if (!makeAppx) fail(`Could not find makeappx.exe under ${cacheRoot || '<missing LOCALAPPDATA>'}`);
 
