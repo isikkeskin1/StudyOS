@@ -42,9 +42,10 @@ test("account, setup, cockpit, workspace, and search stay usable", async ({
   expect(course.name).toBe(courseName);
 
   await expect(page.getByRole("heading", { name: new RegExp(`Import ${courseName}`) })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue without documents" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await page.goto("/");
+  await page.getByRole("button", { name: "Continue without documents" }).click();
   await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
