@@ -1499,3 +1499,87 @@ body {
   .workspace-section-head h2 { font-size:22px; }
   .course-ledger { grid-template-columns:1fr; }
 }
+
+
+/* === Quiet Luxury v3.1 screenshot repair === */
+/* Kill inherited dark cockpit rules that were still winning the cascade. */
+.study-cockpit .cockpit-toolbar {
+  background: transparent !important;
+  border: 0 !important;
+}
+.study-cockpit .today-focus,
+.study-cockpit .today-focus.is-active {
+  color:#1d1d1f !important;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(255,255,255,1), transparent 38%),
+    linear-gradient(145deg,#ffffff 0%,#f4f4f6 100%) !important;
+  border:1px solid rgba(0,0,0,.045) !important;
+}
+.study-cockpit .today-focus-copy,
+.study-cockpit .today-focus h2,
+.study-cockpit .today-focus .focus-setup-copy {
+  color:#1d1d1f !important;
+}
+.study-cockpit .today-focus .focus-kicker { color:#86868b !important; }
+.study-cockpit .today-focus .focus-course-name { color:#0071e3 !important; }
+.study-cockpit .today-focus .focus-setup-copy { color:#6e6e73 !important; }
+
+.study-cockpit .course-ledger {
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  gap:12px !important;
+  border:0 !important;
+  background:transparent !important;
+}
+.study-cockpit .ledger-row {
+  grid-template-columns:42px minmax(0,1fr) 18px !important;
+  grid-template-areas:"symbol course arrow" "symbol grade arrow" !important;
+  min-height:126px !important;
+  padding:20px !important;
+  gap:10px 14px !important;
+  border:1px solid rgba(0,0,0,.045) !important;
+  border-radius:18px !important;
+  background:#fff !important;
+  box-shadow:0 1px 2px rgba(0,0,0,.025) !important;
+}
+.study-cockpit .ledger-row:hover {
+  padding:20px !important;
+  border-color:rgba(0,0,0,.06) !important;
+  transform:translateY(-1px);
+  box-shadow:0 10px 28px rgba(0,0,0,.055) !important;
+}
+.study-cockpit .ledger-row .ledger-symbol { grid-area:symbol !important; }
+.study-cockpit .ledger-row .ledger-course { grid-area:course !important; }
+.study-cockpit .ledger-row .ledger-grade { grid-area:grade !important; }
+.study-cockpit .ledger-row .ledger-grade:nth-of-type(4),
+.study-cockpit .ledger-row .ledger-evidence,
+.study-cockpit .ledger-row .ledger-deadline { display:none !important; }
+.study-cockpit .ledger-row > svg { grid-area:arrow !important; }
+
+.study-cockpit .progress-section .rhythm-chart {
+  min-height:170px !important;
+  padding:22px !important;
+  border:1px solid rgba(0,0,0,.045) !important;
+  border-radius:18px !important;
+  background:#fff !important;
+}
+.study-cockpit .rhythm-empty::before { display:none !important; }
+.study-cockpit .rhythm-empty {
+  min-height:120px !important;
+  align-content:center !important;
+  padding-left:8px;
+}
+.study-cockpit .review-ledger,
+.study-cockpit .review-clear {
+  border:0 !important;
+  background:#fff !important;
+}
+.study-cockpit .review-ledger {
+  border:1px solid rgba(0,0,0,.045) !important;
+  border-radius:18px !important;
+}
+.study-cockpit .review-clear { border-radius:18px !important; }
+
+@media (max-width:1000px) {
+  .study-cockpit .course-ledger { grid-template-columns:1fr !important; }
+}
