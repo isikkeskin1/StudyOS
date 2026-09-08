@@ -11,6 +11,35 @@ html[data-study-theme] .course-ledger:has(> .ledger-row:only-child) {
   grid-template-columns: 1fr !important;
 }
 
+/* Theme the remaining analytics-window control instead of inheriting the old hard-coded black surface. */
+html[data-study-theme] .window-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: 10px !important;
+  background: var(--ui-surface-2) !important;
+}
+html[data-study-theme] .window-toggle button {
+  min-width: 38px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--ui-muted) !important;
+  font-size: 10px;
+}
+html[data-study-theme] .window-toggle button.active,
+html[data-study-theme] .window-toggle button[aria-pressed="true"] {
+  background: var(--ui-surface-3) !important;
+  color: var(--ui-text) !important;
+}
+html[data-study-theme="dark"] .window-toggle button.active,
+html[data-study-theme="dark"] .window-toggle button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--ui-accent) 16%, var(--ui-surface-3)) !important;
+}
+
 /* Protect unusually long real course names without turning the workspace into a billboard. */
 html[data-study-theme] .workspace-app .workspace-topbar h1 {
   max-width: 900px;
@@ -19,13 +48,18 @@ html[data-study-theme] .workspace-app .workspace-topbar h1 {
 }
 
 @media (max-width: 760px) {
-  /* The phone nav needs labels: icon-only navigation was ambiguous in screenshot QA. */
+  /* Mobile already has landmarks and a persistent nav; don't let a programmatically focused skip link become UI chrome. */
+  .skip-link { display: none !important; }
+
+  /* The phone nav needs full labels: icon-only/truncated navigation failed screenshot QA. */
   html[data-study-theme] .cockpit-sidebar .side-nav .nav-text {
     display: block !important;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
     white-space: nowrap;
+    font-size: 8px;
+    line-height: 1;
   }
 
   /* On phones the switch shows only the destination theme, cutting its footprint in half. */
@@ -82,5 +116,14 @@ html[data-study-theme] .workspace-app .workspace-topbar h1 {
 
   html[data-study-theme] .ledger-row > .ledger-grade:nth-of-type(2) {
     align-self: end;
+  }
+
+  html[data-study-theme] .window-toggle {
+    flex: 0 0 auto;
+  }
+  html[data-study-theme] .window-toggle button {
+    min-width: 34px;
+    min-height: 32px;
+    padding: 0 6px;
   }
 }
