@@ -56,6 +56,30 @@ def test_process_text_document_extracts_chunks_and_classifies(client: TestClient
     assert content["chunks"][0]["source_label"] == "document"
 
 
+def test_processing_sanitizes_database_unsafe_control_characters(client: TestClient) -> None:
+    course_id = _create_course(client)
+    document_id = _upload(
+        client,
+        course_id,
+        "solutions.txt",
+        b"Worked solution\x00 with embedded control\x01 characters.\nFinal answer: 42.",
+    )
+
+    process_response = client.post(
+        f"/api/v1/courses/{course_id}/documents/{document_id}/process"
+    )
+
+    assert process_response.status_code == 200
+    content = client.get(
+        f"/api/v1/courses/{course_id}/documents/{document_id}/content"
+    ).json()
+    persisted = content["units"][0]["text"]
+    assert "\x00" not in persisted
+    assert "\x01" not in persisted
+    assert "Worked solution with embedded control characters." in persisted
+    assert "Final answer: 42." in persisted
+
+
 def test_content_requires_processing(client: TestClient) -> None:
     course_id = _create_course(client)
     document_id = _upload(client, course_id, "notes.md", b"# Notes\nEnergy")
