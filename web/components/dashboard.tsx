@@ -290,7 +290,7 @@ export function Dashboard({
 
       <main className="main-content cockpit-main" id="main-content" tabIndex={-1}>
         <div className="cockpit-toolbar">
-          <span>{loading ? "Syncing" : error ? "Sync interrupted" : "Synced"}<i className={error ? "sync-dot warn" : "sync-dot"} /></span>
+          <span>{loading ? "Updating…" : error ? "Offline" : "Up to date"}<i className={error ? "sync-dot warn" : "sync-dot"} /></span>
           <div>
             <select aria-label="Filter dashboard by course" value={courseId} onChange={(event) => setCourseId(event.target.value)}>
               <option value="all">All courses</option>
@@ -311,10 +311,10 @@ export function Dashboard({
                 <span className="today-date">{dayHeading()}</span>
                 <h1>Today</h1>
                 <div className="today-signals" aria-label="Today at a glance">
-                  <span><strong>{formatMinutes(analytics.summary.focus_minutes)}</strong> focused · {days}d</span>
+                  <span><strong>{formatMinutes(analytics.summary.focus_minutes)}</strong> focused</span>
                   <span><strong>{semester.due_review_count}</strong> reviews due</span>
-                  <span><strong>{formatPercent(analytics.summary.average_answer_score)}</strong> answer quality</span>
-                  <span><strong>{analytics.summary.below_target_count}</strong> courses behind</span>
+                  <span><strong>{formatPercent(analytics.summary.average_answer_score)}</strong> accuracy</span>
+                  <span><strong>{analytics.summary.below_target_count}</strong> behind target</span>
                 </div>
               </section>
 
@@ -322,7 +322,7 @@ export function Dashboard({
                 <div className="today-focus-copy">
                   <div className="focus-kicker">
                     <span className={activeFocus ? "live-pulse" : "focus-index"}>{activeFocus ? "" : "01"}</span>
-                    <span>{activeFocus ? "In session" : semester.next_action ? "Next session" : "Setup"}</span>
+                    <span>{activeFocus ? "In session" : semester.next_action ? "Up next" : "Get started"}</span>
                   </div>
 
                   {semester.next_action ? (
@@ -332,7 +332,7 @@ export function Dashboard({
                       <div className="focus-meta">
                         <span>{semester.next_action.planned_minutes} min</span>
                         <span>+{semester.next_action.expected_mark_gain.toFixed(2)} expected marks</span>
-                        <span>{semester.next_action.status.replace("_", " ")}</span>
+                        
                       </div>
 
                       {activeFocus ? (
@@ -343,7 +343,7 @@ export function Dashboard({
                       ) : (
                         <button className="focus-launch" disabled={actionBusy || selectedQueue?.needs_refresh} onClick={() => void focusAction("start")}>
                           <span><UiIcon name="play" /></span>
-                          <div><strong>{selectedQueue?.needs_refresh ? "Refresh plan first" : "Start session"}</strong><small>{semester.next_action.planned_minutes} minutes · distraction-free mode</small></div>
+                          <div><strong>{selectedQueue?.needs_refresh ? "Refresh plan" : "Start"}</strong><small>{semester.next_action.planned_minutes} minutes</small></div>
                           <UiIcon name="arrow" />
                         </button>
                       )}
