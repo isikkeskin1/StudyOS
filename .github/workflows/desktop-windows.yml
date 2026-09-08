@@ -271,9 +271,9 @@ jobs:
             npm run dist:store
           }
 
-          $storePackage = Get-ChildItem "dist/StudyOS-*-Microsoft-Store-x64.msix" | Select-Object -First 1
+          $storePackage = Get-ChildItem "dist/StudyOS-*-Microsoft-Store-x64.msixupload" | Select-Object -First 1
           if (-not $storePackage) {
-            throw "Missing Microsoft Store MSIX package"
+            throw "Missing Microsoft Store .msixupload package"
           }
 
       - name: Verify release signature
@@ -332,7 +332,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: StudyOS-Microsoft-Store
-          path: desktop/dist/StudyOS-*-Microsoft-Store-x64.msix
+          path: desktop/dist/StudyOS-*-Microsoft-Store-x64.msixupload
           if-no-files-found: error
 
       - name: Attach installers to published release
