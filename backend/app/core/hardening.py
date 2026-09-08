@@ -20,11 +20,22 @@ _AUTH_PATHS = {
 }
 
 
+def _allows_same_origin_frame(path: str) -> bool:
+    return (
+        "/catalog/courses/" in path
+        and "/documents/" in path
+        and path.endswith("/file")
+    )
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
+        frame_policy = (
+            "SAMEORIGIN" if _allows_same_origin_frame(request.url.path) else "DENY"
+        )
+        response.headers.setdefault("X-Frame-Options", frame_policy)
         response.headers.setdefault("Referrer-Policy", "no-referrer")
         response.headers.setdefault(
             "Permissions-Policy",
