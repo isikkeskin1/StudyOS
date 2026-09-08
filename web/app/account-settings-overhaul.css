@@ -1,0 +1,274 @@
+/* Account & integrations — large app-native settings workspace. */
+
+.account-settings-backdrop {
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: color-mix(in srgb, #050607 74%, transparent) !important;
+  backdrop-filter: blur(18px) saturate(120%) !important;
+  animation: account-backdrop-in 180ms ease-out both;
+}
+
+.account-settings-panel {
+  width: min(1120px, calc(100vw - 72px)) !important;
+  max-height: min(900px, calc(100dvh - 64px)) !important;
+  overflow: auto !important;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: 22px !important;
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+  box-shadow: 0 44px 120px rgba(0,0,0,.42) !important;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--ui-faint) transparent;
+  animation: account-panel-in 260ms cubic-bezier(.18,.82,.2,1) both;
+}
+
+.account-settings-panel > .manager-header {
+  min-height: 92px !important;
+  padding: 24px 32px !important;
+  border-bottom: 1px solid var(--ui-line) !important;
+  background: color-mix(in srgb, var(--ui-surface) 90%, transparent) !important;
+  backdrop-filter: blur(26px) saturate(145%) !important;
+}
+
+.account-settings-panel .manager-header .eyebrow {
+  margin-bottom: 5px !important;
+  color: var(--ui-faint) !important;
+  font-size: 9px !important;
+  letter-spacing: .08em !important;
+}
+
+.account-settings-panel .manager-header h2 {
+  color: var(--ui-text) !important;
+  font-size: 23px !important;
+  line-height: 1.1 !important;
+  letter-spacing: -.035em !important;
+  font-weight: 680 !important;
+}
+
+.account-settings-panel .manager-close {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 10px !important;
+  border-color: var(--ui-line) !important;
+  background: var(--ui-surface-2) !important;
+  color: var(--ui-muted) !important;
+}
+
+.account-settings-panel .manager-close:hover:not(:disabled) {
+  background: var(--ui-surface-3) !important;
+  color: var(--ui-text) !important;
+}
+
+.account-settings-section,
+.account-integrations {
+  padding: 30px 34px !important;
+  border-top: 1px solid var(--ui-line) !important;
+  background: transparent !important;
+}
+
+.account-settings-section {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 34px !important;
+  align-items: center !important;
+}
+
+.account-settings-section:first-of-type {
+  border-top: 0 !important;
+}
+
+.account-settings-section > strong {
+  grid-column: 1 / -1 !important;
+  margin: -8px 0 0 !important;
+  color: var(--ui-text) !important;
+  font-size: 18px !important;
+  font-weight: 650 !important;
+  letter-spacing: -.02em !important;
+}
+
+.account-settings-label {
+  display: inline-block;
+  margin-bottom: 7px !important;
+  color: var(--ui-faint) !important;
+  font-size: 9px !important;
+  line-height: 1 !important;
+  letter-spacing: .09em !important;
+  text-transform: uppercase;
+  font-weight: 650 !important;
+}
+
+.account-settings-section h3,
+.account-integrations h3 {
+  margin: 0 0 6px !important;
+  color: var(--ui-text) !important;
+  font-size: 16px !important;
+  line-height: 1.25 !important;
+  letter-spacing: -.02em !important;
+  font-weight: 640 !important;
+}
+
+.account-settings-section p,
+.account-integrations p {
+  max-width: 720px !important;
+  margin-top: 6px !important;
+  color: var(--ui-muted) !important;
+  font-size: 12px !important;
+  line-height: 1.65 !important;
+}
+
+.account-settings-section .ghost-button,
+.account-settings-section .primary-button,
+.account-settings-section .danger-button {
+  min-height: 40px !important;
+  padding-inline: 14px !important;
+  border-radius: 10px !important;
+  font-size: 11px !important;
+  white-space: nowrap;
+}
+
+.account-settings-section > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.account-integrations {
+  display: grid !important;
+  gap: 14px !important;
+}
+
+.account-settings-panel .spotify-dock {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.account-danger-zone {
+  margin: 18px 22px 22px !important;
+  padding: 28px !important;
+  border: 1px solid color-mix(in srgb, var(--ui-danger) 22%, var(--ui-line)) !important;
+  border-radius: 16px !important;
+  background: color-mix(in srgb, var(--ui-danger) 5%, var(--ui-surface)) !important;
+}
+
+.account-danger-zone .account-settings-label,
+.account-danger-zone h3 {
+  color: var(--ui-danger) !important;
+}
+
+.account-delete-form {
+  min-width: 300px;
+  display: grid !important;
+  gap: 12px !important;
+}
+
+.account-delete-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--ui-muted) !important;
+  font-size: 10px !important;
+}
+
+.account-delete-form input {
+  min-height: 42px !important;
+  padding: 0 12px !important;
+  border: 1px solid var(--ui-line-strong) !important;
+  border-radius: 9px !important;
+  background: var(--ui-surface-2) !important;
+  color: var(--ui-text) !important;
+  font-size: 12px !important;
+}
+
+.account-settings-panel .error-banner,
+.account-settings-panel .setup-message {
+  margin: 18px 28px 0 !important;
+}
+
+@keyframes account-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes account-panel-in {
+  from { opacity: 0; transform: translateY(18px) scale(.975); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (min-width: 1280px) {
+  .account-settings-panel {
+    width: min(1180px, calc(100vw - 96px)) !important;
+  }
+
+  .account-settings-section,
+  .account-integrations {
+    padding-left: 40px !important;
+    padding-right: 40px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .account-settings-backdrop {
+    place-items: stretch;
+    padding: 0 !important;
+    background: var(--ui-bg) !important;
+    backdrop-filter: none !important;
+  }
+
+  .account-settings-panel {
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: var(--ui-bg) !important;
+  }
+
+  .account-settings-panel > .manager-header {
+    min-height: 72px !important;
+    padding: 16px 18px !important;
+    background: color-mix(in srgb, var(--ui-bg) 88%, transparent) !important;
+  }
+
+  .account-settings-panel .manager-header h2 {
+    font-size: 20px !important;
+  }
+
+  .account-settings-section,
+  .account-integrations {
+    grid-template-columns: 1fr !important;
+    padding: 24px 18px !important;
+    gap: 16px !important;
+  }
+
+  .account-settings-section > div:last-child {
+    justify-content: flex-start;
+  }
+
+  .account-settings-section .ghost-button,
+  .account-settings-section .primary-button,
+  .account-settings-section .danger-button {
+    width: 100%;
+    min-height: 46px !important;
+    justify-content: center;
+  }
+
+  .account-danger-zone {
+    margin: 14px !important;
+    padding: 20px !important;
+  }
+
+  .account-delete-form {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-settings-backdrop,
+  .account-settings-panel {
+    animation: none !important;
+  }
+}
