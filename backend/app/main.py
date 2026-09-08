@@ -12,6 +12,7 @@ from app.api.calendar_subscription import public_router as public_calendar_route
 from app.api.calendar_subscription import router as calendar_subscription_router
 from app.api.calibration import router as calibration_router
 from app.api.catalog import router as catalog_router
+from app.api.catalog_library import router as catalog_library_router
 from app.api.cheat_sheet import router as cheat_sheet_router
 from app.api.courses import router as courses_router
 from app.api.diagnostics import router as diagnostics_router
@@ -101,6 +102,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(auth_router, prefix=resolved_settings.api_prefix)
     application.include_router(courses_router, prefix=resolved_settings.api_prefix)
     application.include_router(catalog_router, prefix=resolved_settings.api_prefix)
+    application.include_router(catalog_library_router, prefix=resolved_settings.api_prefix)
     application.include_router(planning_router, prefix=resolved_settings.api_prefix)
     application.include_router(emergency_planning_router, prefix=resolved_settings.api_prefix)
     application.include_router(emergency_schedule_router, prefix=resolved_settings.api_prefix)
