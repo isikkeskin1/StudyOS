@@ -66,67 +66,40 @@ jobs:
             throw "Missing bundled StudyOS backend executable"
           }
 
-      - name: Smoke desktop legacy database migration
+      - name: Smoke bundled backend migration
         shell: pwsh
         run: |
           $legacyRoot = Join-Path $env:RUNNER_TEMP "studyos-legacy"
           New-Item -ItemType Directory -Path $legacyRoot -Force | Out-Null
           $dbPath = Join-Path $legacyRoot "legacy.db"
           $uploadPath = Join-Path $legacyRoot "uploads"
-
           @'
           import sqlite3
           import sys
-
-          path = sys.argv[1]
-          connection = sqlite3.connect(path)
+          connection = sqlite3.connect(sys.argv[1])
           try:
-              connection.execute(
-                  """
-                  CREATE TABLE users (
-                      id VARCHAR(36) PRIMARY KEY,
-                      email VARCHAR(320) NOT NULL UNIQUE,
-                      password_hash VARCHAR(512) NOT NULL,
-                      created_at DATETIME NOT NULL
-                  )
-                  """
-              )
+              connection.execute("CREATE TABLE users (id VARCHAR(36) PRIMARY KEY, email VARCHAR(320) NOT NULL UNIQUE, password_hash VARCHAR(512) NOT NULL, created_at DATETIME NOT NULL)")
               connection.commit()
           finally:
               connection.close()
           '@ | python - $dbPath
-
           $verifyScript = Join-Path $legacyRoot "verify-migration.py"
           @'
           import sqlite3
           import sys
-
           connection = sqlite3.connect(sys.argv[1])
           try:
-              columns = {
-                  row[1]
-                  for row in connection.execute("PRAGMA table_info(users)").fetchall()
-              }
-              tables = {
-                  row[0]
-                  for row in connection.execute(
-                      "SELECT name FROM sqlite_master WHERE type='table'"
-                  ).fetchall()
-              }
-              required_tables = {
-                  "alembic_version",
-                  "catalog_courses",
-                  "catalog_sources",
-              }
+              columns = {row[1] for row in connection.execute("PRAGMA table_info(users)").fetchall()}
+              tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+              required = {"alembic_version", "catalog_courses", "catalog_sources"}
               if "is_admin" not in columns:
                   raise SystemExit("users.is_admin was not migrated")
-              missing = required_tables - tables
+              missing = required - tables
               if missing:
                   raise SystemExit(f"Missing migrated tables: {sorted(missing)}")
           finally:
               connection.close()
           '@ | Set-Content -Path $verifyScript -Encoding UTF8
-
           $env:STUDYOS_ENV = "desktop"
           $env:STUDYOS_DATABASE_URL = "sqlite:///$($dbPath -replace '\\','/')"
           $env:STUDYOS_DATA_DIR = $uploadPath
@@ -138,28 +111,16 @@ jobs:
             for ($attempt = 0; $attempt -lt 90; $attempt++) {
               try {
                 $response = Invoke-WebRequest "http://127.0.0.1:8766/api/v1/health/ready" -UseBasicParsing -TimeoutSec 2
-                if ($response.StatusCode -eq 200) {
-                  $healthy = $true
-                  break
-                }
+                if ($response.StatusCode -eq 200) { $healthy = $true; break }
               } catch {}
-              if ($backend.HasExited) {
-                throw "Bundled backend exited during legacy database migration smoke"
-              }
+              if ($backend.HasExited) { throw "Bundled backend exited during legacy database migration smoke" }
               Start-Sleep -Milliseconds 500
             }
-            if (-not $healthy) {
-              throw "Bundled backend never became ready after legacy database migration"
-            }
-
+            if (-not $healthy) { throw "Bundled backend never became ready after legacy database migration" }
             python $verifyScript $dbPath
-            if ($LASTEXITCODE -ne 0) {
-              throw "Legacy database migration verification failed"
-            }
+            if ($LASTEXITCODE -ne 0) { throw "Legacy database migration verification failed" }
           } finally {
-            if (-not $backend.HasExited) {
-              Stop-Process -Id $backend.Id -Force
-            }
+            if (-not $backend.HasExited) { Stop-Process -Id $backend.Id -Force }
           }
 
       - name: Smoke bundled backend
@@ -180,23 +141,14 @@ jobs:
             for ($attempt = 0; $attempt -lt 60; $attempt++) {
               try {
                 $response = Invoke-WebRequest "http://127.0.0.1:8765/api/v1/health/ready" -UseBasicParsing -TimeoutSec 2
-                if ($response.StatusCode -eq 200) {
-                  $healthy = $true
-                  break
-                }
+                if ($response.StatusCode -eq 200) { $healthy = $true; break }
               } catch {}
-              if ($backend.HasExited) {
-                throw "Bundled backend exited during startup"
-              }
+              if ($backend.HasExited) { throw "Bundled backend exited during startup" }
               Start-Sleep -Milliseconds 500
             }
-            if (-not $healthy) {
-              throw "Bundled backend never became ready"
-            }
+            if (-not $healthy) { throw "Bundled backend never became ready" }
           } finally {
-            if (-not $backend.HasExited) {
-              Stop-Process -Id $backend.Id -Force
-            }
+            if (-not $backend.HasExited) { Stop-Process -Id $backend.Id -Force }
           }
 
       - name: Install web dependencies
@@ -215,16 +167,12 @@ jobs:
         shell: pwsh
         run: |
           $stage = "desktop/build/web"
-          if (Test-Path $stage) {
-            Remove-Item -Recurse -Force $stage
-          }
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
           New-Item -ItemType Directory -Path $stage | Out-Null
           Copy-Item -Recurse -Force "web/.next/standalone/*" $stage
           Copy-Item -Recurse -Force "web/.next/static" "$stage/.next/static"
           Copy-Item -Recurse -Force "web/public" "$stage/public"
-          if (!(Test-Path "$stage/server.js")) {
-            throw "Missing staged Next standalone server"
-          }
+          if (!(Test-Path "$stage/server.js")) { throw "Missing staged Next standalone server" }
 
       - name: Install desktop dependencies
         working-directory: desktop
@@ -235,6 +183,11 @@ jobs:
         working-directory: desktop
         shell: pwsh
         run: npm run verify
+
+      - name: Show electron-builder version
+        working-directory: desktop
+        shell: pwsh
+        run: npx electron-builder --version
 
       - name: Build Windows installer
         working-directory: desktop
@@ -262,35 +215,68 @@ jobs:
           if ($configuredCount -ne 0 -and $configuredCount -ne 3) {
             throw "Configure all three Microsoft Store repository variables or leave all three unset."
           }
-
-          if ($configuredCount -eq 3) {
-            npx electron-builder --win appx --publish never `
-              --config.appx.identityName="$env:STORE_IDENTITY_NAME" `
-              --config.appx.publisher="$env:STORE_PUBLISHER" `
-              --config.appx.publisherDisplayName="$env:STORE_PUBLISHER_DISPLAY_NAME"
+          try {
+            if ($configuredCount -eq 3) {
+              npx electron-builder --win appx --publish never `
+                --config.appx.identityName="$env:STORE_IDENTITY_NAME" `
+                --config.appx.publisher="$env:STORE_PUBLISHER" `
+                --config.appx.publisherDisplayName="$env:STORE_PUBLISHER_DISPLAY_NAME"
+            } else {
+              npm run dist:store
+            }
             if ($LASTEXITCODE -ne 0) {
               throw "electron-builder AppX build exited with code $LASTEXITCODE"
             }
-          } else {
-            npm run dist:store
-            if ($LASTEXITCODE -ne 0) {
-              throw "npm dist:store exited with code $LASTEXITCODE"
+          } catch {
+            Write-Host "::group::AppX mapping diagnostics"
+            $mappingFiles = Get-ChildItem "dist" -Filter "mapping.txt" -Recurse -File -ErrorAction SilentlyContinue
+            if ($mappingFiles.Count -eq 0) {
+              Write-Host "No mapping.txt found under desktop/dist"
+            } else {
+              foreach ($mapping in $mappingFiles) {
+                Write-Host "===== $($mapping.FullName) ====="
+                Get-Content $mapping.FullName
+              }
             }
+            $manifestFiles = Get-ChildItem "dist" -Filter "AppxManifest.xml" -Recurse -File -ErrorAction SilentlyContinue
+            if ($manifestFiles.Count -eq 0) {
+              Write-Host "No AppxManifest.xml found under desktop/dist"
+            } else {
+              foreach ($manifest in $manifestFiles) {
+                Write-Host "===== $($manifest.FullName) ====="
+                Get-Content $manifest.FullName
+              }
+            }
+            Write-Host "::endgroup::"
+            Write-Host "::group::Potentially invalid package paths"
+            $invalid = Get-ChildItem "dist/win-unpacked" -Recurse -Force -File -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.Name -match '[<>:\"|?*]' -or
+                $_.Name -match '[ .]$' -or
+                $_.BaseName -match '^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$'
+              }
+            if ($invalid) {
+              $invalid | ForEach-Object { Write-Host $_.FullName }
+            } else {
+              Write-Host "No obvious invalid Windows filenames found in win-unpacked"
+            }
+            Write-Host "::endgroup::"
+            throw
           }
 
           $storePackage = Get-ChildItem "dist/StudyOS-*-Microsoft-Store-x64.appx" | Select-Object -First 1
           if (-not $storePackage) {
             throw "Missing Microsoft Store .appx package"
           }
+          Write-Host "Created Store package: $($storePackage.FullName)"
+          Write-Host "Size: $([math]::Round($storePackage.Length / 1MB, 2)) MB"
 
       - name: Verify release signature
         if: github.event_name == 'release'
         shell: pwsh
         run: |
           $installer = Get-ChildItem "desktop/dist/StudyOS-Windows-x64-Setup.exe" | Select-Object -First 1
-          if (-not $installer) {
-            throw "Missing StudyOS installer for signature verification"
-          }
+          if (-not $installer) { throw "Missing StudyOS installer for signature verification" }
           $signature = Get-AuthenticodeSignature $installer.FullName
           if ($signature.Status -ne "Valid") {
             throw "StudyOS installer is not signed with a valid Authenticode certificate: $($signature.Status)"
@@ -300,9 +286,7 @@ jobs:
         shell: pwsh
         run: |
           $metadata = "desktop/dist/latest.yml"
-          if (!(Test-Path $metadata)) {
-            throw "Missing latest.yml auto-update metadata"
-          }
+          if (!(Test-Path $metadata)) { throw "Missing latest.yml auto-update metadata" }
           $raw = Get-Content $metadata -Raw
           if ($raw -notmatch "StudyOS-Windows-x64-Setup\.exe") {
             throw "latest.yml does not reference the StudyOS Windows installer"
@@ -320,9 +304,7 @@ jobs:
         shell: pwsh
         run: |
           $appExe = "desktop/dist/win-unpacked/StudyOS.exe"
-          if (!(Test-Path $appExe)) {
-            throw "Packaged StudyOS.exe is missing"
-          }
+          if (!(Test-Path $appExe)) { throw "Packaged StudyOS.exe is missing" }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7
@@ -342,6 +324,16 @@ jobs:
           path: desktop/dist/StudyOS-*-Microsoft-Store-x64.appx
           if-no-files-found: error
 
+      - name: Upload AppX diagnostics on failure
+        if: failure() && steps.build-store.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: StudyOS-AppX-diagnostics
+          path: |
+            desktop/dist/**/mapping.txt
+            desktop/dist/**/AppxManifest.xml
+          if-no-files-found: ignore
+
       - name: Attach installers to published release
         if: github.event_name == 'release'
         shell: pwsh
@@ -350,20 +342,12 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           $installer = Get-ChildItem "desktop/dist/StudyOS-Windows-x64-Setup.exe" | Select-Object -First 1
-          if (-not $installer) {
-            throw "Missing StudyOS installer"
-          }
+          if (-not $installer) { throw "Missing StudyOS installer" }
           $assets = @($installer.FullName, (Resolve-Path "desktop/dist/latest.yml").Path)
           $portable = Get-ChildItem "desktop/dist/StudyOS-*-Windows-x64-Portable.exe" | Select-Object -First 1
-          if ($portable) {
-            $assets += $portable.FullName
-          }
+          if ($portable) { $assets += $portable.FullName }
           $blockmap = Get-ChildItem "desktop/dist/*.blockmap" | Select-Object -First 1
-          if ($blockmap) {
-            $assets += $blockmap.FullName
-          }
+          if ($blockmap) { $assets += $blockmap.FullName }
           $storePackage = Get-ChildItem "desktop/dist/StudyOS-*-Microsoft-Store-x64.appx" | Select-Object -First 1
-          if ($storePackage) {
-            $assets += $storePackage.FullName
-          }
+          if ($storePackage) { $assets += $storePackage.FullName }
           gh release upload $env:RELEASE_TAG @assets --clobber
