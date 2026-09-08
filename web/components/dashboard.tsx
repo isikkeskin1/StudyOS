@@ -368,7 +368,7 @@ export function Dashboard({
 
               <section className="workspace-section course-momentum" id="courses">
                 <div className="workspace-section-head">
-                  <div><span className="section-number">02</span><div><h2>Course momentum</h2><p>Where you stand, and what needs work.</p></div></div>
+                  <div><span className="section-number">02</span><div><h2>Courses</h2><p>Where you stand, and what needs work.</p></div></div>
                   <button className="text-action" onClick={() => setManagerOpen(true)}>Manage courses <UiIcon name="arrow" /></button>
                 </div>
 
@@ -381,7 +381,7 @@ export function Dashboard({
                     const semesterCourse = semester.courses.find((item) => item.course_id === course.course_id);
                     return (
                       <a className="ledger-row" href={`/courses/${course.course_id}`} key={course.course_id}>
-                        <span className={`ledger-symbol course-color-${index % 4}`}>{String(index + 1).padStart(2, "0")}</span>
+                        <span className={`ledger-symbol course-color-${index % 4}`}>{course.course_name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
                         <div className="ledger-course">
                           <div><strong>{course.course_name}</strong><span>{course.measured_topic_count}/{course.topic_count} topics measured</span></div>
                           <div className="ledger-progress"><span style={{ width: `${readiness * 100}%` }} />{course.target_grade !== null && <i style={{ left: `${target * 100}%` }} />}</div>
@@ -420,7 +420,7 @@ export function Dashboard({
 
               <section className="workspace-section review-section" id="risks">
                 <div className="workspace-section-head">
-                  <div><span className="section-number">04</span><div><h2>Review queue</h2><p>Where the evidence says to look again.</p></div></div>
+                  <div><span className="section-number">04</span><div><h2>Review</h2><p>Mistakes and topics worth another pass.</p></div></div>
                   <span className="review-count">{riskRows.length} signals</span>
                 </div>
                 {riskRows.length ? (
