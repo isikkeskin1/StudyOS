@@ -67,6 +67,7 @@ fs.mkdirSync(stagingDir, { recursive: true });
 const lines = fs.readFileSync(mappingPath, 'utf8').split(/\r?\n/);
 let copied = 0;
 let skippedReserved = 0;
+let skippedOptionalTile = 0;
 
 const reservedPayloadNames = new Set([
   'appxmanifest.xml',
@@ -74,6 +75,10 @@ const reservedPayloadNames = new Set([
   'appxstreammap.xml',
   'appxsignature.p7x',
   '[content_types].xml',
+]);
+
+const optionalPayloadNames = new Set([
+  'wide310x150logo.png',
 ]);
 
 for (const line of lines) {
@@ -92,6 +97,12 @@ for (const line of lines) {
     continue;
   }
 
+  if (optionalPayloadNames.has(destinationLeaf)) {
+    skippedOptionalTile += 1;
+    console.log(`Skipping optional AppX tile payload: ${destination}`);
+    continue;
+  }
+
   if (path.isAbsolute(destination) || destination.split('\\').includes('..')) {
     fail(`Unsafe AppX destination in mapping: ${destination}`);
   }
@@ -106,7 +117,10 @@ for (const line of lines) {
   copied += 1;
 }
 
-fs.copyFileSync(manifestPath, path.join(stagingDir, 'AppxManifest.xml'));
+let manifest = fs.readFileSync(manifestPath, 'utf8');
+manifest = manifest.replace(/\s*<uap:DefaultTile\b[^>]*>[\s\S]*?<\/uap:DefaultTile>\s*/i, '\n');
+manifest = manifest.replace(/\s*<uap:DefaultTile\b[^>]*\/\>\s*/i, '\n');
+fs.writeFileSync(path.join(stagingDir, 'AppxManifest.xml'), manifest, 'utf8');
 
 const cacheRoot = process.env.LOCALAPPDATA
   ? path.join(process.env.LOCALAPPDATA, 'electron-builder', 'Cache')
@@ -115,7 +129,7 @@ const makeAppx = findFile(cacheRoot, 'makeappx.exe');
 if (!makeAppx) fail(`Could not find makeappx.exe under ${cacheRoot || '<missing LOCALAPPDATA>'}`);
 
 if (fs.existsSync(outputPath)) fs.rmSync(outputPath, { force: true });
-console.log(`Manual AppX staging ready: ${copied} payload files copied, ${skippedReserved} reserved payload(s) skipped.`);
+console.log(`Manual AppX staging ready: ${copied} payload files copied, ${skippedReserved} reserved payload(s) skipped, ${skippedOptionalTile} optional tile payload(s) skipped.`);
 console.log(`Using MakeAppx: ${makeAppx}`);
 console.log(`Creating: ${outputPath}`);
 
