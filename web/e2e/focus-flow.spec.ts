@@ -44,6 +44,24 @@ test("focus countdown survives reload and never auto-completes", async ({ page }
   await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
   await page.getByRole("button", { name: /Start session/ }).click();
   await expect(page.getByText("Time remaining", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Focus Room" })).toBeVisible();
+
+  await page.getByRole("link", { name: "Open Focus Room" }).click();
+  await expect(page).toHaveURL(/\/focus$/);
+  await expect(page.getByText("Focus session live", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Complete block", exact: true })).toBeVisible();
+  await expect(page.getByText("Time remaining", { exact: true })).toBeVisible();
+  const scratchpad = page.getByLabel("Focus scratchpad");
+  await scratchpad.fill("Momentum: impulse equals change in momentum.");
+  await page.reload();
+  await expect(page.getByLabel("Focus scratchpad")).toHaveValue("Momentum: impulse equals change in momentum.");
+  await expect(page.getByText("Time remaining", { exact: true })).toBeVisible();
+  const roomOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+  expect(roomOverflow).toBe(false);
+  await page.screenshot({ path: testInfo.outputPath("focus-room.png"), fullPage: true, animations: "disabled" });
+
+  await page.goto("/");
+  await expect(page.getByText("Time remaining", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText("Time remaining", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Complete session", exact: true })).toBeVisible();
