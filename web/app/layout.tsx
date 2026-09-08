@@ -12,6 +12,7 @@ import "./surfaces-v055.css";
 import "./spotify-dock.css";
 import "./integrations-v055.css";
 import "./theme-system.css";
+import "./theme-polish.css";
 
 export const metadata: Metadata = {
   title: "StudyOS",
