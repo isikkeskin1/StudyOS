@@ -23,6 +23,7 @@
     "productName": "StudyOS",
     "asar": true,
     "directories": { "output": "dist" },
+    "toolsets": { "winCodeSign": "1.0.0" },
     "files": ["main.cjs","preload.cjs","setup.html","package.json","update.html","splash.html"],
     "extraResources": [
       { "from": "build/web/server.js", "to": "web/server.js" },
