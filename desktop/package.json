@@ -31,7 +31,7 @@
       { "from": "build/web/public", "to": "web/public", "filter": ["**/*"] },
       { "from": "build/web/node_modules", "to": "web/node_modules", "filter": ["**/*", "!**/.bin{,/**}"] },
       { "from": "build/web/package.json", "to": "web/package.json" },
-      { "from": "build/backend", "to": "backend", "filter": ["**/*"] }
+      { "from": "build/backend", "to": "backend", "filter": ["**/*", "!**/default-docx-template{,/**}"] }
     ],
     "win": {
       "target": [
