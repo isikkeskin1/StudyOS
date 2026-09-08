@@ -202,6 +202,7 @@ jobs:
         shell: pwsh
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          DEBUG: "electron-builder*"
           STORE_IDENTITY_NAME: ${{ vars.STUDYOS_STORE_IDENTITY_NAME }}
           STORE_PUBLISHER: ${{ vars.STUDYOS_STORE_PUBLISHER }}
           STORE_PUBLISHER_DISPLAY_NAME: ${{ vars.STUDYOS_STORE_PUBLISHER_DISPLAY_NAME }}
@@ -259,6 +260,13 @@ jobs:
               $invalid | ForEach-Object { Write-Host $_.FullName }
             } else {
               Write-Host "No obvious invalid Windows filenames found in win-unpacked"
+            }
+            $makeAppx = Get-ChildItem "$env:LOCALAPPDATA/electron-builder/Cache/winCodeSign" -Filter "makeappx.exe" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($makeAppx) {
+              Write-Host "MakeAppx tool: $($makeAppx.FullName)"
+              & $makeAppx.FullName /?
+            } else {
+              Write-Host "No cached makeappx.exe found"
             }
             Write-Host "::endgroup::"
             throw
