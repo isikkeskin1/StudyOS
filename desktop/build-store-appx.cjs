@@ -67,6 +67,7 @@ fs.mkdirSync(stagingDir, { recursive: true });
 const lines = fs.readFileSync(mappingPath, 'utf8').split(/\r?\n/);
 let copied = 0;
 let skippedReserved = 0;
+let skippedPythonDocxTemplate = 0;
 let skippedOptionalTile = 0;
 
 const reservedPayloadNames = new Set([
@@ -89,7 +90,17 @@ for (const line of lines) {
 
   const source = match[1].replace(/\\"/g, '"');
   const destination = match[2].replace(/\\"/g, '"');
+  const normalizedDestination = destination.replace(/\\/g, '/').toLowerCase();
   const destinationLeaf = path.basename(destination).toLowerCase();
+
+  // python-docx ships a built-in default template whose OPC package contains
+  // a nested [Content_Types].xml. That filename collides with AppX payload
+  // packaging rules. StudyOS only reads uploaded DOCX files, so the built-in
+  // blank-document template is not required by the packaged desktop backend.
+  if (normalizedDestination.includes('/default-docx-template/')) {
+    skippedPythonDocxTemplate += 1;
+    continue;
+  }
 
   if (reservedPayloadNames.has(destinationLeaf)) {
     skippedReserved += 1;
@@ -129,7 +140,7 @@ const makeAppx = findFile(cacheRoot, 'makeappx.exe');
 if (!makeAppx) fail(`Could not find makeappx.exe under ${cacheRoot || '<missing LOCALAPPDATA>'}`);
 
 if (fs.existsSync(outputPath)) fs.rmSync(outputPath, { force: true });
-console.log(`Manual AppX staging ready: ${copied} payload files copied, ${skippedReserved} reserved payload(s) skipped, ${skippedOptionalTile} optional tile payload(s) skipped.`);
+console.log(`Manual AppX staging ready: ${copied} payload files copied, ${skippedPythonDocxTemplate} python-docx template payload(s) skipped, ${skippedReserved} reserved payload(s) skipped, ${skippedOptionalTile} optional tile payload(s) skipped.`);
 console.log(`Using MakeAppx: ${makeAppx}`);
 console.log(`Creating: ${outputPath}`);
 
