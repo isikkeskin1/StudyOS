@@ -52,6 +52,30 @@ html[data-study-theme] .workspace-app .workspace-topbar h1 {
     display: none !important;
   }
 
+  /* Keep course identity as a small sticky context row above the horizontal workbench tabs. */
+  html[data-study-theme] .workspace-app .workspace-course-label {
+    display: grid !important;
+    gap: 2px;
+    margin: 0 2px 7px !important;
+    padding: 2px 6px 9px !important;
+    border-bottom: 1px solid var(--ui-line);
+  }
+  html[data-study-theme] .workspace-app .workspace-course-label span {
+    color: var(--ui-faint) !important;
+    font-size: 8px !important;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+  }
+  html[data-study-theme] .workspace-app .workspace-course-label strong {
+    max-width: calc(100vw - 40px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ui-text) !important;
+    font-size: 11px !important;
+    font-weight: 600;
+  }
+
   html[data-study-theme] .workspace-app .workspace-topbar h1 {
     font-size: clamp(32px, 10vw, 44px) !important;
   }
