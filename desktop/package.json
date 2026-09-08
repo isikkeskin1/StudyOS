@@ -12,11 +12,11 @@
     "build:win": "npm run dist:win",
     "dist:win": "electron-builder --win nsis portable --publish never",
     "pack:win": "electron-builder --win dir",
-    "dist:store": "electron-builder --win msix --publish never"
+    "dist:store": "electron-builder --win appx --publish never"
   },
   "devDependencies": {
     "electron": "44.2.0",
-    "electron-builder": "27.0.0-alpha.8"
+    "electron-builder": "26.15.7"
   },
   "build": {
     "appId": "com.studyos.desktop",
@@ -49,15 +49,14 @@
     },
     "portable": { "artifactName": "StudyOS-${version}-Windows-x64-Portable.${ext}" },
     "publish": [{ "provider": "github", "owner": "isikkeskin1", "repo": "StudyOS", "releaseType": "release" }],
-    "msix": {
+    "appx": {
       "identityName": "isikkeskin.StudyOS",
       "publisher": "CN=0E4D601A-07D5-4DE4-9443-3990D3F6EBCE",
       "publisherDisplayName": "isikkeskin",
       "artifactName": "StudyOS-${version}-Microsoft-Store-x64.${ext}",
       "displayName": "StudyOS",
       "languages": ["en-US"],
-      "minVersion": "10.0.17763.0",
-      "createMsixupload": true
+      "minVersion": "10.0.17763.0"
     }
   },
   "dependencies": { "electron-updater": "6.6.2" }
