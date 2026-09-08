@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "pwa:check": "node scripts/check-pwa.mjs",
+    "check": "npm run lint && npm run typecheck && npm run pwa:check && npm run build",
     "e2e": "playwright test"
   },
   "dependencies": {
