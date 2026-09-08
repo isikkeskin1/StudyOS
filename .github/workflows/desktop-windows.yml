@@ -243,11 +243,44 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run build:win
 
+      - name: Build Microsoft Store MSIX
+        working-directory: desktop
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          STORE_IDENTITY_NAME: ${{ vars.STUDYOS_STORE_IDENTITY_NAME }}
+          STORE_PUBLISHER: ${{ vars.STUDYOS_STORE_PUBLISHER }}
+          STORE_PUBLISHER_DISPLAY_NAME: ${{ vars.STUDYOS_STORE_PUBLISHER_DISPLAY_NAME }}
+        run: |
+          $configured = @(
+            -not [string]::IsNullOrWhiteSpace($env:STORE_IDENTITY_NAME),
+            -not [string]::IsNullOrWhiteSpace($env:STORE_PUBLISHER),
+            -not [string]::IsNullOrWhiteSpace($env:STORE_PUBLISHER_DISPLAY_NAME)
+          )
+          $configuredCount = ($configured | Where-Object { $_ }).Count
+          if ($configuredCount -ne 0 -and $configuredCount -ne 3) {
+            throw "Configure all three Microsoft Store repository variables or leave all three unset."
+          }
+
+          if ($configuredCount -eq 3) {
+            npx electron-builder --win msix --publish never `
+              --config.msix.identityName="$env:STORE_IDENTITY_NAME" `
+              --config.msix.publisher="$env:STORE_PUBLISHER" `
+              --config.msix.publisherDisplayName="$env:STORE_PUBLISHER_DISPLAY_NAME"
+          } else {
+            npm run dist:store
+          }
+
+          $storePackage = Get-ChildItem "dist/StudyOS-*-Microsoft-Store-x64.msix" | Select-Object -First 1
+          if (-not $storePackage) {
+            throw "Missing Microsoft Store MSIX package"
+          }
+
       - name: Verify release signature
         if: github.event_name == 'release'
         shell: pwsh
         run: |
-          $installer = Get-ChildItem "desktop/dist/StudyOS-*-Windows-x64-Setup.exe" | Select-Object -First 1
+          $installer = Get-ChildItem "desktop/dist/StudyOS-Windows-x64-Setup.exe" | Select-Object -First 1
           if (-not $installer) {
             throw "Missing StudyOS installer for signature verification"
           }
@@ -264,7 +297,7 @@ jobs:
             throw "Missing latest.yml auto-update metadata"
           }
           $raw = Get-Content $metadata -Raw
-          if ($raw -notmatch "StudyOS-.*-Windows-x64-Setup\.exe") {
+          if ($raw -notmatch "StudyOS-Windows-x64-Setup\.exe") {
             throw "latest.yml does not reference the StudyOS Windows installer"
           }
 
@@ -289,10 +322,17 @@ jobs:
         with:
           name: StudyOS-Windows
           path: |
-            desktop/dist/StudyOS-*-Windows-x64-Setup.exe
+            desktop/dist/StudyOS-Windows-x64-Setup.exe
             desktop/dist/StudyOS-*-Windows-x64-Portable.exe
             desktop/dist/latest.yml
             desktop/dist/*.blockmap
+          if-no-files-found: error
+
+      - name: Upload Microsoft Store package
+        uses: actions/upload-artifact@v7
+        with:
+          name: StudyOS-Microsoft-Store
+          path: desktop/dist/StudyOS-*-Microsoft-Store-x64.msix
           if-no-files-found: error
 
       - name: Attach installers to published release
@@ -302,7 +342,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          $installer = Get-ChildItem "desktop/dist/StudyOS-*-Windows-x64-Setup.exe" | Select-Object -First 1
+          $installer = Get-ChildItem "desktop/dist/StudyOS-Windows-x64-Setup.exe" | Select-Object -First 1
           if (-not $installer) {
             throw "Missing StudyOS installer"
           }
