@@ -9,6 +9,7 @@
   "scripts": {
     "start": "electron .",
     "verify": "node verify.cjs",
+    "build:win": "npm run dist:win",
     "dist:win": "electron-builder --win nsis portable --publish never",
     "pack:win": "electron-builder --win dir"
   },
