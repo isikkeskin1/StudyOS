@@ -184,7 +184,10 @@ export function AuthScreen({
           <p>Turn your course materials into a plan. Practice what matters. Walk into your next exam prepared.</p>
           <div className="study-orbit" aria-hidden="true"><div className="orbit-ring orbit-one" /><div className="orbit-ring orbit-two" /><div className="orbit-core"><BrandMark /></div><span className="orbit-chip orbit-sources"><UiIcon name="sources" />Your materials</span><span className="orbit-chip orbit-plan"><UiIcon name="target" />A focused plan</span><span className="orbit-chip orbit-progress"><UiIcon name="activity" />Real progress</span></div>
         </div>
-        <span className="auth-story-foot"><UiIcon name="shield" />Your workspace. Your pace.</span>
+        <div className="auth-story-foot">
+          <span><UiIcon name="shield" />Your workspace. Your pace.</span>
+          <a className="ghost-button" href="/download">Get the Windows app</a>
+        </div>
       </aside>
 
       <section className="auth-card">
