@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { AuthScreen, type AuthUser } from "@/components/auth-screen";
 import { Dashboard } from "@/components/dashboard";
+import { LibraryLauncher } from "@/components/library-launcher";
 import { SetupWizard } from "@/components/setup-wizard";
 import type { Course } from "@/lib/setup-types";
 
@@ -85,15 +86,18 @@ export function AppGate() {
     return <SetupWizard onReady={() => setMode("dashboard")} />;
   }
   return (
-    <Dashboard
-      userEmail={user?.email ?? null}
-      isAdmin={user?.is_admin ?? false}
-      onSignOut={() => void signOut()}
-      onAccountDeleted={() => {
-        window.dispatchEvent(new Event("studyos:signed-out"));
-        setUser(null);
-        setMode("auth");
-      }}
-    />
+    <>
+      <Dashboard
+        userEmail={user?.email ?? null}
+        isAdmin={user?.is_admin ?? false}
+        onSignOut={() => void signOut()}
+        onAccountDeleted={() => {
+          window.dispatchEvent(new Event("studyos:signed-out"));
+          setUser(null);
+          setMode("auth");
+        }}
+      />
+      <LibraryLauncher isAdmin={user?.is_admin ?? false} />
+    </>
   );
 }
