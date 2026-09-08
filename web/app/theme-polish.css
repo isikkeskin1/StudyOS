@@ -168,11 +168,9 @@ html[data-study-theme] .workspace-app .workspace-topbar h1 {
   /* Dashboard utility controls are navigation, not floating widgets. Reserve bottom-nav cells for them. */
   body:has(.study-cockpit) .cockpit-sidebar .side-nav {
     grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
-    padding-right: calc((100vw - 20px) / 3) !important;
   }
   body:has(.study-cockpit):has(.library-launcher a:nth-child(2)) .cockpit-sidebar .side-nav {
     grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
-    padding-right: calc((100vw - 20px) * 3 / 7) !important;
   }
 
   body:has(.study-cockpit) .library-launcher {
