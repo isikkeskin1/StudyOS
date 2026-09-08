@@ -101,7 +101,6 @@ export function InstitutionLibrary() {
       const params = nextFolderId ? `?folder_id=${encodeURIComponent(nextFolderId)}` : "";
       const payload = await requestJson<LibraryPayload>(`/api/v1/catalog/courses/${nextCourseId}/library${params}`);
       setLibrary(payload);
-      setSelected(new Set());
       setPreview(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not open this library folder.");
@@ -130,6 +129,7 @@ export function InstitutionLibrary() {
   const chooseCourse = (id: string) => {
     setCourseId(id);
     setFolderId(null);
+    setSelected(new Set());
     setNotice(null);
   };
 
@@ -149,7 +149,14 @@ export function InstitutionLibrary() {
 
   const toggleAll = () => {
     if (!library) return;
-    setSelected(allSelected ? new Set() : new Set(library.documents.map((document) => document.id)));
+    setSelected((current) => {
+      const next = new Set(current);
+      for (const document of library.documents) {
+        if (allSelected) next.delete(document.id);
+        else next.add(document.id);
+      }
+      return next;
+    });
   };
 
   const downloadPack = async () => {
