@@ -10,6 +10,20 @@ async function expectNoHorizontalOverflow(page: import("@playwright/test").Page)
   expect(overflow.body).toBeLessThanOrEqual(overflow.viewport + 1);
 }
 
+test("appearance defaults dark and persists the chosen mode", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-study-theme", "dark");
+
+  await page.getByRole("button", { name: "Light", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-study-theme", "light");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-study-theme", "light");
+
+  await page.getByRole("button", { name: "Dark", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-study-theme", "dark");
+  await expectNoHorizontalOverflow(page);
+});
+
 test("account, setup, cockpit, workspace, and search stay usable", async ({
   page,
 }, testInfo) => {
@@ -53,7 +67,14 @@ test("account, setup, cockpit, workspace, and search stay usable", async ({
   await expect(
     page.locator(".course-ledger .ledger-row").filter({ hasText: courseName }).first(),
   ).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("study-cockpit.png"), fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: testInfo.outputPath("study-cockpit-dark.png"), fullPage: true, animations: "disabled" });
+
+  await page.getByRole("button", { name: "Light", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-study-theme", "light");
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath("study-cockpit-light.png"), fullPage: true, animations: "disabled" });
+  await page.getByRole("button", { name: "Dark", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-study-theme", "dark");
 
   await page.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");
   const search = page.getByPlaceholder(
