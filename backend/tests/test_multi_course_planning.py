@@ -58,7 +58,7 @@ def _prepare_course(
     _upload_and_process(
         client,
         course_id,
-        f"{name}-lecture.txt",
+        "lecture-mechanics.txt",
         (
             b"Newton's Laws\n"
             b"Force mass acceleration dynamics free body diagrams Newton second law.\n\n"
@@ -71,7 +71,7 @@ def _prepare_course(
     _upload_and_process(
         client,
         course_id,
-        f"{name}-exam.txt",
+        "2026-written-exam.txt",
         (
             b"Written Exam\n"
             b"Question 1 (12 marks)\n"

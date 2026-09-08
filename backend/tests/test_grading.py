@@ -113,10 +113,16 @@ def test_automatic_grading_records_solution_feedback_and_mastery(
         f"/api/v1/courses/{course_id}/diagnostics/{session_id}/grade",
         json={
             "diagnostic_question_id": question["id"],
-            "student_answer": (
-                "Newton's second law says force equals mass times acceleration. "
-                "The force is 10 N."
-            ),
+            "student_answer": {
+                "Q1": (
+                    "Newton's second law says force equals mass times acceleration. "
+                    "The force is 10 N."
+                ),
+                "Q2": (
+                    "Momentum is conserved, so initial momentum equals final momentum. "
+                    "The final momentum is 20 kg m/s."
+                ),
+            }[question["question_label"]],
             "confidence": 0.8,
             "duration_seconds": 150,
         },

@@ -264,6 +264,7 @@ class CandidateStats:
     heading_hits: int = 0
     document_ids: set[str] = field(default_factory=set)
     heading_document_ids: set[str] = field(default_factory=set)
+    heading_document_types: set[str] = field(default_factory=set)
     exam_document_ids: set[str] = field(default_factory=set)
     lecture_document_ids: set[str] = field(default_factory=set)
     chunk_scores: dict[str, float] = field(default_factory=dict)
@@ -467,10 +468,10 @@ def _candidate_quality(normalized: str, stats: CandidateStats) -> bool:
     if len(tokens) == 1 and tokens[0] in _WEAK_SINGLE_TOKENS:
         return False
 
-    # Structural headings in teaching material are strong evidence on their own. Exam-only
+    # Structural headings in teaching or unclassified material are strong evidence. Exam-only
     # headings are accepted only when teaching material independently mentions the same topic.
     if stats.heading_hits > 0:
-        if stats.lecture_document_ids:
+        if stats.lecture_document_ids or "unknown" in stats.heading_document_types:
             return True
         if len(stats.heading_document_ids) >= 2:
             return True
@@ -486,12 +487,12 @@ def _candidate_quality(normalized: str, stats: CandidateStats) -> bool:
 
     if len(tokens) == 1:
         return (
-            stats.mention_count >= 5
+            stats.mention_count >= 2
             and (lecture_document_count >= 2 or exam_document_count >= 1)
         )
 
     return (
-        stats.mention_count >= 3
+        stats.mention_count >= 2
         and (lecture_document_count >= 2 or exam_document_count >= 1)
     )
 
@@ -535,6 +536,7 @@ def _extract_topics(
                 candidate.weighted_score += score
                 candidate.document_ids.add(document.id)
                 candidate.heading_document_ids.add(document.id)
+                candidate.heading_document_types.add(doc_type)
                 candidate.chunk_scores[chunk.id] = max(
                     candidate.chunk_scores.get(chunk.id, 0.0),
                     score,
