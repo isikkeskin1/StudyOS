@@ -1,8 +1,5 @@
 import "./download.css";
 
-const WINDOWS_DOWNLOAD_URL =
-  "https://github.com/isikkeskin1/StudyOS/releases/latest/download/StudyOS-Windows-x64-Setup.exe";
-
 const STORE_URL = process.env.NEXT_PUBLIC_STUDYOS_STORE_URL?.trim() || "";
 
 export default function DownloadPage() {
@@ -18,7 +15,7 @@ export default function DownloadPage() {
         </p>
 
         <div className="download-actions">
-          <a className="download-primary" href={WINDOWS_DOWNLOAD_URL}>
+          <a className="download-primary" href="/download/windows">
             Download for Windows
             <span>64-bit installer</span>
           </a>
