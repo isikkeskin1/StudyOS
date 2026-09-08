@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { AppBoot } from "@/components/app-boot";
 import { AuthScreen, type AuthUser } from "@/components/auth-screen";
 import { Dashboard } from "@/components/dashboard";
 import { LibraryLauncher } from "@/components/library-launcher";
@@ -77,7 +78,12 @@ export function AppGate() {
   };
 
   if (mode === "loading") {
-    return <main className="setup-shell"><div className="setup-loading">Starting StudyOS…</div></main>;
+    return (
+      <AppBoot
+        label="Syncing your semester"
+        detail="Checking your courses, priorities, and latest progress"
+      />
+    );
   }
   if (mode === "auth") {
     return <AuthScreen onAuthenticated={(resolved) => void enterProduct(resolved)} />;
