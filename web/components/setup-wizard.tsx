@@ -213,7 +213,7 @@ export function SetupWizard({ onReady }: { onReady: () => void }) {
           <>
             <p className="eyebrow">Course setup</p>
             <h1>Build your first study command center.</h1>
-            <p className="setup-copy">Add the exam target first. StudyOS will ground the plan in your own material next.</p>
+            <p className="setup-copy">Add the exam target first. StudyOS can use your own material, institutional material, or wait until you have sources later.</p>
             <form className="setup-form" onSubmit={createCourse}>
               <label>Course name<input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Physics I" /></label>
               <div className="setup-row">
@@ -242,7 +242,7 @@ export function SetupWizard({ onReady }: { onReady: () => void }) {
           <>
             <p className="eyebrow">Ground the system</p>
             <h1>Import {course.name} materials.</h1>
-            <p className="setup-copy">Upload lecture notes, PDFs, DOCX, PPTX, TXT, or past exams. StudyOS processes every file before it can influence planning.</p>
+            <p className="setup-copy">Upload lecture notes, PDFs, DOCX, PPTX, TXT, or past exams. If you do not have documents yet, continue now and add your own or school-provided material later from StudyOS.</p>
             <label className="drop-zone">
               <input type="file" multiple accept=".pdf,.docx,.pptx,.txt" onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
               <strong>{files.length ? `${files.length} file${files.length === 1 ? "" : "s"} selected` : "Choose course files"}</strong>
@@ -251,6 +251,7 @@ export function SetupWizard({ onReady }: { onReady: () => void }) {
             {documents.length > 0 && <p className="setup-file-count">{documents.length} material{documents.length === 1 ? "" : "s"} already attached.</p>}
             <div className="setup-actions">
               <button className="ghost-button" type="button" onClick={() => setStep(1)}>Back</button>
+              <button className="ghost-button" type="button" disabled={busy} onClick={onReady}>Continue without documents</button>
               <button className="primary-button" type="button" disabled={busy || !files.length} onClick={() => void importFiles()}>
                 {busy ? "Processing…" : "Upload & process"}
               </button>
