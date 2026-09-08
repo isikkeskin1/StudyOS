@@ -1,24 +1,43 @@
-/* Desktop app chrome must remain anchored while the study canvas scrolls. */
+/* Desktop cockpit chrome follows the page as one complete rail.
+ * Keep it in the layout with sticky positioning instead of hard-fixing it and
+ * giving the sidebar a second, independent scrollbar.
+ */
 @media (min-width: 761px) {
+  html[data-study-theme] .study-cockpit {
+    --study-sidebar-width: 232px;
+    display: grid !important;
+    grid-template-columns: var(--study-sidebar-width) minmax(0, 1fr) !important;
+    align-items: start !important;
+  }
+
   html[data-study-theme] .study-cockpit .cockpit-sidebar {
-    position: fixed !important;
-    inset: 0 auto 0 0 !important;
-    height: 100vh !important;
-    height: 100dvh !important;
-    min-height: 0 !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
+    position: sticky !important;
+    top: 0 !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    width: var(--study-sidebar-width) !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    overflow: visible !important;
+    overscroll-behavior: auto;
     z-index: 80 !important;
-    scrollbar-width: thin;
-    scrollbar-color: var(--ui-line-strong) transparent;
   }
 
-  html[data-study-theme] .study-cockpit .cockpit-sidebar::-webkit-scrollbar {
-    width: 4px;
+  html[data-study-theme] .study-cockpit .cockpit-main {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
   }
+}
 
-  html[data-study-theme] .study-cockpit .cockpit-sidebar::-webkit-scrollbar-thumb {
-    background: var(--ui-line-strong);
-    border-radius: 999px;
+@media (min-width: 761px) and (max-width: 1120px) {
+  html[data-study-theme] .study-cockpit {
+    --study-sidebar-width: 200px;
   }
 }
