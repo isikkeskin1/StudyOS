@@ -25,6 +25,12 @@ class Document(Base):
         nullable=False,
         index=True,
     )
+    catalog_folder_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("catalog_folders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str | None] = mapped_column(String(150), nullable=True)
     extension: Mapped[str] = mapped_column(String(16), nullable=False)
