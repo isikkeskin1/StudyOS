@@ -1,0 +1,158 @@
+/* Async-state motion: data fetching, processing, analysis, and action feedback. */
+
+/* Legacy client loaders become a designed loading surface instead of loose text. */
+.workspace-shell:has(> .setup-loading) {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: var(--ui-bg);
+}
+.workspace-shell > .setup-loading {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  min-width: 250px;
+  padding-top: 84px;
+  color: var(--ui-muted) !important;
+  font-size: 11px !important;
+  letter-spacing: .02em;
+  text-align: center;
+}
+.workspace-shell > .setup-loading::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 58px;
+  height: 58px;
+  margin-left: -29px;
+  border: 1px solid var(--ui-line-strong);
+  border-top-color: var(--ui-accent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 13px var(--ui-bg), inset 0 0 0 14px var(--ui-line);
+  animation: async-orbit 1.05s linear infinite;
+}
+.workspace-shell > .setup-loading::after {
+  content: "";
+  position: absolute;
+  top: 27px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  border-radius: 2px;
+  background: var(--ui-text);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--ui-accent) 45%, transparent);
+  animation: async-core 1.7s ease-in-out infinite alternate;
+}
+@keyframes async-orbit { to { transform: rotate(360deg); } }
+@keyframes async-core { to { transform: scale(1.35) rotate(45deg); } }
+
+/* Focus's client-side hydration has its own calm opening sequence. */
+.focus-room-state:not(:has(h1)) {
+  gap: 15px !important;
+}
+.focus-room-state:not(:has(h1)) .brand-mark {
+  position: relative;
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 15px !important;
+  animation: focus-open-mark 1.7s var(--motion-ease) infinite alternate;
+}
+.focus-room-state:not(:has(h1)) .brand-mark::after {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 28%, transparent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: async-orbit 1.8s linear infinite;
+}
+.focus-room-state:not(:has(h1)) p {
+  color: var(--ui-muted) !important;
+  animation: focus-open-copy 1.4s ease-in-out infinite alternate;
+}
+@keyframes focus-open-mark { to { transform: translateY(-3px) scale(1.03); } }
+@keyframes focus-open-copy { to { opacity: .55; } }
+
+/* Disabled primary actions communicate ongoing work instead of looking dead. */
+html[data-study-theme] :is(.primary-button,.focus-room-complete,.tutor-panel button):disabled {
+  position: relative;
+  overflow: hidden;
+  opacity: .74 !important;
+  cursor: wait !important;
+}
+html[data-study-theme] :is(.primary-button,.focus-room-complete,.tutor-panel button):disabled::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.13) 49%, transparent 67%);
+  transform: translateX(-120%);
+  animation: async-button-scan 1.15s ease-in-out infinite;
+}
+@keyframes async-button-scan { to { transform: translateX(120%); } }
+
+/* Status feedback enters with direction and then settles. */
+.setup-message,
+.error-banner,
+.focus-room-answer {
+  animation: async-status-in 420ms var(--motion-spring) both;
+  transform-origin: top center;
+}
+@keyframes async-status-in {
+  from { opacity: 0; transform: translateY(-7px) scale(.985); filter: blur(3px); }
+}
+.error-banner[role="alert"] {
+  animation-name: async-error-in;
+}
+@keyframes async-error-in {
+  0% { opacity: 0; transform: translateY(-6px); }
+  55% { opacity: 1; transform: translateX(2px); }
+  72% { transform: translateX(-2px); }
+  100% { transform: none; }
+}
+
+/* Files arriving after fetch/upload should feel added, not teleported. */
+:is(.library-document-row,.admin-library-document,.document-row,.source-row) {
+  animation: async-row-in 430ms var(--motion-ease) both;
+}
+:is(.library-document-row,.admin-library-document,.document-row,.source-row):nth-child(2) { animation-delay: 35ms; }
+:is(.library-document-row,.admin-library-document,.document-row,.source-row):nth-child(3) { animation-delay: 70ms; }
+:is(.library-document-row,.admin-library-document,.document-row,.source-row):nth-child(4) { animation-delay: 105ms; }
+@keyframes async-row-in { from { opacity: 0; transform: translateY(8px); } }
+
+/* Skeleton shimmer utility for any future surface: class="study-skeleton". */
+.study-skeleton {
+  position: relative;
+  overflow: hidden;
+  min-height: 12px;
+  border-radius: 7px;
+  background: var(--ui-surface-3);
+}
+.study-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 25%, color-mix(in srgb, var(--ui-text) 8%, transparent) 48%, transparent 72%);
+  transform: translateX(-120%);
+  animation: study-skeleton-scan 1.65s ease-in-out infinite;
+}
+@keyframes study-skeleton-scan { 65%,100% { transform: translateX(120%); } }
+
+@media (max-width: 760px) {
+  .workspace-shell > .setup-loading { padding-top: 74px; }
+  .workspace-shell > .setup-loading::before { width: 50px; height: 50px; margin-left: -25px; }
+  .workspace-shell > .setup-loading::after { top: 23px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shell > .setup-loading::before,
+  .workspace-shell > .setup-loading::after,
+  .focus-room-state:not(:has(h1)) .brand-mark,
+  .focus-room-state:not(:has(h1)) .brand-mark::after,
+  .focus-room-state:not(:has(h1)) p {
+    animation: none !important;
+  }
+}
