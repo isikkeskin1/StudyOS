@@ -96,6 +96,34 @@ html[data-study-theme] .workspace-app .workspace-topbar h1 {
     display: none !important;
   }
 
+  /* Mobile needs a discoverable search affordance; a keyboard-only shortcut is useless on a phone. */
+  html[data-study-theme] .workspace-app .workspace-search {
+    display: block !important;
+    margin: 0 0 7px !important;
+    padding: 0 !important;
+  }
+  html[data-study-theme] .workspace-app .workspace-search .global-search-trigger {
+    width: 100%;
+    min-height: 36px;
+    justify-content: flex-start;
+    gap: 7px;
+    padding: 0 10px;
+    border: 1px solid var(--ui-line) !important;
+    border-radius: 9px !important;
+    background: var(--ui-surface-2) !important;
+    color: var(--ui-muted) !important;
+    font-size: 10px;
+  }
+  html[data-study-theme] .workspace-app .workspace-search .global-search-trigger::before {
+    content: "⌕";
+    color: var(--ui-faint);
+    font-size: 14px;
+    line-height: 1;
+  }
+  html[data-study-theme] .workspace-app .workspace-search .global-search-trigger > span {
+    display: none !important;
+  }
+
   /* Keep course identity as a small sticky context row above the horizontal workbench tabs. */
   html[data-study-theme] .workspace-app .workspace-course-label {
     display: grid !important;
