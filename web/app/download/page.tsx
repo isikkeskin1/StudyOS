@@ -1,3 +1,5 @@
+import "./download.css";
+
 const WINDOWS_DOWNLOAD_URL =
   "https://github.com/isikkeskin1/StudyOS/releases/latest/download/StudyOS-Windows-x64-Setup.exe";
 
