@@ -916,3 +916,101 @@ body {
   .ledger-evidence,
   .ledger-deadline { display: none; }
 }
+
+
+/* === Authored StudyOS v2.1: screenshot corrections === */
+.cockpit-main {
+  padding-left: clamp(24px, 2.6vw, 42px);
+  padding-right: clamp(24px, 2.6vw, 42px);
+}
+
+.cockpit-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 238px);
+  gap: clamp(28px, 3vw, 42px);
+}
+
+.cockpit-workspace {
+  padding: 42px 0 88px;
+}
+
+.cockpit-rail {
+  padding: 42px 0 70px;
+  background: transparent;
+  border-left: 0;
+}
+
+.today-focus {
+  min-height: 318px;
+}
+
+.workspace-section {
+  margin-top: 52px;
+}
+
+.rhythm-empty {
+  position: relative;
+  min-height: 150px;
+  display: grid;
+  align-content: end;
+  gap: 4px;
+  overflow: hidden;
+}
+.rhythm-empty::before {
+  content: "";
+  position: absolute;
+  inset: 22px 0 50px;
+  opacity: .55;
+  background:
+    linear-gradient(to top, #202822 1px, transparent 1px) 0 100% / 100% 33%,
+    linear-gradient(90deg,
+      transparent 0 2%,
+      #243029 2% 4%, transparent 4% 8%,
+      #1f2923 8% 11%, transparent 11% 15%,
+      #2b3930 15% 19%, transparent 19% 23%,
+      #202b24 23% 26%, transparent 26% 31%,
+      #304238 31% 35%, transparent 35% 39%,
+      #223029 39% 42%, transparent 42% 47%,
+      #28372f 47% 51%, transparent 51% 56%,
+      #1d2822 56% 60%, transparent 60% 65%,
+      #32463a 65% 69%, transparent 69% 74%,
+      #27352d 74% 78%, transparent 78% 83%,
+      #1f2c25 83% 87%, transparent 87% 92%,
+      #2c3d33 92% 96%, transparent 96% 100%
+    );
+  mask-image: linear-gradient(to top, black, transparent 88%);
+}
+
+.review-clear {
+  min-height: 96px;
+  padding: 20px 4px;
+  border-bottom: 1px solid #202622;
+}
+.review-clear::before {
+  width: 26px;
+  height: 26px;
+  border: 1px solid #2b4034;
+  border-radius: 50%;
+  background: #101713;
+}
+
+@media (max-width: 1400px) and (min-width: 981px) {
+  .ledger-row {
+    grid-template-columns: 40px minmax(210px, 1fr) 82px 82px 18px;
+    gap: 14px;
+  }
+  .ledger-evidence,
+  .ledger-deadline {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .cockpit-workspace {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .cockpit-rail {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
