@@ -1,0 +1,62 @@
+/* Final visual-QA corrections. Keep this small and scoped to defects found in browser screenshots. */
+
+/* Only show the accessibility skip link for genuine keyboard focus. */
+.skip-link:focus { top: -100px !important; }
+.skip-link:focus-visible { top: 12px !important; }
+
+/* The compact course card intentionally shows one grade figure; prevent the old target cell sharing its grid area. */
+html[data-study-theme] .ledger-row > .ledger-grade:nth-of-type(3) { display: none !important; }
+html[data-study-theme] .ledger-row > .ledger-grade:nth-of-type(2) { display: flex !important; }
+html[data-study-theme] .course-ledger:has(> .ledger-row:only-child) {
+  grid-template-columns: 1fr !important;
+}
+
+/* Protect unusually long real course names without turning the workspace into a billboard. */
+html[data-study-theme] .workspace-app .workspace-topbar h1 {
+  max-width: 900px;
+  overflow-wrap: anywhere;
+  font-size: clamp(38px, 4.6vw, 64px) !important;
+}
+
+@media (max-width: 760px) {
+  /* The phone nav needs labels: icon-only navigation was ambiguous in screenshot QA. */
+  html[data-study-theme] .cockpit-sidebar .side-nav .nav-text {
+    display: block !important;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* On phones the switch shows only the destination theme, cutting its footprint in half. */
+  .study-appearance {
+    display: block !important;
+    width: auto;
+    padding: 3px;
+  }
+  .study-appearance button {
+    min-width: 52px;
+    min-height: 34px;
+  }
+  html[data-study-theme="dark"] .study-appearance button[aria-pressed="true"],
+  html[data-study-theme="light"] .study-appearance button[aria-pressed="true"] {
+    display: none;
+  }
+
+  /* Installation/notification controls belong in settings on a phone, not floating over study content. */
+  .pwa-controller-root { display: none !important; }
+
+  /* Focus and the course workbench should have zero persistent overlays. Theme still follows the saved choice. */
+  body:has(.focus-room) > .study-appearance,
+  body:has(.workspace-app) > .study-appearance {
+    display: none !important;
+  }
+
+  html[data-study-theme] .workspace-app .workspace-topbar h1 {
+    font-size: clamp(32px, 10vw, 44px) !important;
+  }
+
+  html[data-study-theme] .ledger-row > .ledger-grade:nth-of-type(2) {
+    align-self: end;
+  }
+}
