@@ -34,6 +34,49 @@ class CatalogCourseRead(BaseModel):
     document_count: int
 
 
+class CatalogFolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=180)
+    parent_id: str | None = Field(default=None, max_length=36)
+
+
+class CatalogFolderUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=180)
+
+
+class CatalogFolderRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    catalog_course_id: str
+    parent_id: str | None
+    name: str
+    created_at: datetime
+
+
+class CatalogLibraryDocumentRead(BaseModel):
+    id: str
+    folder_id: str | None
+    original_filename: str
+    content_type: str | None
+    extension: str
+    size_bytes: int
+    status: str
+    created_at: datetime
+    previewable: bool
+
+
+class CatalogLibraryRead(BaseModel):
+    catalog: CatalogCourseRead
+    current_folder: CatalogFolderRead | None
+    breadcrumbs: list[CatalogFolderRead]
+    folders: list[CatalogFolderRead]
+    documents: list[CatalogLibraryDocumentRead]
+
+
+class CatalogPackRequest(BaseModel):
+    document_ids: list[str] = Field(min_length=1, max_length=200)
+
+
 class CatalogDiscoveryRequest(BaseModel):
     seed_urls: list[str] = Field(min_length=1, max_length=12)
     max_depth: int = Field(default=2, ge=0, le=3)
