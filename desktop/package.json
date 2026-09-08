@@ -11,7 +11,8 @@
     "verify": "node verify.cjs",
     "build:win": "npm run dist:win",
     "dist:win": "electron-builder --win nsis portable --publish never",
-    "pack:win": "electron-builder --win dir"
+    "pack:win": "electron-builder --win dir",
+    "dist:store": "electron-builder --win msix --publish never"
   },
   "devDependencies": {
     "electron": "44.2.0",
@@ -40,17 +41,23 @@
       {
         "from": "build/web/.next",
         "to": "web/.next",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "build/web/public",
         "to": "web/public",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "build/web/node_modules",
         "to": "web/node_modules",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "build/web/package.json",
@@ -59,13 +66,25 @@
       {
         "from": "build/backend",
         "to": "backend",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
       "target": [
-        {"target": "nsis", "arch": ["x64"]},
-        {"target": "portable", "arch": ["x64"]}
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "../web/public/icons/icon-512.png"
     },
@@ -75,7 +94,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "StudyOS",
-      "artifactName": "StudyOS-${version}-Windows-x64-Setup.${ext}"
+      "artifactName": "StudyOS-Windows-x64-Setup.${ext}"
     },
     "portable": {
       "artifactName": "StudyOS-${version}-Windows-x64-Portable.${ext}"
@@ -87,7 +106,16 @@
         "repo": "StudyOS",
         "releaseType": "release"
       }
-    ]
+    ],
+    "msix": {
+      "artifactName": "StudyOS-${version}-Microsoft-Store-x64.${ext}",
+      "displayName": "StudyOS",
+      "publisherDisplayName": "StudyOS",
+      "languages": [
+        "en-US"
+      ],
+      "minVersion": "10.0.17763.0"
+    }
   },
   "dependencies": {
     "electron-updater": "6.6.2"
