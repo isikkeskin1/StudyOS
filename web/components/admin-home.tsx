@@ -51,6 +51,11 @@ export function AdminHome() {
             <div><strong>Institution files</strong><small>Build folders, upload PDFs and documents, preview files, and manage what students see.</small></div>
             <UiIcon name="arrow" />
           </Link>
+          <Link className="admin-home-card" href="/admin/manage">
+            <span className="admin-home-icon"><UiIcon name="shield" /></span>
+            <div><strong>Manage & delete</strong><small>Remove a master course, one institutional file, or a discovered source without touching unrelated content.</small></div>
+            <UiIcon name="arrow" />
+          </Link>
           <Link className="admin-home-card" href="/library">
             <span className="admin-home-icon"><UiIcon name="courses" /></span>
             <div><strong>Student library</strong><small>Open the published library exactly as students see it.</small></div>
