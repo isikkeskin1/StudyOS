@@ -98,6 +98,7 @@ def test_admin_builds_nested_library_and_student_downloads_pack(tmp_path: Path) 
 
         root = student.get(f"/api/v1/catalog/courses/{catalog_id}/library")
         assert root.status_code == 200
+        assert root.headers["x-frame-options"] == "DENY"
         assert [folder["name"] for folder in root.json()["folders"]] == ["Lectures"]
         assert root.json()["documents"] == []
 
@@ -128,6 +129,7 @@ def test_admin_builds_nested_library_and_student_downloads_pack(tmp_path: Path) 
             f"/api/v1/catalog/courses/{catalog_id}/documents/{document_id}/file"
         )
         assert file_response.status_code == 200
+        assert file_response.headers["x-frame-options"] == "SAMEORIGIN"
         assert b"Force equals mass times acceleration" in file_response.content
         assert "inline" in file_response.headers["content-disposition"]
 
