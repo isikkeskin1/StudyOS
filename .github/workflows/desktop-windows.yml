@@ -279,8 +279,10 @@ jobs:
           Write-Host "Created Store package: $($storePackage.FullName)"
           Write-Host "Size: $([math]::Round($storePackage.Length / 1MB, 2)) MB"
 
-      - name: Verify release signature
-        if: github.event_name == 'release'
+      - name: Verify direct-download release signature
+        # Store packages are signed by Microsoft after Partner Center ingests the
+        # package. This check is solely for the separately distributed NSIS EXE.
+        if: github.event_name == 'release' && vars.STUDYOS_WINDOWS_SIGNING_ENABLED == 'true'
         shell: pwsh
         run: |
           $installer = Get-ChildItem "desktop/dist/StudyOS-Windows-x64-Setup.exe" | Select-Object -First 1
@@ -289,6 +291,13 @@ jobs:
           if ($signature.Status -ne "Valid") {
             throw "StudyOS installer is not signed with a valid Authenticode certificate: $($signature.Status)"
           }
+
+      - name: Explain unsigned direct-download build
+        if: github.event_name == 'release' && vars.STUDYOS_WINDOWS_SIGNING_ENABLED != 'true'
+        shell: pwsh
+        run: |
+          Write-Host "The GitHub release installer is unsigned because STUDYOS_WINDOWS_SIGNING_ENABLED is not true."
+          Write-Host "The AppX artifact is intended for Partner Center, which applies the Microsoft Store signature after submission."
 
       - name: Verify desktop update metadata
         shell: pwsh

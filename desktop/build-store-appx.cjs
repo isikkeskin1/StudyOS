@@ -71,7 +71,6 @@ let skippedReserved = 0;
 let skippedPythonDocxContentTypes = 0;
 
 const reservedPayloadNames = new Set([
-  'appxmanifest.xml',
   'appxblockmap.xml',
   'appxstreammap.xml',
   'appxsignature.p7x',
@@ -103,6 +102,13 @@ function validateDestination(destination) {
   }
 }
 
+// MakeAppx accepts the application manifest as a normal mapping entry.  Keep a
+// private source name for it: staging it as AppxManifest.xml *and* passing /m
+// makes the tool see two manifests, which is the cause of the CI failure.
+const stagedManifestSource = path.join(stagingDir, 'StoreManifestSource.xml');
+fs.copyFileSync(manifestPath, stagedManifestSource);
+filteredMapping.push(`"${escapeMappingValue(stagedManifestSource)}" "AppxManifest.xml"`);
+
 for (const line of lines) {
   const trimmed = line.trim();
   if (!trimmed || trimmed.startsWith('[')) continue;
@@ -112,6 +118,12 @@ for (const line of lines) {
   const source = match[1].replace(/\\"/g, '"');
   const destination = match[2].replace(/\\"/g, '"');
   const destinationLeaf = path.basename(destination).toLowerCase();
+
+  if (destinationLeaf === 'appxmanifest.xml') {
+    skippedReserved += 1;
+    console.log(`Replacing generated AppX manifest mapping: ${destination}`);
+    continue;
+  }
 
   if (reservedPayloadNames.has(destinationLeaf)) {
     skippedReserved += 1;
@@ -138,20 +150,8 @@ for (const line of lines) {
   copied += 1;
 }
 
-const stagedManifestPath = path.join(stagingDir, 'AppxManifest.xml');
-fs.copyFileSync(manifestPath, stagedManifestPath);
-
-// /m tells MakeAppx that this is the input application manifest rather than a
-// payload file. Microsoft requires /f + [ResourceMetadata] when /m is used.
 const filteredMappingPath = path.join(stagingDir, 'filtered-mapping.txt');
-const mappingHeader = [
-  '[ResourceMetadata]',
-  '"ResourceDimensions" "language-en-us"',
-  '"ResourceId" "English"',
-  '',
-  '[Files]',
-].join('\n');
-fs.writeFileSync(filteredMappingPath, `${mappingHeader}\n${filteredMapping.join('\n')}\n`, 'utf8');
+fs.writeFileSync(filteredMappingPath, `[Files]\n${filteredMapping.join('\n')}\n`, 'utf8');
 
 const cacheRoot = process.env.LOCALAPPDATA
   ? path.join(process.env.LOCALAPPDATA, 'electron-builder', 'Cache')
@@ -167,7 +167,6 @@ console.log(`Creating: ${outputPath}`);
 
 const result = spawnSync(makeAppx, [
   'pack',
-  '/m', stagedManifestPath,
   '/f', filteredMappingPath,
   '/p', outputPath,
   '/o',
