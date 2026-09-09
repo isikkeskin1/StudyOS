@@ -68,19 +68,13 @@ const lines = fs.readFileSync(mappingPath, 'utf8').split(/\r?\n/);
 const filteredMapping = [];
 let copied = 0;
 let skippedReserved = 0;
-let skippedPythonDocxTemplate = 0;
-let skippedOptionalTile = 0;
+let skippedPythonDocxContentTypes = 0;
 
 const reservedPayloadNames = new Set([
-  'appxmanifest.xml',
   'appxblockmap.xml',
   'appxstreammap.xml',
   'appxsignature.p7x',
   '[content_types].xml',
-]);
-
-const optionalPayloadNames = new Set([
-  'wide310x150logo.png',
 ]);
 
 function escapeMappingValue(value) {
@@ -108,6 +102,10 @@ function validateDestination(destination) {
   }
 }
 
+// MakeAppx's mapping-file mode treats an exact AppxManifest.xml destination as the
+// package manifest. Keep it out of the payload set, then add it explicitly below.
+filteredMapping.push(`"${escapeMappingValue(manifestPath)}" "AppxManifest.xml"`);
+
 for (const line of lines) {
   const trimmed = line.trim();
   if (!trimmed || trimmed.startsWith('[')) continue;
@@ -119,20 +117,22 @@ for (const line of lines) {
   const normalizedDestination = destination.replace(/\\/g, '/').toLowerCase();
   const destinationLeaf = path.basename(destination).toLowerCase();
 
-  if (normalizedDestination.includes('/default-docx-template/')) {
-    skippedPythonDocxTemplate += 1;
+  if (destinationLeaf === 'appxmanifest.xml') {
+    // We add the generated manifest once, above, so it is never duplicated.
+    continue;
+  }
+
+  // [Content_Types].xml is an OPC/DOCX footprint file. It is not a valid AppX
+  // payload name and MakeAppx creates its own package footprint files.
+  if (destinationLeaf === '[content_types].xml') {
+    skippedPythonDocxContentTypes += 1;
+    console.log(`Skipping OPC footprint payload: ${destination}`);
     continue;
   }
 
   if (reservedPayloadNames.has(destinationLeaf)) {
     skippedReserved += 1;
     console.log(`Skipping reserved AppX payload name: ${destination}`);
-    continue;
-  }
-
-  if (optionalPayloadNames.has(destinationLeaf)) {
-    skippedOptionalTile += 1;
-    console.log(`Skipping optional AppX tile payload: ${destination}`);
     continue;
   }
 
@@ -149,12 +149,6 @@ for (const line of lines) {
   copied += 1;
 }
 
-let manifest = fs.readFileSync(manifestPath, 'utf8');
-manifest = manifest.replace(/\s*<uap:DefaultTile\b[^>]*>[\s\S]*?<\/uap:DefaultTile>\s*/i, '\n');
-manifest = manifest.replace(/\s*<uap:DefaultTile\b[^>]*\/\>\s*/i, '\n');
-const stagedManifestPath = path.join(stagingDir, 'AppxManifest.xml');
-fs.writeFileSync(stagedManifestPath, manifest, 'utf8');
-
 const filteredMappingPath = path.join(stagingDir, 'filtered-mapping.txt');
 fs.writeFileSync(filteredMappingPath, `[Files]\n${filteredMapping.join('\n')}\n`, 'utf8');
 
@@ -165,14 +159,13 @@ const makeAppx = findFile(cacheRoot, 'makeappx.exe');
 if (!makeAppx) fail(`Could not find makeappx.exe under ${cacheRoot || '<missing LOCALAPPDATA>'}`);
 
 if (fs.existsSync(outputPath)) fs.rmSync(outputPath, { force: true });
-console.log(`Manual AppX staging ready: ${copied} payload files copied, ${skippedPythonDocxTemplate} python-docx template payload(s) skipped, ${skippedReserved} reserved payload(s) skipped, ${skippedOptionalTile} optional tile payload(s) skipped.`);
+console.log(`Manual AppX staging ready: ${copied} payload files copied, ${skippedPythonDocxContentTypes} OPC footprint payload(s) skipped, ${skippedReserved} reserved payload(s) skipped.`);
 console.log(`Filtered MakeAppx mapping: ${filteredMappingPath}`);
 console.log(`Using MakeAppx: ${makeAppx}`);
 console.log(`Creating: ${outputPath}`);
 
 const result = spawnSync(makeAppx, [
   'pack',
-  '/m', stagedManifestPath,
   '/f', filteredMappingPath,
   '/p', outputPath,
   '/o',
