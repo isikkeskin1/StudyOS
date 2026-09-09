@@ -69,6 +69,7 @@ const filteredMapping = [];
 let copied = 0;
 let skippedReserved = 0;
 let skippedPythonDocxContentTypes = 0;
+let encodedDestinations = 0;
 
 const reservedPayloadNames = new Set([
   'appxblockmap.xml',
@@ -102,9 +103,22 @@ function validateDestination(destination) {
   }
 }
 
-// MakeAppx's mapping-file mode treats an exact AppxManifest.xml destination as the
-// package manifest. Keep it out of the payload set, then add it explicitly below.
-filteredMapping.push(`"${escapeMappingValue(manifestPath)}" "AppxManifest.xml"`);
+// AppX payload names are package-part URIs. Encode characters such as spaces and
+// square brackets in the mapping; Windows decodes these URI escapes when resolving
+// files from the installed package, so Next.js routes such as [courseId] keep their
+// original on-disk names.
+function encodePackagePath(destination) {
+  return destination
+    .split('\\')
+    .map((component) => encodeURIComponent(component))
+    .join('\\');
+}
+
+// Use a differently named source file for the manifest, while mapping it to the
+// reserved AppxManifest.xml package footprint. This is the MakeAppx-supported form.
+const stagedManifestSource = path.join(stagingDir, 'CustomManifest.xml');
+fs.copyFileSync(manifestPath, stagedManifestSource);
+filteredMapping.push(`"${escapeMappingValue(stagedManifestSource)}" "AppxManifest.xml"`);
 
 for (const line of lines) {
   const trimmed = line.trim();
@@ -114,16 +128,10 @@ for (const line of lines) {
 
   const source = match[1].replace(/\\"/g, '"');
   const destination = match[2].replace(/\\"/g, '"');
-  const normalizedDestination = destination.replace(/\\/g, '/').toLowerCase();
   const destinationLeaf = path.basename(destination).toLowerCase();
 
-  if (destinationLeaf === 'appxmanifest.xml') {
-    // We add the generated manifest once, above, so it is never duplicated.
-    continue;
-  }
+  if (destinationLeaf === 'appxmanifest.xml') continue;
 
-  // [Content_Types].xml is an OPC/DOCX footprint file. It is not a valid AppX
-  // payload name and MakeAppx creates its own package footprint files.
   if (destinationLeaf === '[content_types].xml') {
     skippedPythonDocxContentTypes += 1;
     console.log(`Skipping OPC footprint payload: ${destination}`);
@@ -145,7 +153,13 @@ for (const line of lines) {
 
   fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
   fs.copyFileSync(source, destinationPath);
-  filteredMapping.push(`"${escapeMappingValue(destinationPath)}" "${escapeMappingValue(destination)}"`);
+
+  const packageDestination = encodePackagePath(destination);
+  if (packageDestination !== destination) {
+    encodedDestinations += 1;
+    console.log(`Encoding AppX URI destination: ${destination} -> ${packageDestination}`);
+  }
+  filteredMapping.push(`"${escapeMappingValue(destinationPath)}" "${escapeMappingValue(packageDestination)}"`);
   copied += 1;
 }
 
@@ -159,7 +173,7 @@ const makeAppx = findFile(cacheRoot, 'makeappx.exe');
 if (!makeAppx) fail(`Could not find makeappx.exe under ${cacheRoot || '<missing LOCALAPPDATA>'}`);
 
 if (fs.existsSync(outputPath)) fs.rmSync(outputPath, { force: true });
-console.log(`Manual AppX staging ready: ${copied} payload files copied, ${skippedPythonDocxContentTypes} OPC footprint payload(s) skipped, ${skippedReserved} reserved payload(s) skipped.`);
+console.log(`Manual AppX staging ready: ${copied} payload files copied, ${encodedDestinations} URI destination(s) encoded, ${skippedPythonDocxContentTypes} OPC footprint payload(s) skipped, ${skippedReserved} reserved payload(s) skipped.`);
 console.log(`Filtered MakeAppx mapping: ${filteredMappingPath}`);
 console.log(`Using MakeAppx: ${makeAppx}`);
 console.log(`Creating: ${outputPath}`);
