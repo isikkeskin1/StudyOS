@@ -55,12 +55,32 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         )
-        op.create_index("ix_catalog_courses_source_course_id", "catalog_courses", ["source_course_id"])
-        op.create_index("ix_catalog_courses_institution_name", "catalog_courses", ["institution_name"])
-        op.create_index("ix_catalog_courses_institution_code", "catalog_courses", ["institution_code"])
-        op.create_index("ix_catalog_courses_course_code", "catalog_courses", ["course_code"])
+        op.create_index(
+            "ix_catalog_courses_source_course_id",
+            "catalog_courses",
+            ["source_course_id"],
+        )
+        op.create_index(
+            "ix_catalog_courses_institution_name",
+            "catalog_courses",
+            ["institution_name"],
+        )
+        op.create_index(
+            "ix_catalog_courses_institution_code",
+            "catalog_courses",
+            ["institution_code"],
+        )
+        op.create_index(
+            "ix_catalog_courses_course_code",
+            "catalog_courses",
+            ["course_code"],
+        )
         op.create_index("ix_catalog_courses_published", "catalog_courses", ["published"])
-        op.create_index("ix_catalog_courses_created_by_user_id", "catalog_courses", ["created_by_user_id"])
+        op.create_index(
+            "ix_catalog_courses_created_by_user_id",
+            "catalog_courses",
+            ["created_by_user_id"],
+        )
 
 
 def downgrade() -> None:
