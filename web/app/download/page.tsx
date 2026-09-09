@@ -35,6 +35,7 @@ export default function DownloadPage() {
         <article><span>02</span><h2>Use the same account.</h2><p>Sign in with the same StudyOS account you already use in the browser.</p></article>
         <article><span>03</span><h2>Choose your channel.</h2><p>Use the direct installer or Microsoft Store for a managed Windows installation.</p></article>
       </section>
+      <footer className="download-legal"><Link href="/privacy">Privacy Policy</Link></footer>
     </main>
   );
 }

@@ -139,6 +139,9 @@
   line-height: 1.65;
 }
 
+.download-legal { width: min(1040px, 100%); margin: 22px auto 0; padding-top: 20px; border-top: 1px solid #17202a; color: #778493; font-size: 12px; }
+.download-legal a:hover { color: #f4f7fb; }
+
 @media (max-width: 760px) {
   .download-shell { padding: 18px; }
   .download-back { margin-bottom: 38px; }

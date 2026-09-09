@@ -188,7 +188,7 @@ export function AuthScreen({
         </div>
         <div className="auth-story-foot">
           <span><UiIcon name="shield" />Your workspace. Your pace.</span>
-          <Link className="ghost-button" href="/download">Get the Windows app</Link>
+          <span><Link href="/privacy">Privacy</Link> · <Link className="ghost-button" href="/download">Get the Windows app</Link></span>
         </div>
       </aside>
 
