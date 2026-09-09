@@ -78,7 +78,10 @@ const reservedPayloadNames = new Set([
 ]);
 
 function escapeMappingValue(value) {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  // MakeAppx mapping files use ordinary Windows paths. Backslashes are path
+  // separators here, not escape characters; doubling them creates package
+  // entries such as app\\StudyOS.exe that do not satisfy the manifest.
+  return value.replace(/"/g, '\\"');
 }
 
 function validateDestination(destination) {
