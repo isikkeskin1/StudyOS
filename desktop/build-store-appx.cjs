@@ -65,6 +65,7 @@ if (fs.existsSync(stagingDir)) fs.rmSync(stagingDir, { recursive: true, force: t
 fs.mkdirSync(stagingDir, { recursive: true });
 
 const lines = fs.readFileSync(mappingPath, 'utf8').split(/\r?\n/);
+const filteredMapping = [];
 let copied = 0;
 let skippedReserved = 0;
 let skippedPythonDocxTemplate = 0;
@@ -82,6 +83,31 @@ const optionalPayloadNames = new Set([
   'wide310x150logo.png',
 ]);
 
+function escapeMappingValue(value) {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function validateDestination(destination) {
+  if (path.isAbsolute(destination)) fail(`Unsafe AppX destination in mapping: ${destination}`);
+  const components = destination.split('\\');
+  if (components.some((component) => component === '..' || component === '')) {
+    fail(`Unsafe AppX destination component in mapping: ${destination}`);
+  }
+
+  for (const component of components) {
+    if (/[<>:"|?*\x00-\x1f]/.test(component)) {
+      fail(`Invalid Windows AppX destination component: ${destination}`);
+    }
+    if (/[ .]$/.test(component)) {
+      fail(`Trailing dot/space in AppX destination component: ${destination}`);
+    }
+    const base = component.split('.')[0].toUpperCase();
+    if (/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(base)) {
+      fail(`Reserved Windows device name in AppX destination: ${destination}`);
+    }
+  }
+}
+
 for (const line of lines) {
   const trimmed = line.trim();
   if (!trimmed || trimmed.startsWith('[')) continue;
@@ -93,10 +119,6 @@ for (const line of lines) {
   const normalizedDestination = destination.replace(/\\/g, '/').toLowerCase();
   const destinationLeaf = path.basename(destination).toLowerCase();
 
-  // python-docx ships a built-in default template whose OPC package contains
-  // a nested [Content_Types].xml. That filename collides with AppX payload
-  // packaging rules. StudyOS only reads uploaded DOCX files, so the built-in
-  // blank-document template is not required by the packaged desktop backend.
   if (normalizedDestination.includes('/default-docx-template/')) {
     skippedPythonDocxTemplate += 1;
     continue;
@@ -114,24 +136,27 @@ for (const line of lines) {
     continue;
   }
 
-  if (path.isAbsolute(destination) || destination.split('\\').includes('..')) {
-    fail(`Unsafe AppX destination in mapping: ${destination}`);
-  }
+  validateDestination(destination);
+  if (!fs.existsSync(source)) fail(`Mapped AppX source does not exist: ${source}`);
 
   const destinationPath = path.resolve(stagingDir, ...destination.split('\\'));
   const stagingRoot = path.resolve(stagingDir) + path.sep;
   if (!destinationPath.startsWith(stagingRoot)) fail(`AppX destination escapes staging directory: ${destination}`);
-  if (!fs.existsSync(source)) fail(`Mapped AppX source does not exist: ${source}`);
 
   fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
   fs.copyFileSync(source, destinationPath);
+  filteredMapping.push(`"${escapeMappingValue(destinationPath)}" "${escapeMappingValue(destination)}"`);
   copied += 1;
 }
 
 let manifest = fs.readFileSync(manifestPath, 'utf8');
 manifest = manifest.replace(/\s*<uap:DefaultTile\b[^>]*>[\s\S]*?<\/uap:DefaultTile>\s*/i, '\n');
 manifest = manifest.replace(/\s*<uap:DefaultTile\b[^>]*\/\>\s*/i, '\n');
-fs.writeFileSync(path.join(stagingDir, 'AppxManifest.xml'), manifest, 'utf8');
+const stagedManifestPath = path.join(stagingDir, 'AppxManifest.xml');
+fs.writeFileSync(stagedManifestPath, manifest, 'utf8');
+
+const filteredMappingPath = path.join(stagingDir, 'filtered-mapping.txt');
+fs.writeFileSync(filteredMappingPath, `[Files]\n${filteredMapping.join('\n')}\n`, 'utf8');
 
 const cacheRoot = process.env.LOCALAPPDATA
   ? path.join(process.env.LOCALAPPDATA, 'electron-builder', 'Cache')
@@ -141,10 +166,18 @@ if (!makeAppx) fail(`Could not find makeappx.exe under ${cacheRoot || '<missing 
 
 if (fs.existsSync(outputPath)) fs.rmSync(outputPath, { force: true });
 console.log(`Manual AppX staging ready: ${copied} payload files copied, ${skippedPythonDocxTemplate} python-docx template payload(s) skipped, ${skippedReserved} reserved payload(s) skipped, ${skippedOptionalTile} optional tile payload(s) skipped.`);
+console.log(`Filtered MakeAppx mapping: ${filteredMappingPath}`);
 console.log(`Using MakeAppx: ${makeAppx}`);
 console.log(`Creating: ${outputPath}`);
 
-const result = spawnSync(makeAppx, ['pack', '/d', stagingDir, '/p', outputPath, '/o', '/v'], {
+const result = spawnSync(makeAppx, [
+  'pack',
+  '/m', stagedManifestPath,
+  '/f', filteredMappingPath,
+  '/p', outputPath,
+  '/o',
+  '/v',
+], {
   cwd: desktopDir,
   stdio: 'inherit',
   windowsHide: true,
