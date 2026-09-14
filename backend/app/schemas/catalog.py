@@ -32,3 +32,33 @@ class CatalogCourseRead(BaseModel):
     updated_at: datetime
     name: str
     document_count: int
+
+
+class CatalogDiscoveryRequest(BaseModel):
+    seed_urls: list[str] = Field(min_length=1, max_length=12)
+    max_depth: int = Field(default=2, ge=0, le=3)
+    max_sources: int = Field(default=80, ge=1, le=250)
+
+
+class CatalogSourceRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    catalog_course_id: str
+    url: str
+    discovered_from_url: str | None
+    title: str | None
+    source_kind: str
+    content_type: str | None
+    extension: str | None
+    status: str
+    depth: int
+    sha256: str | None
+    imported_document_id: str | None
+    discovery_note: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CatalogSourceStatusUpdate(BaseModel):
+    status: str = Field(pattern="^(approved|rejected|candidate)$")
