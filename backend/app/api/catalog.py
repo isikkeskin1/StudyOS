@@ -11,17 +11,30 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.auth import User
-from app.models.catalog import CatalogCourse
+from app.models.catalog import CatalogCourse, CatalogSource
 from app.models.course import Course
 from app.models.course_intelligence import CourseAnalysis
 from app.models.document import Document
-from app.schemas.catalog import CatalogCourseCreate, CatalogCourseRead
+from app.schemas.catalog import (
+    CatalogCourseCreate,
+    CatalogCourseRead,
+    CatalogDiscoveryRequest,
+    CatalogSourceRead,
+    CatalogSourceStatusUpdate,
+)
 from app.schemas.course import CourseRead
+from app.schemas.document import DocumentRead
 from app.services.account_data import delete_course_data
 from app.services.exam_analysis import (
     CourseTopicsRequiredError,
     NoExamDocumentsError,
     analyze_exams,
+)
+from app.services.catalog_discovery import (
+    DiscoveryError,
+    SourceImportError,
+    discover_catalog_sources,
+    import_approved_catalog_sources,
 )
 from app.services.intelligence import NoProcessedDocumentsError, analyze_course
 from app.services.processing import DocumentProcessingError, process_document
@@ -195,6 +208,112 @@ def unpublish_catalog_course(
     db.commit()
     db.refresh(item)
     return _catalog_read(db, item)
+
+
+@router.post(
+    "/admin/catalog/courses/{catalog_id}/discover",
+    response_model=list[CatalogSourceRead],
+)
+def discover_course_sources(
+    catalog_id: str,
+    payload: CatalogDiscoveryRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> list[CatalogSource]:
+    _require_admin(request, db)
+    item = db.get(CatalogCourse, catalog_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Catalog course not found")
+
+    try:
+        return discover_catalog_sources(
+            db,
+            catalog=item,
+            seed_urls=payload.seed_urls,
+            max_depth=payload.max_depth,
+            max_sources=payload.max_sources,
+        )
+    except DiscoveryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/admin/catalog/courses/{catalog_id}/sources",
+    response_model=list[CatalogSourceRead],
+)
+def list_course_sources(
+    catalog_id: str,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> list[CatalogSource]:
+    _require_admin(request, db)
+    item = db.get(CatalogCourse, catalog_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Catalog course not found")
+    return list(
+        db.scalars(
+            select(CatalogSource)
+            .where(CatalogSource.catalog_course_id == item.id)
+            .order_by(CatalogSource.created_at.desc())
+        ).all()
+    )
+
+
+@router.patch(
+    "/admin/catalog/courses/{catalog_id}/sources/{source_id}",
+    response_model=CatalogSourceRead,
+)
+def update_course_source_status(
+    catalog_id: str,
+    source_id: str,
+    payload: CatalogSourceStatusUpdate,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> CatalogSource:
+    _require_admin(request, db)
+    source = db.get(CatalogSource, source_id)
+    if source is None or source.catalog_course_id != catalog_id:
+        raise HTTPException(status_code=404, detail="Catalog source not found")
+    if source.status in {"imported", "duplicate"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Imported sources cannot be returned to the review queue",
+        )
+    source.status = payload.status
+    source.discovery_note = None if payload.status != "rejected" else source.discovery_note
+    db.commit()
+    db.refresh(source)
+    return source
+
+
+@router.post(
+    "/admin/catalog/courses/{catalog_id}/import-approved",
+    response_model=list[DocumentRead],
+)
+def import_approved_sources(
+    catalog_id: str,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> list[Document]:
+    _require_admin(request, db)
+    item = db.get(CatalogCourse, catalog_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Catalog course not found")
+
+    try:
+        return import_approved_catalog_sources(
+            db,
+            catalog=item,
+            data_dir=Path(request.app.state.settings.data_dir),
+        )
+    except SourceImportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get("/catalog/courses", response_model=list[CatalogCourseRead])
