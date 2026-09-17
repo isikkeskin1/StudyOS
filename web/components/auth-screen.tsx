@@ -5,6 +5,7 @@ import { FormEvent, useState } from "react";
 export type AuthUser = {
   id: string;
   email: string;
+  is_admin: boolean;
   created_at: string;
 };
 
