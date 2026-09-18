@@ -25,16 +25,16 @@ from app.schemas.catalog import (
 from app.schemas.course import CourseRead
 from app.schemas.document import DocumentRead
 from app.services.account_data import delete_course_data
-from app.services.exam_analysis import (
-    CourseTopicsRequiredError,
-    NoExamDocumentsError,
-    analyze_exams,
-)
 from app.services.catalog_discovery import (
     DiscoveryError,
     SourceImportError,
     discover_catalog_sources,
     import_approved_catalog_sources,
+)
+from app.services.exam_analysis import (
+    CourseTopicsRequiredError,
+    NoExamDocumentsError,
+    analyze_exams,
 )
 from app.services.intelligence import NoProcessedDocumentsError, analyze_course
 from app.services.processing import DocumentProcessingError, process_document
