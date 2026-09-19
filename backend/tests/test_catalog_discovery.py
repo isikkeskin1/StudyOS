@@ -22,7 +22,13 @@ def _app(tmp_path: Path):
     )
 
 
-def _fake_fetch(_client, url: str, *, allowed_hosts: set[str], max_bytes: int):
+def _fake_fetch(
+    _client,
+    url: str,
+    *,
+    allowed_hosts: set[str],
+    max_bytes: int = 25 * 1024 * 1024,
+):
     del allowed_hosts, max_bytes
     pages = {
         "https://didattica.polito.test/physics": FetchedSource(
@@ -30,27 +36,42 @@ def _fake_fetch(_client, url: str, *, allowed_hosts: set[str], max_bytes: int):
             content=(
                 b"<html><head><title>Physics I - Politecnico di Torino</title></head>"
                 b"<body>"
-                b"<a href='/files/lecture.pdf'>Lecture slides</a>"
-                b"<a href='/files/exercises.pdf'>Exercises</a>"
-                b"<a href='/files/2025-written-exam.pdf'>Past exam</a>"
+                b"<a href='/files/lecture-notes.txt'>Lecture slides</a>"
+                b"<a href='/files/exercises.txt'>Exercises</a>"
+                b"<a href='/files/2025-written-exam.txt'>Past exam</a>"
                 b"</body></html>"
             ),
             content_type="text/html",
         ),
-        "https://didattica.polito.test/files/lecture.pdf": FetchedSource(
+        "https://didattica.polito.test/files/lecture-notes.txt": FetchedSource(
             url=url,
-            content=b"fake lecture pdf bytes",
-            content_type="application/pdf",
+            content=(
+                b"Newton's Laws\n"
+                b"Newton's second law relates force, mass, and acceleration.\n\n"
+                b"Momentum\n"
+                b"Momentum is conserved in isolated systems."
+            ),
+            content_type="text/plain",
         ),
-        "https://didattica.polito.test/files/exercises.pdf": FetchedSource(
+        "https://didattica.polito.test/files/exercises.txt": FetchedSource(
             url=url,
-            content=b"fake exercise pdf bytes",
-            content_type="application/pdf",
+            content=(
+                b"Physics I Exercises\n"
+                b"Exercise 1: calculate force using Newton's second law.\n"
+                b"Exercise 2: determine momentum after a collision."
+            ),
+            content_type="text/plain",
         ),
-        "https://didattica.polito.test/files/2025-written-exam.pdf": FetchedSource(
+        "https://didattica.polito.test/files/2025-written-exam.txt": FetchedSource(
             url=url,
-            content=b"fake exam pdf bytes",
-            content_type="application/pdf",
+            content=(
+                b"Physics I Written Exam\n"
+                b"Question 1 (10 marks)\n"
+                b"Calculate the net force using Newton's second law.\n\n"
+                b"Question 2 (10 marks)\n"
+                b"Use conservation of momentum to solve the collision."
+            ),
+            content_type="text/plain",
         ),
     }
     return pages[url]
@@ -113,15 +134,45 @@ def test_admin_discovers_reviews_and_imports_public_course_sources(
         assert "past_exam" in kinds
         assert "web_page" in kinds
 
-        lecture = next(
-            item for item in source_payload if item["source_kind"] == "lecture"
+        importable = [
+            item
+            for item in source_payload
+            if item["source_kind"] in {"lecture", "exercise", "past_exam"}
+        ]
+        assert len(importable) == 3
+        for source in importable:
+            approved = client.patch(
+                (
+                    f"/api/v1/admin/catalog/courses/{catalog_id}/sources/"
+                    f"{source['id']}"
+                ),
+                json={"status": "approved"},
+            )
+            assert approved.status_code == 200
+            assert approved.json()["status"] == "approved"
+
+        imported = client.post(
+            f"/api/v1/admin/catalog/courses/{catalog_id}/import-approved"
         )
-        approved = client.patch(
-            f"/api/v1/admin/catalog/courses/{catalog_id}/sources/{lecture['id']}",
-            json={"status": "approved"},
+        assert imported.status_code == 200
+        assert len(imported.json()) == 3
+
+        refreshed = client.get(
+            f"/api/v1/admin/catalog/courses/{catalog_id}/sources"
+        ).json()
+        assert sum(item["status"] == "imported" for item in refreshed) == 3
+
+        master_course_id = created.json()["source_course_id"]
+        intelligence = client.get(
+            f"/api/v1/courses/{master_course_id}/intelligence"
         )
-        assert approved.status_code == 200
-        assert approved.json()["status"] == "approved"
+        assert intelligence.status_code == 200
+
+        exam_intelligence = client.get(
+            f"/api/v1/courses/{master_course_id}/exam-intelligence"
+        )
+        assert exam_intelligence.status_code == 200
+        assert exam_intelligence.json()["question_count"] == 2
 
 
 def test_discovery_rejects_private_network_resolution(monkeypatch) -> None:
