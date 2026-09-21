@@ -16,6 +16,7 @@ from app.models.course import Course
 from app.models.course_intelligence import CourseAnalysis
 from app.models.document import Document
 from app.schemas.catalog import (
+    CatalogAssignmentRequest,
     CatalogCourseCreate,
     CatalogCourseRead,
     CatalogDiscoveryRequest,
@@ -436,6 +437,36 @@ def enroll_catalog_course(
         db,
         item=item,
         user_id=user_id,
+        data_dir=Path(request.app.state.settings.data_dir),
+    )
+
+
+@router.post(
+    "/admin/catalog/courses/{catalog_id}/assign",
+    response_model=CourseRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def assign_catalog_course_by_email(
+    catalog_id: str,
+    payload: CatalogAssignmentRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> Course:
+    _require_admin(request, db)
+    _unscoped(db)
+
+    target_user = db.scalar(select(User).where(User.email == payload.email))
+    if target_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    item = db.get(CatalogCourse, catalog_id)
+    if item is None or not item.published:
+        raise HTTPException(status_code=404, detail="Catalog course not found")
+
+    return _instantiate_catalog_course(
+        db,
+        item=item,
+        user_id=target_user.id,
         data_dir=Path(request.app.state.settings.data_dir),
     )
 
