@@ -221,12 +221,31 @@ def _extension(url: str, content_type: str | None) -> str | None:
     return None
 
 
-def _classify(url: str, title: str | None, text: str = "") -> str:
-    haystack = " ".join((url, title or "", text[:3000])).lower()
+def _normalized_search_text(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+
+def _classify(
+    url: str,
+    title: str | None,
+    text: str = "",
+    *,
+    content_type: str | None = None,
+) -> str:
+    primary = _normalized_search_text(" ".join((url, title or "")))
     for kind, terms in _KIND_RULES:
-        if any(term in haystack for term in terms):
+        if any(_normalized_search_text(term) in primary for term in terms):
             return kind
-    if (urlparse(url).path.lower().endswith(tuple(_SUPPORTED_EXTENSIONS))):
+
+    if content_type in _HTML_TYPES:
+        return "web_page"
+
+    body = _normalized_search_text(text[:3000])
+    for kind, terms in _KIND_RULES:
+        if any(_normalized_search_text(term) in body for term in terms):
+            return kind
+
+    if urlparse(url).path.lower().endswith(tuple(_SUPPORTED_EXTENSIONS)):
         return "course_file"
     return "web_page"
 
@@ -348,7 +367,12 @@ def discover_catalog_sources(
                 url=fetched.url,
                 discovered_from_url=parent_url,
                 title=title,
-                source_kind=_classify(fetched.url, title, text),
+                source_kind=_classify(
+                    fetched.url,
+                    title,
+                    text,
+                    content_type=fetched.content_type,
+                ),
                 content_type=fetched.content_type,
                 extension=extension,
                 status=status,
