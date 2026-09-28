@@ -74,3 +74,14 @@ class CatalogAssignmentRequest(BaseModel):
         if "@" not in normalized:
             raise ValueError("Enter a valid account email")
         return normalized
+
+
+class CatalogSeedSuggestionRequest(BaseModel):
+    program_code: str | None = Field(default=None, max_length=20)
+    cohort_year: int | None = Field(default=None, ge=2000, le=2100)
+
+
+class CatalogSeedSuggestionRead(BaseModel):
+    institution_code: str
+    urls: list[str]
+    notes: list[str]
