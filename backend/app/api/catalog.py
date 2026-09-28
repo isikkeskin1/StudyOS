@@ -20,6 +20,8 @@ from app.schemas.catalog import (
     CatalogCourseCreate,
     CatalogCourseRead,
     CatalogDiscoveryRequest,
+    CatalogSeedSuggestionRead,
+    CatalogSeedSuggestionRequest,
     CatalogSourceRead,
     CatalogSourceStatusUpdate,
 )
@@ -36,6 +38,10 @@ from app.services.exam_analysis import (
     CourseTopicsRequiredError,
     NoExamDocumentsError,
     analyze_exams,
+)
+from app.services.institution_presets import (
+    InstitutionPresetError,
+    suggest_catalog_seed_urls,
 )
 from app.services.intelligence import NoProcessedDocumentsError, analyze_course
 from app.services.processing import DocumentProcessingError, process_document
@@ -209,6 +215,40 @@ def unpublish_catalog_course(
     db.commit()
     db.refresh(item)
     return _catalog_read(db, item)
+
+
+@router.post(
+    "/admin/catalog/courses/{catalog_id}/suggest-seeds",
+    response_model=CatalogSeedSuggestionRead,
+)
+def suggest_course_seeds(
+    catalog_id: str,
+    payload: CatalogSeedSuggestionRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> CatalogSeedSuggestionRead:
+    _require_admin(request, db)
+    item = db.get(CatalogCourse, catalog_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Catalog course not found")
+
+    try:
+        urls, notes = suggest_catalog_seed_urls(
+            item,
+            program_code=payload.program_code,
+            cohort_year=payload.cohort_year,
+        )
+    except InstitutionPresetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    return CatalogSeedSuggestionRead(
+        institution_code=(item.institution_code or "").upper(),
+        urls=urls,
+        notes=notes,
+    )
 
 
 @router.post(
