@@ -187,6 +187,7 @@ The probabilistic layer supports:
 | 📅 **Calendar & focus** | Calendar-aware planning and focus workflow integration |
 | 📲 **PWA** | Installable web app, offline shell and notifications |
 | 🔐 **Account controls** | Account-scoped ownership, export and confirmed deletion |
+| 🏫 **Institution catalog** | Admin-curated university courses, public source discovery, review/import, publishing and direct user assignment |
 
 ---
 
