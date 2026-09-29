@@ -93,6 +93,17 @@
     },
     "portable": {
       "artifactName": "StudyOS-${version}-Windows-x64-Portable.${ext}"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "isikkeskin1",
+        "repo": "StudyOS",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.6.2"
   }
 }
