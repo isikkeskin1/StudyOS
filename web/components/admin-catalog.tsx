@@ -468,6 +468,10 @@ export function AdminCatalog({
                   </p>
                   {selected.institution_code?.toUpperCase() === "POLITO" && (
                     <div className="polito-seed-helper">
+                      <p className="manager-note">
+                        Course code is enough. Program/cohort are optional hints when you want
+                        to target a specific teaching plan.
+                      </p>
                       <div className="setup-row">
                         <label>
                           Degree program code
@@ -495,7 +499,7 @@ export function AdminCatalog({
                         disabled={busy || !selected.course_code}
                         onClick={loadOfficialSeeds}
                       >
-                        Load official Polito seeds
+                        Find official Polito sources
                       </button>
                     </div>
                   )}
