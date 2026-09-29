@@ -41,6 +41,7 @@ from app.services.exam_analysis import (
 )
 from app.services.institution_presets import (
     InstitutionPresetError,
+    discover_polito_official_seeds,
     suggest_catalog_seed_urls,
 )
 from app.services.intelligence import NoProcessedDocumentsError, analyze_course
@@ -233,11 +234,18 @@ def suggest_course_seeds(
         raise HTTPException(status_code=404, detail="Catalog course not found")
 
     try:
-        urls, notes = suggest_catalog_seed_urls(
-            item,
-            program_code=payload.program_code,
-            cohort_year=payload.cohort_year,
-        )
+        if (
+            (item.institution_code or "").strip().upper() == "POLITO"
+            and not payload.program_code
+            and payload.cohort_year is None
+        ):
+            urls, notes = discover_polito_official_seeds(item)
+        else:
+            urls, notes = suggest_catalog_seed_urls(
+                item,
+                program_code=payload.program_code,
+                cohort_year=payload.cohort_year,
+            )
     except InstitutionPresetError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
