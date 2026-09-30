@@ -88,7 +88,7 @@ function configureAutoUpdates() {
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.allowPrerelease = false;
+  autoUpdater.allowPrerelease = app.getVersion().startsWith("0.");
 
   autoUpdater.on("checking-for-update", () => {
     logDesktop("Checking for StudyOS desktop updates.");
