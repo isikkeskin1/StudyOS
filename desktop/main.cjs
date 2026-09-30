@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, session, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, session, shell } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const http = require("http");
 const https = require("https");
 const fs = require("fs");
@@ -17,6 +18,8 @@ let proxyServer = null;
 let appWindow = null;
 let setupWindow = null;
 let lastStartupError = "";
+let updateCheckTimer = null;
+let updateReadyVersion = null;
 
 function desktopLogPath() {
   return process.env.STUDYOS_DESKTOP_LOG_PATH?.trim()
@@ -72,6 +75,74 @@ if (!hasSingleInstanceLock) {
     window.focus();
   });
 }
+
+function isPortableBuild() {
+  return Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
+}
+
+function configureAutoUpdates() {
+  if (!app.isPackaged || process.platform !== "win32" || isPortableBuild()) {
+    logDesktop("Automatic updates disabled for this runtime.");
+    return;
+  }
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = false;
+
+  autoUpdater.on("checking-for-update", () => {
+    logDesktop("Checking for StudyOS desktop updates.");
+  });
+  autoUpdater.on("update-available", (info) => {
+    logDesktop(`StudyOS update available: ${info.version}`);
+  });
+  autoUpdater.on("update-not-available", (info) => {
+    logDesktop(`StudyOS is current at ${info.version || app.getVersion()}`);
+  });
+  autoUpdater.on("download-progress", (progress) => {
+    logDesktop(
+      `Downloading StudyOS update: ${Math.round(progress.percent || 0)}%`,
+    );
+  });
+  autoUpdater.on("error", (error) => {
+    logDesktop("StudyOS automatic update failed.", error);
+  });
+  autoUpdater.on("update-downloaded", async (info) => {
+    updateReadyVersion = info.version;
+    logDesktop(`StudyOS update downloaded: ${info.version}`);
+
+    const window = appWindow && !appWindow.isDestroyed() ? appWindow : null;
+    const result = await dialog.showMessageBox(window || undefined, {
+      type: "info",
+      title: "StudyOS update ready",
+      message: `StudyOS ${info.version} is ready to install.`,
+      detail:
+        "Restart StudyOS now to finish the update, or keep working and it will install when you exit.",
+      buttons: ["Restart & update", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+    if (result.response === 0) {
+      app.isQuitting = true;
+      stopRuntime();
+      setImmediate(() => autoUpdater.quitAndInstall(false, true));
+    }
+  });
+
+  const check = async () => {
+    try {
+      await autoUpdater.checkForUpdates();
+    } catch (error) {
+      logDesktop("StudyOS update check failed.", error);
+    }
+  };
+
+  setTimeout(() => void check(), 12_000);
+  updateCheckTimer = setInterval(() => void check(), 4 * 60 * 60 * 1000);
+  updateCheckTimer.unref?.();
+}
+
 
 function configPath() {
   return path.join(app.getPath("userData"), "desktop.json");
@@ -458,6 +529,7 @@ if (hasSingleInstanceLock) {
   app.whenReady().then(async () => {
     try {
       await launchStudyOS();
+      configureAutoUpdates();
     } catch (error) {
       stopRuntime();
       createSetupWindow(error);
@@ -476,7 +548,14 @@ app.on("activate", () => {
 
 app.on("before-quit", () => {
   app.isQuitting = true;
+  if (updateCheckTimer) {
+    clearInterval(updateCheckTimer);
+    updateCheckTimer = null;
+  }
   stopRuntime();
+  if (updateReadyVersion) {
+    logDesktop(`Installing downloaded StudyOS update ${updateReadyVersion} on exit.`);
+  }
 });
 
 app.on("window-all-closed", () => {
