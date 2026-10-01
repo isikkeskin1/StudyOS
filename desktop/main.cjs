@@ -81,7 +81,12 @@ function isPortableBuild() {
 }
 
 function configureAutoUpdates() {
-  if (!app.isPackaged || process.platform !== "win32" || isPortableBuild()) {
+  if (
+    process.env.STUDYOS_DISABLE_AUTO_UPDATE === "1"
+    || !app.isPackaged
+    || process.platform !== "win32"
+    || isPortableBuild()
+  ) {
     logDesktop("Automatic updates disabled for this runtime.");
     return;
   }
@@ -112,7 +117,7 @@ function configureAutoUpdates() {
     logDesktop(`StudyOS update downloaded: ${info.version}`);
 
     const window = appWindow && !appWindow.isDestroyed() ? appWindow : null;
-    const result = await dialog.showMessageBox(window || undefined, {
+    const options = {
       type: "info",
       title: "StudyOS update ready",
       message: `StudyOS ${info.version} is ready to install.`,
@@ -122,7 +127,10 @@ function configureAutoUpdates() {
       defaultId: 0,
       cancelId: 1,
       noLink: true,
-    });
+    };
+    const result = window
+      ? await dialog.showMessageBox(window, options)
+      : await dialog.showMessageBox(options);
     if (result.response === 0) {
       app.isQuitting = true;
       stopRuntime();
