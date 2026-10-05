@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, session, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, session, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const http = require("http");
 const https = require("https");
@@ -17,6 +17,8 @@ let nextProcess = null;
 let proxyServer = null;
 let appWindow = null;
 let setupWindow = null;
+let splashWindow = null;
+let updateWindow = null;
 let lastStartupError = "";
 let updateCheckTimer = null;
 let updateReadyVersion = null;
@@ -100,42 +102,35 @@ function configureAutoUpdates() {
   });
   autoUpdater.on("update-available", (info) => {
     logDesktop(`StudyOS update available: ${info.version}`);
+    createUpdateWindow(info.version);
   });
   autoUpdater.on("update-not-available", (info) => {
     logDesktop(`StudyOS is current at ${info.version || app.getVersion()}`);
   });
   autoUpdater.on("download-progress", (progress) => {
-    logDesktop(
-      `Downloading StudyOS update: ${Math.round(progress.percent || 0)}%`,
-    );
+    const percent = Math.round(progress.percent || 0);
+    logDesktop(`Downloading StudyOS update: ${percent}%`);
+    sendUpdateProgress({
+      stage: "downloading",
+      version: updateReadyVersion,
+      percent,
+      bytesPerSecond: progress.bytesPerSecond || 0,
+      transferred: progress.transferred || 0,
+      total: progress.total || 0,
+    });
   });
   autoUpdater.on("error", (error) => {
     logDesktop("StudyOS automatic update failed.", error);
+    sendUpdateProgress({
+      stage: "error",
+      message: error instanceof Error ? error.message : String(error),
+    });
   });
-  autoUpdater.on("update-downloaded", async (info) => {
+  autoUpdater.on("update-downloaded", (info) => {
     updateReadyVersion = info.version;
     logDesktop(`StudyOS update downloaded: ${info.version}`);
-
-    const window = appWindow && !appWindow.isDestroyed() ? appWindow : null;
-    const options = {
-      type: "info",
-      title: "StudyOS update ready",
-      message: `StudyOS ${info.version} is ready to install.`,
-      detail:
-        "Restart StudyOS now to finish the update, or keep working and it will install when you exit.",
-      buttons: ["Restart & update", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true,
-    };
-    const result = window
-      ? await dialog.showMessageBox(window, options)
-      : await dialog.showMessageBox(options);
-    if (result.response === 0) {
-      app.isQuitting = true;
-      stopRuntime();
-      setImmediate(() => autoUpdater.quitAndInstall(false, true));
-    }
+    createUpdateWindow(info.version);
+    sendUpdateProgress({ stage: "ready", version: info.version, percent: 100 });
   });
 
   const check = async () => {
@@ -151,6 +146,82 @@ function configureAutoUpdates() {
   updateCheckTimer.unref?.();
 }
 
+
+function sendSplashProgress(message) {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.webContents.send("studyos:startup-progress", message);
+  }
+}
+
+function createSplashWindow() {
+  if (splashWindow && !splashWindow.isDestroyed()) return;
+  splashWindow = new BrowserWindow({
+    width: 460,
+    height: 340,
+    resizable: false,
+    frame: false,
+    transparent: false,
+    backgroundColor: "#070b11",
+    alwaysOnTop: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+    },
+  });
+  splashWindow.once("ready-to-show", () => splashWindow?.show());
+  void splashWindow.loadFile(path.join(__dirname, "splash.html"));
+}
+
+function closeSplashWindow() {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close();
+  }
+  splashWindow = null;
+}
+
+function sendUpdateProgress(payload) {
+  if (updateWindow && !updateWindow.isDestroyed()) {
+    updateWindow.webContents.send("studyos:update-progress", payload);
+  }
+}
+
+function createUpdateWindow(version) {
+  if (updateWindow && !updateWindow.isDestroyed()) {
+    updateWindow.show();
+    updateWindow.focus();
+    sendUpdateProgress({ stage: "available", version });
+    return;
+  }
+  updateWindow = new BrowserWindow({
+    width: 620,
+    height: 420,
+    resizable: false,
+    backgroundColor: "#070b11",
+    autoHideMenuBar: true,
+    show: false,
+    parent: appWindow && !appWindow.isDestroyed() ? appWindow : undefined,
+    modal: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+    },
+  });
+  updateWindow.once("ready-to-show", () => updateWindow?.show());
+  updateWindow.webContents.once("did-finish-load", () => {
+    sendUpdateProgress({ stage: "available", version });
+  });
+  updateWindow.on("closed", () => {
+    updateWindow = null;
+  });
+  void updateWindow.loadFile(path.join(__dirname, "update.html"));
+}
 
 function configPath() {
   return path.join(app.getPath("userData"), "desktop.json");
@@ -423,7 +494,10 @@ function createAppWindow(appOrigin) {
     },
   });
 
-  appWindow.once("ready-to-show", () => appWindow.show());
+  appWindow.once("ready-to-show", () => {
+    closeSplashWindow();
+    appWindow?.show();
+  });
   appWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https://")) void shell.openExternal(url);
     return { action: "deny" };
@@ -457,6 +531,7 @@ function probeBackend(origin, timeoutMs = 5000) {
 }
 
 function createSetupWindow(error) {
+  closeSplashWindow();
   if (error) {
     lastStartupError = error instanceof Error ? error.message : String(error);
     logDesktop("StudyOS desktop startup failed.", error);
@@ -520,13 +595,36 @@ ipcMain.handle("studyos:save-backend", async (event, backendUrl) => {
   return true;
 });
 
+ipcMain.handle("studyos:restart-and-update", () => {
+  if (!updateReadyVersion) {
+    throw new Error("No StudyOS update is ready to install.");
+  }
+  app.isQuitting = true;
+  stopRuntime();
+  setImmediate(() => autoUpdater.quitAndInstall(false, true));
+  return true;
+});
+
+ipcMain.handle("studyos:close-update-window", () => {
+  updateWindow?.close();
+  return true;
+});
+
 async function launchStudyOS() {
   const config = readConfig();
-  const backendUrl = config.backendUrl
-    ? normalizeBackendUrl(config.backendUrl)
-    : await startLocalBackend();
+  sendSplashProgress("Starting StudyOS services…");
 
-  const nextPort = await startNextServer();
+  const backendPromise = config.backendUrl
+    ? Promise.resolve(normalizeBackendUrl(config.backendUrl))
+    : startLocalBackend();
+  const webPromise = startNextServer();
+
+  const [backendUrl, nextPort] = await Promise.all([
+    backendPromise,
+    webPromise,
+  ]);
+
+  sendSplashProgress("Opening your workspace…");
   const proxyPort = await startProxy(backendUrl, nextPort);
   const appOrigin = `http://127.0.0.1:${proxyPort}`;
   createAppWindow(appOrigin);
@@ -535,6 +633,7 @@ async function launchStudyOS() {
 
 if (hasSingleInstanceLock) {
   app.whenReady().then(async () => {
+    createSplashWindow();
     try {
       await launchStudyOS();
       configureAutoUpdates();
