@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data:;" />
+  <title>StudyOS Update</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center; overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 8%, rgba(124,58,237,.26), transparent 38%),
+        radial-gradient(circle at 82% 88%, rgba(37,99,235,.20), transparent 36%),
+        linear-gradient(180deg,#080c12,#05080d);
+      color: #f8fafc;
+    }
+    main {
+      width: min(560px, calc(100vw - 36px));
+      padding: 30px;
+      border: 1px solid rgba(148,163,184,.16);
+      border-radius: 26px;
+      background: rgba(10,15,23,.94);
+      box-shadow: 0 40px 120px rgba(0,0,0,.5);
+    }
+    .top { display:flex; align-items:center; gap:14px; }
+    .mark {
+      width: 54px; height: 54px; display:grid; place-items:center; border-radius:17px;
+      background: linear-gradient(135deg,#7c3aed,#2563eb); font-size:28px;
+      box-shadow: 0 16px 45px rgba(124,58,237,.32);
+    }
+    .eyebrow { color:#8b9bb0; font-size:11px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
+    h1 { margin:4px 0 0; font-size:28px; letter-spacing:-.03em; }
+    #version { color:#9db8ff; }
+    .status { margin:24px 0 10px; color:#dbe7f4; font-size:14px; }
+    .track {
+      height: 12px; width:100%; overflow:hidden; border-radius:999px;
+      background:#0c131d; border:1px solid rgba(148,163,184,.15);
+    }
+    .fill {
+      height:100%; width:0%; border-radius:inherit;
+      background: linear-gradient(90deg,#7c3aed,#3b82f6,#22d3ee);
+      transition: width .25s ease;
+      box-shadow:0 0 24px rgba(59,130,246,.48);
+    }
+    .meta { display:flex; justify-content:space-between; gap:16px; margin-top:10px; color:#8294a8; font-size:12px; }
+    .actions { display:none; gap:10px; margin-top:22px; }
+    button {
+      flex:1; min-height:44px; border-radius:12px; border:1px solid rgba(148,163,184,.16);
+      background:#111827; color:#e8eef7; font-weight:800; cursor:pointer;
+    }
+    button.primary { background:linear-gradient(135deg,#7c3aed,#2563eb); border:0; color:white; }
+    .pulse { animation:pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="top">
+      <div class="mark">🧠</div>
+      <div>
+        <div class="eyebrow">StudyOS updater</div>
+        <h1>Updating to <span id="version">latest</span></h1>
+      </div>
+    </div>
+    <div class="status" id="status">Preparing your update…</div>
+    <div class="track"><div class="fill" id="fill"></div></div>
+    <div class="meta">
+      <span id="percent">0%</span>
+      <span id="speed">Connecting…</span>
+    </div>
+    <div class="actions" id="actions">
+      <button id="later">Later</button>
+      <button class="primary" id="restart">Restart & update</button>
+    </div>
+  </main>
+  <script>
+    const version = document.getElementById("version");
+    const status = document.getElementById("status");
+    const fill = document.getElementById("fill");
+    const percent = document.getElementById("percent");
+    const speed = document.getElementById("speed");
+    const actions = document.getElementById("actions");
+    const restart = document.getElementById("restart");
+    const later = document.getElementById("later");
+
+    const formatBytes = (value) => {
+      if (!Number.isFinite(value) || value <= 0) return "Connecting…";
+      const units = ["B/s","KB/s","MB/s","GB/s"];
+      let size = value;
+      let unit = 0;
+      while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit += 1; }
+      return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unit]}`;
+    };
+
+    window.studyosDesktop.onUpdateProgress((payload) => {
+      if (payload.version) version.textContent = payload.version;
+      if (payload.stage === "available") {
+        status.textContent = "New version found. Starting download…";
+        status.classList.add("pulse");
+      } else if (payload.stage === "downloading") {
+        status.classList.remove("pulse");
+        status.textContent = "Downloading update…";
+        const value = Math.max(0, Math.min(100, payload.percent || 0));
+        fill.style.width = `${value}%`;
+        percent.textContent = `${Math.round(value)}%`;
+        speed.textContent = formatBytes(payload.bytesPerSecond || 0);
+      } else if (payload.stage === "ready") {
+        status.classList.remove("pulse");
+        status.textContent = "Update ready.";
+        fill.style.width = "100%";
+        percent.textContent = "100%";
+        speed.textContent = "Ready to install";
+        actions.style.display = "flex";
+      } else if (payload.stage === "error") {
+        status.classList.remove("pulse");
+        status.textContent = payload.message || "Update failed.";
+        speed.textContent = "Check diagnostics";
+      }
+    });
+
+    restart.addEventListener("click", () => window.studyosDesktop.restartAndUpdate());
+    later.addEventListener("click", () => window.studyosDesktop.closeUpdateWindow());
+  </script>
+</body>
+</html>
