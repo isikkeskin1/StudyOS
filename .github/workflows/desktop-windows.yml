@@ -158,18 +158,22 @@ jobs:
       - name: Build Windows installer
         working-directory: desktop
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.WINDOWS_CSC_LINK != '' && 'true' || 'false' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: npm run dist:win
 
       - name: Verify release signature
-        if: github.event_name == 'release' && env.STUDYOS_SIGNING_ENABLED == 'true'
+        if: github.event_name == 'release'
         working-directory: desktop
         shell: pwsh
         env:
-          STUDYOS_SIGNING_ENABLED: ${{ secrets.WINDOWS_CSC_LINK != '' && 'true' || 'false' }}
+          WINDOWS_CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CSC_LINK)) {
+            Write-Host "No Windows signing certificate configured; release remains unsigned."
+            exit 0
+          }
           $setup = Get-ChildItem "dist/*Setup.exe" | Select-Object -First 1
           if (-not $setup) {
             throw "StudyOS setup installer was not produced"
