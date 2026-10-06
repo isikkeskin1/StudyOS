@@ -8,7 +8,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dist:win": "electron-builder --win nsis portable",
+    "dist:win": "electron-builder --win nsis portable --publish never",
     "pack:win": "electron-builder --win dir"
   },
   "devDependencies": {
