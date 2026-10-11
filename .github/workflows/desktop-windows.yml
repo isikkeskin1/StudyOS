@@ -40,7 +40,7 @@ jobs:
           if ($parts.Count -lt 3) {
             throw "Release tag must look like v0.52.0"
           }
-          npm version "$version" --no-git-tag-version
+          npm version "$version" --no-git-tag-version --allow-same-version
           Write-Host "Building StudyOS Desktop $version"
 
       - name: Set up Node
