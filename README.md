@@ -8,7 +8,7 @@
 
 <br />
 
-![Version](https://img.shields.io/badge/version-v0.51.2-7C3AED?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-v0.52.0-7C3AED?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-BETA-F59E0B?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=nextdotjs&logoColor=white)
@@ -40,9 +40,11 @@ When a GitHub Release is published, CI automatically attaches:
 
 👉 **[Download the latest StudyOS release](https://github.com/isikkeskin1/StudyOS/releases/latest)**
 
-On first launch, StudyOS starts a private local backend automatically and stores its SQLite database plus uploaded course files under your Windows AppData. Hosted/cloud mode remains optional; remote servers must use HTTPS.
+On first launch, StudyOS shows an immediate branded startup screen while the bundled backend and web shell start in parallel. It stores its SQLite database plus uploaded course files under your Windows AppData. Hosted/cloud mode remains optional; remote servers must use HTTPS.
 
-> **Beta signing note:** current Windows beta binaries are unsigned, so Microsoft SmartScreen may display an “unknown publisher” warning. Code signing is planned before broad public distribution.
+Installed Windows builds from v0.52 onward can check GitHub Releases automatically, download updates in a StudyOS-branded updater window, and install them on restart. The Portable build intentionally stays self-contained and does not auto-update itself.
+
+> **Beta signing note:** Windows beta binaries may still be unsigned, so Microsoft SmartScreen can display an “unknown publisher” warning. The release pipeline is code-signing ready; trusted signing remains the supported path to remove that publisher warning.
 
 ---
 
@@ -349,13 +351,14 @@ docker compose up -d --build
 | **5 · Optimization** | ✅ Complete | Expected-marks planning, Emergency Mode, multi-course optimization |
 | **6 · Study operating system** | ✅ Complete | Semester queues, reviews, cheat sheets, calendar/focus, PWA |
 | **v0.50 · Beta hardening** | ✅ Complete | Security, data controls, failure states, production readiness |
-| **v0.51 · Desktop beta** | 🟣 Current | Windows installer, portable app, desktop distribution pipeline |
+| **v0.51 · Desktop beta** | ✅ Complete | Windows installer, portable app, desktop distribution pipeline |
+| **v0.52 · Distribution & catalog** | 🟣 Current | Auto-updates, fast desktop boot, institutional course catalog and admin source discovery |
 
 \*An external ANN/vector backend remains intentionally scale-driven rather than a beta requirement.
 
-### What comes after v0.51?
+### What comes after v0.52?
 
-The v0.5x line prioritizes **desktop beta feedback, regressions, reliability, compatibility and security** over throwing more feature surface into the product.
+The v0.5x line now prioritizes **beta feedback, updater reliability, institutional course coverage, web deployment, compatibility and security** before the first stable release.
 
 ---
 
@@ -379,6 +382,6 @@ StudyOS exists to answer that question continuously.
 
 <br />
 
-**v0.51.2 Desktop Beta · Study smarter under real constraints.**
+**v0.52.0 Desktop Beta · Study smarter under real constraints.**
 
 </div>
